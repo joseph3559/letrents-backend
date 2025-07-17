@@ -1,8 +1,8 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
-# Set Go environment variables to ensure Go 1.24 is used
-ENV GOTOOLCHAIN=go1.24
+# Set Go environment variables to ensure Go 1.23 is used
+ENV GOTOOLCHAIN=go1.23.4
 ENV GO111MODULE=on
 
 # Install git and ca-certificates for fetching dependencies
