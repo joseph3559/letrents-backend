@@ -394,7 +394,6 @@ type S3Provider struct {
 	region    string
 	accessKey string
 	secretKey string
-	endpoint  string // For S3-compatible services
 }
 
 func NewS3Provider(bucket, region, accessKey, secretKey string) *S3Provider {

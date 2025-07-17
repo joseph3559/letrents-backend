@@ -569,7 +569,7 @@ func (s *LandlordService) GetTenantSummary(ctx context.Context, tenantID uuid.UU
 	// Build lease info
 	var leaseInfo *port.LeaseInfo
 	if currentUnit != nil && currentUnit.LeaseStartDate != nil && currentUnit.LeaseEndDate != nil {
-		daysRemaining := int(currentUnit.LeaseEndDate.Sub(time.Now()).Hours() / 24)
+		daysRemaining := int(time.Until(*currentUnit.LeaseEndDate).Hours() / 24)
 		leaseInfo = &port.LeaseInfo{
 			LeaseID:       uuid.New(), // TODO: Get actual lease ID
 			StartDate:     *currentUnit.LeaseStartDate,
@@ -588,9 +588,8 @@ func (s *LandlordService) GetTenantSummary(ctx context.Context, tenantID uuid.UU
 
 	// Filter payments for this tenant (simplified - PaymentRecord doesn't have TenantID)
 	// TODO: Implement proper tenant payment filtering when PaymentRecord is enhanced
-	var tenantPayments []*port.PaymentRecord
 	// For now, just return all payments since we can't filter by tenant
-	tenantPayments = payments
+	tenantPayments := payments
 
 	// Get maintenance history
 	maintenance, err := s.landlordRepo.GetRecentMaintenance(ctx, landlordID, 10)

@@ -19,17 +19,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// mockLogger implements the Logger interface for demo purposes
-type mockLogger struct{}
-
-func (m *mockLogger) Error(msg string, args ...interface{}) {
-	log.Printf("[ERROR] "+msg, args...)
-}
-
-func (m *mockLogger) Info(msg string, args ...interface{}) {
-	log.Printf("[INFO] "+msg, args...)
-}
-
 // Simple auth middleware for demo
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

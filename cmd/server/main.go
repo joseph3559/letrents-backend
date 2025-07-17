@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -42,7 +41,7 @@ func main() {
 		migrationFile := "internal/db/migration/schema.sql"
 		if _, err := os.Stat(migrationFile); err == nil {
 			log.Println("Running main database migration...")
-			migrationSQL, err := ioutil.ReadFile(migrationFile)
+			migrationSQL, err := os.ReadFile(migrationFile)
 			if err != nil {
 				log.Printf("Warning: Failed to read migration file: %v", err)
 			} else {
@@ -56,7 +55,7 @@ func main() {
 		propertyMigrationFile := "internal/db/migration/property_schema.sql"
 		if _, err := os.Stat(propertyMigrationFile); err == nil {
 			log.Println("Running property management migration...")
-			propertyMigrationSQL, err := ioutil.ReadFile(propertyMigrationFile)
+			propertyMigrationSQL, err := os.ReadFile(propertyMigrationFile)
 			if err != nil {
 				log.Printf("Warning: Failed to read property migration file: %v", err)
 			} else {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -31,7 +30,7 @@ func main() {
 	}
 
 	log.Printf("Reading seed file: %s", seedFile)
-	seedSQL, err := ioutil.ReadFile(seedFile)
+	seedSQL, err := os.ReadFile(seedFile)
 	if err != nil {
 		log.Fatalf("Failed to read seed file: %v", err)
 	}

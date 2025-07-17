@@ -12,11 +12,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Context keys for request context
+// Custom types for context keys to avoid collisions
+type contextKey string
+
 const (
-	UserContextKey    = "user"
-	ClaimsContextKey  = "claims"
-	UserObjContextKey = "user_object"
+	UserContextKey    contextKey = "user"
+	ClaimsContextKey  contextKey = "claims"
+	UserObjContextKey contextKey = "user_object"
 )
 
 type AuthMiddleware struct {
