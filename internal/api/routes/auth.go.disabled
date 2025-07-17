@@ -1,0 +1,208 @@
+package routes
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"pay-rents-backend/config"
+	"pay-rents-backend/internal/api/handler"
+	"pay-rents-backend/internal/api/middleware"
+	"pay-rents-backend/internal/core/port"
+
+	"github.com/gorilla/mux"
+)
+
+// SetupAuthRoutes sets up comprehensive authentication routes
+func SetupAuthRoutes(
+	router *mux.Router,
+	cfg *config.Config,
+	authService port.AuthService,
+	authRepo port.AuthRepository,
+) {
+	// Create auth handler and middleware
+	authHandler := handler.NewAuthHandler(authService)
+	authMiddleware := middleware.NewAuthMiddleware(authService)
+
+	// Auth routes prefix
+	authRouter := router.PathPrefix("/api/v1/auth").Subrouter()
+
+	// Public authentication routes (no auth required)
+	authRouter.HandleFunc("/login", authHandler.LoginHandler).Methods("POST")
+	authRouter.HandleFunc("/login/phone", authHandler.LoginWithPhoneHandler).Methods("POST")
+	authRouter.HandleFunc("/login/verify-otp", authHandler.VerifyOTPHandler).Methods("POST")
+	authRouter.HandleFunc("/refresh", authHandler.RefreshTokenHandler).Methods("POST")
+	authRouter.HandleFunc("/register", authHandler.RegisterHandler).Methods("POST")
+	authRouter.HandleFunc("/forgot-password", authHandler.RequestPasswordResetHandler).Methods("POST")
+	authRouter.HandleFunc("/reset-password", authHandler.ConfirmPasswordResetHandler).Methods("POST")
+	authRouter.HandleFunc("/verify-email", authHandler.VerifyEmailHandler).Methods("GET")
+	authRouter.HandleFunc("/accept-invitation", authHandler.AcceptInvitationHandler).Methods("POST")
+
+	// Protected authentication routes (auth required)
+	protectedAuth := authRouter.PathPrefix("/").Subrouter()
+	protectedAuth.Use(authMiddleware.RequireAuth)
+
+	// User management routes
+	protectedAuth.HandleFunc("/logout", authHandler.LogoutHandler).Methods("POST")
+	protectedAuth.HandleFunc("/logout/all", authHandler.LogoutAllSessionsHandler).Methods("POST")
+	protectedAuth.HandleFunc("/me", authHandler.GetCurrentUserHandler).Methods("GET")
+	protectedAuth.HandleFunc("/permissions", authHandler.GetUserPermissionsHandler).Methods("GET")
+	protectedAuth.HandleFunc("/change-password", authHandler.ChangePasswordHandler).Methods("POST")
+
+	// Email verification routes
+	protectedAuth.HandleFunc("/send-verification", authHandler.SendEmailVerificationHandler).Methods("POST")
+	protectedAuth.HandleFunc("/resend-verification", authHandler.ResendEmailVerificationHandler).Methods("POST")
+
+	// Phone verification routes
+	protectedAuth.HandleFunc("/send-phone-verification", authHandler.SendPhoneVerificationHandler).Methods("POST")
+
+	// Session management routes
+	protectedAuth.HandleFunc("/sessions", authHandler.GetUserSessionsHandler).Methods("GET")
+	protectedAuth.HandleFunc("/sessions/{sessionId}", authHandler.TerminateSessionHandler).Methods("DELETE")
+
+	// Admin routes (require elevated permissions)
+	adminAuth := protectedAuth.PathPrefix("/admin").Subrouter()
+	adminAuth.Use(authMiddleware.RequireAgencyAdminOrHigher())
+
+	// User invitation routes
+	adminAuth.HandleFunc("/invite", authHandler.InviteUserHandler).Methods("POST")
+
+	// Setup user management routes
+	setupUserRoutes(router, cfg, authService, authRepo, authMiddleware)
+}
+
+// setupUserRoutes sets up user management routes with proper authentication
+func setupUserRoutes(
+	router *mux.Router,
+	cfg *config.Config,
+	authService port.AuthService,
+	authRepo port.AuthRepository,
+	authMiddleware *middleware.AuthMiddleware,
+) {
+	// Users routes prefix
+	usersRouter := router.PathPrefix("/api/v1/users").Subrouter()
+
+	// All user routes require authentication
+	usersRouter.Use(authMiddleware.RequireAuth)
+
+	// TODO: Add user CRUD routes here when needed
+	// usersRouter.HandleFunc("", userHandler.ListUsers).Methods("GET")
+	// usersRouter.HandleFunc("/{id}", userHandler.GetUser).Methods("GET")
+	// usersRouter.HandleFunc("/{id}", userHandler.UpdateUser).Methods("PUT")
+	// usersRouter.HandleFunc("/{id}", userHandler.DeleteUser).Methods("DELETE")
+}
+
+// SetupHealthRoutes sets up health check routes (public)
+func SetupHealthRoutes(router *mux.Router) {
+	router.HandleFunc("/api/v1/health", healthHandler).Methods("GET")
+	router.HandleFunc("/api/v1/status", statusHandler).Methods("GET")
+}
+
+// Health check handlers
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write([]byte(`{
+		"success": true,
+		"message": "Service is healthy",
+		"data": {
+			"status": "healthy",
+			"service": "pay-rents-backend",
+			"version": "1.0.0"
+		}
+	}`))
+}
+
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write([]byte(`{
+		"success": true,
+		"message": "Service status",
+		"data": {
+			"status": "running",
+			"uptime": "unknown",
+			"features": {
+				"authentication": true,
+				"email_verification": true,
+				"phone_verification": true,
+				"role_based_access": true,
+				"session_management": true
+			}
+		}
+	}`))
+}
+
+// SetupDemoAuthRoutes sets up demo authentication routes for when services aren't available
+func SetupDemoAuthRoutes(router *mux.Router) {
+	authRouter := router.PathPrefix("/api/v1/auth").Subrouter()
+	authRouter.HandleFunc("/login", demoLogin).Methods("POST")
+	authRouter.HandleFunc("/logout", demoLogout).Methods("POST")
+	authRouter.HandleFunc("/me", demoCurrentUser).Methods("GET")
+}
+
+type DemoLoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type DemoResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+func demoLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Demo credentials: admin@payrents.com / admin123!
+	response := map[string]interface{}{
+		"token":         "demo-jwt-token-12345",
+		"refresh_token": "demo-refresh-token-67890",
+		"user": map[string]interface{}{
+			"id":         "admin-demo-id",
+			"email":      "admin@payrents.com",
+			"first_name": "Super",
+			"last_name":  "Admin",
+			"role":       "super_admin",
+			"status":     "active",
+		},
+		"expires_at": "2024-12-31T23:59:59Z",
+	}
+
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(DemoResponse{
+		Success: true,
+		Message: "Login successful - Demo mode",
+		Data:    response,
+	})
+}
+
+func demoLogout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(DemoResponse{
+		Success: true,
+		Message: "Logout successful - Demo mode",
+	})
+}
+
+func demoCurrentUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	user := map[string]interface{}{
+		"id":         "admin-demo-id",
+		"email":      "admin@payrents.com",
+		"first_name": "Super",
+		"last_name":  "Admin",
+		"role":       "super_admin",
+		"status":     "active",
+		"created_at": "2024-01-01T00:00:00Z",
+		"updated_at": "2024-01-01T00:00:00Z",
+	}
+
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(DemoResponse{
+		Success: true,
+		Message: "Current user retrieved successfully",
+		Data:    user,
+	})
+}

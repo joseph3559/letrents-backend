@@ -1,0 +1,850 @@
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"pay-rents-backend/internal/core/domain"
+	"pay-rents-backend/internal/core/port"
+	"pay-rents-backend/internal/utils"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+)
+
+type AgentHandler struct {
+	agentService port.AgentService
+	authService  port.AuthService
+	logger       utils.Logger
+}
+
+func NewAgentHandler(agentService port.AgentService, authService port.AuthService, logger utils.Logger) *AgentHandler {
+	return &AgentHandler{
+		agentService: agentService,
+		authService:  authService,
+		logger:       logger,
+	}
+}
+
+// Dashboard endpoints
+
+// GetDashboardOverview returns complete dashboard data for agent
+func (h *AgentHandler) GetDashboardOverview(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	overview, err := h.agentService.GetDashboardOverview(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get dashboard overview", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get dashboard overview", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, overview)
+}
+
+// GetDashboardStats returns dashboard statistics for agent
+func (h *AgentHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	stats, err := h.agentService.GetDashboardStats(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get dashboard stats", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get dashboard stats", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, stats)
+}
+
+// GetRentCollectionTrends returns rent collection trends for agent
+func (h *AgentHandler) GetRentCollectionTrends(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	months := 3 // Default to 3 months
+	if monthsParam := r.URL.Query().Get("months"); monthsParam != "" {
+		if m, err := strconv.Atoi(monthsParam); err == nil && m > 0 && m <= 12 {
+			months = m
+		}
+	}
+
+	trends, err := h.agentService.GetRentCollectionTrends(r.Context(), agentID, months)
+	if err != nil {
+		h.logger.Error("Failed to get rent collection trends", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get rent collection trends", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, trends)
+}
+
+// Property & Unit Management endpoints
+
+// GetAssignedProperties returns properties assigned to agent
+func (h *AgentHandler) GetAssignedProperties(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	properties, err := h.agentService.GetAssignedProperties(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get assigned properties", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get assigned properties", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, properties)
+}
+
+// GetUnitsOverview returns units overview for agent
+func (h *AgentHandler) GetUnitsOverview(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	filters, err := h.parseUnitFilters(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid filters", err)
+		return
+	}
+
+	units, err := h.agentService.GetUnitsOverview(r.Context(), agentID, filters)
+	if err != nil {
+		h.logger.Error("Failed to get units overview", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get units overview", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, units)
+}
+
+// SearchUnits searches units for agent
+func (h *AgentHandler) SearchUnits(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		utils.WriteError(w, http.StatusBadRequest, "Search query is required", nil)
+		return
+	}
+
+	filters, err := h.parseUnitFilters(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid filters", err)
+		return
+	}
+
+	units, err := h.agentService.SearchUnits(r.Context(), agentID, query, filters)
+	if err != nil {
+		h.logger.Error("Failed to search units", "error", err, "agent_id", agentID, "query", query)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to search units", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, units)
+}
+
+// GetUnitDetails returns detailed unit information
+func (h *AgentHandler) GetUnitDetails(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	unitID, err := h.extractUUIDParam(r, "unit_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid unit ID", err)
+		return
+	}
+
+	unitDetails, err := h.agentService.GetUnitDetails(r.Context(), agentID, unitID)
+	if err != nil {
+		h.logger.Error("Failed to get unit details", "error", err, "agent_id", agentID, "unit_id", unitID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get unit details", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, unitDetails)
+}
+
+// UpdateUnitStatus updates unit status
+func (h *AgentHandler) UpdateUnitStatus(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	unitID, err := h.extractUUIDParam(r, "unit_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid unit ID", err)
+		return
+	}
+
+	var req struct {
+		Status domain.UnitStatusEnum `json:"status"`
+		Notes  string                `json:"notes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.UpdateUnitStatus(r.Context(), agentID, unitID, req.Status, req.Notes)
+	if err != nil {
+		h.logger.Error("Failed to update unit status", "error", err, "agent_id", agentID, "unit_id", unitID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to update unit status", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unit status updated successfully"})
+}
+
+// Tenant Management endpoints
+
+// GetTenantsOverview returns tenants overview for agent
+func (h *AgentHandler) GetTenantsOverview(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	filters, err := h.parseTenantFilters(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid filters", err)
+		return
+	}
+
+	tenants, err := h.agentService.GetTenantsOverview(r.Context(), agentID, filters)
+	if err != nil {
+		h.logger.Error("Failed to get tenants overview", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get tenants overview", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, tenants)
+}
+
+// AddNewTenant adds a new tenant to a unit
+func (h *AgentHandler) AddNewTenant(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	var req port.AddTenantRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.AddNewTenant(r.Context(), agentID, &req)
+	if err != nil {
+		h.logger.Error("Failed to add new tenant", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to add new tenant", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusCreated, map[string]string{"message": "Tenant added successfully"})
+}
+
+// GetTenantDetails returns detailed tenant information
+func (h *AgentHandler) GetTenantDetails(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	tenantID, err := h.extractUUIDParam(r, "tenant_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid tenant ID", err)
+		return
+	}
+
+	tenantDetails, err := h.agentService.GetTenantDetails(r.Context(), agentID, tenantID)
+	if err != nil {
+		h.logger.Error("Failed to get tenant details", "error", err, "agent_id", agentID, "tenant_id", tenantID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get tenant details", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, tenantDetails)
+}
+
+// SendTenantMessage sends message to tenant
+func (h *AgentHandler) SendTenantMessage(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	tenantID, err := h.extractUUIDParam(r, "tenant_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid tenant ID", err)
+		return
+	}
+
+	var message port.TenantMessage
+	if err := json.NewDecoder(r.Body).Decode(&message); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.SendTenantMessage(r.Context(), agentID, tenantID, &message)
+	if err != nil {
+		h.logger.Error("Failed to send tenant message", "error", err, "agent_id", agentID, "tenant_id", tenantID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to send tenant message", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Message sent successfully"})
+}
+
+// GetTenantsInArrears returns tenants in arrears
+func (h *AgentHandler) GetTenantsInArrears(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	tenants, err := h.agentService.GetTenantsInArrears(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get tenants in arrears", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get tenants in arrears", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, tenants)
+}
+
+// Rent & Invoice Management endpoints
+
+// CreateRentInvoice creates a new rent invoice
+func (h *AgentHandler) CreateRentInvoice(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	var req port.CreateInvoiceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	invoice, err := h.agentService.CreateRentInvoice(r.Context(), agentID, &req)
+	if err != nil {
+		h.logger.Error("Failed to create rent invoice", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to create rent invoice", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusCreated, invoice)
+}
+
+// BulkCreateInvoices creates multiple rent invoices
+func (h *AgentHandler) BulkCreateInvoices(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	var req port.BulkInvoiceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	invoices, err := h.agentService.BulkCreateInvoices(r.Context(), agentID, &req)
+	if err != nil {
+		h.logger.Error("Failed to bulk create invoices", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to bulk create invoices", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusCreated, invoices)
+}
+
+// GetInvoices returns invoices for agent
+func (h *AgentHandler) GetInvoices(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	filters, err := h.parseInvoiceFilters(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid filters", err)
+		return
+	}
+
+	invoices, err := h.agentService.GetInvoices(r.Context(), agentID, filters)
+	if err != nil {
+		h.logger.Error("Failed to get invoices", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get invoices", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, invoices)
+}
+
+// MarkPaymentReceived marks invoice as paid
+func (h *AgentHandler) MarkPaymentReceived(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	invoiceID, err := h.extractUUIDParam(r, "invoice_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid invoice ID", err)
+		return
+	}
+
+	var payment port.PaymentRecord
+	if err := json.NewDecoder(r.Body).Decode(&payment); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.MarkPaymentReceived(r.Context(), agentID, invoiceID, &payment)
+	if err != nil {
+		h.logger.Error("Failed to mark payment received", "error", err, "agent_id", agentID, "invoice_id", invoiceID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to mark payment received", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Payment recorded successfully"})
+}
+
+// SendInvoiceToTenant sends invoice to tenant
+func (h *AgentHandler) SendInvoiceToTenant(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	invoiceID, err := h.extractUUIDParam(r, "invoice_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid invoice ID", err)
+		return
+	}
+
+	var delivery port.InvoiceDelivery
+	if err := json.NewDecoder(r.Body).Decode(&delivery); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.SendInvoiceToTenant(r.Context(), agentID, invoiceID, &delivery)
+	if err != nil {
+		h.logger.Error("Failed to send invoice to tenant", "error", err, "agent_id", agentID, "invoice_id", invoiceID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to send invoice to tenant", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Invoice sent successfully"})
+}
+
+// GetOverdueInvoices returns overdue invoices
+func (h *AgentHandler) GetOverdueInvoices(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	invoices, err := h.agentService.GetOverdueInvoices(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get overdue invoices", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get overdue invoices", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, invoices)
+}
+
+// Maintenance Management endpoints
+
+// GetMaintenanceRequests returns maintenance requests for agent
+func (h *AgentHandler) GetMaintenanceRequests(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	filters, err := h.parseMaintenanceFilters(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid filters", err)
+		return
+	}
+
+	requests, err := h.agentService.GetMaintenanceRequests(r.Context(), agentID, filters)
+	if err != nil {
+		h.logger.Error("Failed to get maintenance requests", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get maintenance requests", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, requests)
+}
+
+// ForwardToCaretaker forwards maintenance request to caretaker
+func (h *AgentHandler) ForwardToCaretaker(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	requestID, err := h.extractUUIDParam(r, "request_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request ID", err)
+		return
+	}
+
+	caretakerID, err := h.extractUUIDParam(r, "caretaker_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid caretaker ID", err)
+		return
+	}
+
+	var req port.ForwardMaintenanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.ForwardToCaretaker(r.Context(), agentID, requestID, caretakerID, &req)
+	if err != nil {
+		h.logger.Error("Failed to forward to caretaker", "error", err, "agent_id", agentID, "request_id", requestID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to forward to caretaker", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Request forwarded successfully"})
+}
+
+// GetPendingMaintenance returns pending maintenance requests
+func (h *AgentHandler) GetPendingMaintenance(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	requests, err := h.agentService.GetPendingMaintenance(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get pending maintenance", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get pending maintenance", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, requests)
+}
+
+// Notifications endpoints
+
+// GetNotifications returns notifications for agent
+func (h *AgentHandler) GetNotifications(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	unreadOnly := r.URL.Query().Get("unread_only") == "true"
+	limit := 50 // Default limit
+
+	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
+		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	notifications, err := h.agentService.GetNotifications(r.Context(), agentID, unreadOnly, limit)
+	if err != nil {
+		h.logger.Error("Failed to get notifications", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get notifications", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, notifications)
+}
+
+// MarkNotificationRead marks notification as read
+func (h *AgentHandler) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	notificationID, err := h.extractUUIDParam(r, "notification_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid notification ID", err)
+		return
+	}
+
+	err = h.agentService.MarkNotificationRead(r.Context(), agentID, notificationID)
+	if err != nil {
+		h.logger.Error("Failed to mark notification read", "error", err, "agent_id", agentID, "notification_id", notificationID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to mark notification read", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Notification marked as read"})
+}
+
+// GetUnreadCount returns unread notification count
+func (h *AgentHandler) GetUnreadCount(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	count, err := h.agentService.GetUnreadCount(r.Context(), agentID)
+	if err != nil {
+		h.logger.Error("Failed to get unread count", "error", err, "agent_id", agentID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get unread count", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]int{"count": count})
+}
+
+// Communication endpoints
+
+// SendSMSToTenant sends SMS to tenant
+func (h *AgentHandler) SendSMSToTenant(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	tenantID, err := h.extractUUIDParam(r, "tenant_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid tenant ID", err)
+		return
+	}
+
+	var req struct {
+		Message string `json:"message"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.SendSMSToTenant(r.Context(), agentID, tenantID, req.Message)
+	if err != nil {
+		h.logger.Error("Failed to send SMS to tenant", "error", err, "agent_id", agentID, "tenant_id", tenantID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to send SMS to tenant", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "SMS sent successfully"})
+}
+
+// SendEmailToTenant sends email to tenant
+func (h *AgentHandler) SendEmailToTenant(w http.ResponseWriter, r *http.Request) {
+	agentID, err := h.extractAgentID(r)
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	tenantID, err := h.extractUUIDParam(r, "tenant_id")
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid tenant ID", err)
+		return
+	}
+
+	var req struct {
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	err = h.agentService.SendEmailToTenant(r.Context(), agentID, tenantID, req.Subject, req.Body)
+	if err != nil {
+		h.logger.Error("Failed to send email to tenant", "error", err, "agent_id", agentID, "tenant_id", tenantID)
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to send email to tenant", err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Email sent successfully"})
+}
+
+// Helper methods
+
+func (h *AgentHandler) extractAgentID(r *http.Request) (uuid.UUID, error) {
+	// Extract agent ID from JWT token or session
+	// This would typically be done through middleware that sets the user ID in context
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		return uuid.Nil, fmt.Errorf("user ID not found in context")
+	}
+	return userID, nil
+}
+
+func (h *AgentHandler) extractUUIDParam(r *http.Request, param string) (uuid.UUID, error) {
+	vars := mux.Vars(r)
+	idStr, ok := vars[param]
+	if !ok {
+		return uuid.Nil, fmt.Errorf("parameter %s not found", param)
+	}
+	return uuid.Parse(idStr)
+}
+
+func (h *AgentHandler) parseUnitFilters(r *http.Request) (*port.AgentUnitFilters, error) {
+	filters := &port.AgentUnitFilters{}
+
+	if propertyIDStr := r.URL.Query().Get("property_id"); propertyIDStr != "" {
+		propertyID, err := uuid.Parse(propertyIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid property ID")
+		}
+		filters.PropertyID = &propertyID
+	}
+
+	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
+		// Parse comma-separated status values
+		// Implementation would parse the status string and convert to enum
+	}
+
+	if minRentStr := r.URL.Query().Get("min_rent"); minRentStr != "" {
+		if minRent, err := strconv.ParseFloat(minRentStr, 64); err == nil {
+			filters.MinRent = &minRent
+		}
+	}
+
+	if maxRentStr := r.URL.Query().Get("max_rent"); maxRentStr != "" {
+		if maxRent, err := strconv.ParseFloat(maxRentStr, 64); err == nil {
+			filters.MaxRent = &maxRent
+		}
+	}
+
+	return filters, nil
+}
+
+func (h *AgentHandler) parseTenantFilters(r *http.Request) (*port.TenantFilters, error) {
+	filters := &port.TenantFilters{}
+
+	if propertyIDStr := r.URL.Query().Get("property_id"); propertyIDStr != "" {
+		propertyID, err := uuid.Parse(propertyIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid property ID")
+		}
+		filters.PropertyID = &propertyID
+	}
+
+	if unitIDStr := r.URL.Query().Get("unit_id"); unitIDStr != "" {
+		unitID, err := uuid.Parse(unitIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid unit ID")
+		}
+		filters.UnitID = &unitID
+	}
+
+	if inArrearsStr := r.URL.Query().Get("in_arrears"); inArrearsStr != "" {
+		if inArrears, err := strconv.ParseBool(inArrearsStr); err == nil {
+			filters.InArrears = &inArrears
+		}
+	}
+
+	return filters, nil
+}
+
+func (h *AgentHandler) parseInvoiceFilters(r *http.Request) (*port.InvoiceFilters, error) {
+	filters := &port.InvoiceFilters{}
+
+	if propertyIDStr := r.URL.Query().Get("property_id"); propertyIDStr != "" {
+		propertyID, err := uuid.Parse(propertyIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid property ID")
+		}
+		filters.PropertyID = &propertyID
+	}
+
+	if unitIDStr := r.URL.Query().Get("unit_id"); unitIDStr != "" {
+		unitID, err := uuid.Parse(unitIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid unit ID")
+		}
+		filters.UnitID = &unitID
+	}
+
+	if tenantIDStr := r.URL.Query().Get("tenant_id"); tenantIDStr != "" {
+		tenantID, err := uuid.Parse(tenantIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid tenant ID")
+		}
+		filters.TenantID = &tenantID
+	}
+
+	return filters, nil
+}
+
+func (h *AgentHandler) parseMaintenanceFilters(r *http.Request) (*port.MaintenanceFilters, error) {
+	filters := &port.MaintenanceFilters{}
+
+	if propertyIDStr := r.URL.Query().Get("property_id"); propertyIDStr != "" {
+		propertyID, err := uuid.Parse(propertyIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid property ID")
+		}
+		filters.PropertyID = &propertyID
+	}
+
+	if unitIDStr := r.URL.Query().Get("unit_id"); unitIDStr != "" {
+		unitID, err := uuid.Parse(unitIDStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid unit ID")
+		}
+		filters.UnitID = &unitID
+	}
+
+	return filters, nil
+}

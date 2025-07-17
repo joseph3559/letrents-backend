@@ -1,0 +1,392 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+
+	"pay-rents-backend/internal/api/handler"
+	"pay-rents-backend/internal/db/postgres"
+	"pay-rents-backend/internal/services"
+	"pay-rents-backend/internal/websocket"
+)
+
+// Simple auth middleware for demo
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// For demo, just pass through without strict auth
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Simple database connection
+func initDB() (*sql.DB, error) {
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "localhost"
+	}
+
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "postgres"
+	}
+
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbPassword == "" {
+		dbPassword = "password"
+	}
+
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "payrents_db"
+	}
+
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPassword, dbName)
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+// Login handler for demo
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var req map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Demo authentication
+	var role string
+	var firstName, lastName string
+	var userID uuid.UUID
+	var valid bool
+
+	switch req["email"] {
+	case "admin@payrents.com":
+		if req["password"] == "admin123!" {
+			role = "super_admin"
+			firstName = "Super"
+			lastName = "Admin"
+			userID = uuid.MustParse("c4c8b0bd-821d-4ca9-bce9-efaa1da85caa")
+			valid = true
+		}
+	case "landlord@demo.com":
+		if req["password"] == "admin123!" {
+			role = "landlord"
+			firstName = "John"
+			lastName = "Landlord"
+			userID = uuid.MustParse("b2c8b0bd-821d-4ca9-bce9-efaa1da85caa")
+			valid = true
+		}
+	case "caretaker@demo.com":
+		if req["password"] == "admin123!" {
+			role = "caretaker"
+			firstName = "Jane"
+			lastName = "Caretaker"
+			userID = uuid.MustParse("e5c8b0bd-821d-4ca9-bce9-efaa1da85caa")
+			valid = true
+		}
+	}
+
+	if !valid {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	response := map[string]interface{}{
+		"token":         fmt.Sprintf("demo-jwt-token-%s-%d", role, time.Now().Unix()),
+		"refresh_token": fmt.Sprintf("demo-refresh-token-%s", userID.String()),
+		"user": map[string]interface{}{
+			"id":         userID.String(),
+			"email":      req["email"],
+			"first_name": firstName,
+			"last_name":  lastName,
+			"role":       role,
+			"status":     "active",
+		},
+		"expires_at": time.Now().Add(24 * time.Hour),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// Current user handler
+func currentUserHandler(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+
+	// Default user
+	user := map[string]interface{}{
+		"id":         "c4c8b0bd-821d-4ca9-bce9-efaa1da85caa",
+		"email":      "admin@payrents.com",
+		"first_name": "Super",
+		"last_name":  "Admin",
+		"role":       "super_admin",
+		"status":     "active",
+		"created_at": time.Now().Add(-24 * time.Hour),
+		"updated_at": time.Now(),
+	}
+
+	// Parse token for role-specific user
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+
+		if strings.Contains(token, "landlord") {
+			user = map[string]interface{}{
+				"id":         "b2c8b0bd-821d-4ca9-bce9-efaa1da85caa",
+				"email":      "landlord@demo.com",
+				"first_name": "John",
+				"last_name":  "Landlord",
+				"role":       "landlord",
+				"status":     "active",
+				"created_at": time.Now().Add(-24 * time.Hour),
+				"updated_at": time.Now(),
+			}
+		} else if strings.Contains(token, "caretaker") {
+			user = map[string]interface{}{
+				"id":         "e5c8b0bd-821d-4ca9-bce9-efaa1da85caa",
+				"email":      "caretaker@demo.com",
+				"first_name": "Jane",
+				"last_name":  "Caretaker",
+				"role":       "caretaker",
+				"status":     "active",
+				"created_at": time.Now().Add(-24 * time.Hour),
+				"updated_at": time.Now(),
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data":    user,
+	})
+}
+
+// Health check handler
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "healthy",
+		"time":   time.Now(),
+	})
+}
+
+// WebSocket repository adapter
+type WebSocketRepoAdapter struct {
+	db *sql.DB
+}
+
+func (r *WebSocketRepoAdapter) LogConnection(ctx context.Context, userID uuid.UUID, connectionID, room, userAgent, ipAddress string) error {
+	query := `
+		INSERT INTO websocket_connections (user_id, connection_id, room, user_agent, ip_address, status)
+		VALUES ($1, $2, $3, $4, $5, 'connected')
+		ON CONFLICT (connection_id) DO UPDATE SET
+			status = 'connected',
+			last_seen = NOW(),
+			user_agent = EXCLUDED.user_agent,
+			ip_address = EXCLUDED.ip_address
+	`
+	_, err := r.db.ExecContext(ctx, query, userID, connectionID, room, userAgent, ipAddress)
+	return err
+}
+
+func (r *WebSocketRepoAdapter) UpdateConnectionStatus(ctx context.Context, connectionID, status string) error {
+	query := `UPDATE websocket_connections SET status = $1, last_seen = NOW() WHERE connection_id = $2`
+	_, err := r.db.ExecContext(ctx, query, status, connectionID)
+	return err
+}
+
+func (r *WebSocketRepoAdapter) GetActiveConnections(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	query := `SELECT connection_id FROM websocket_connections WHERE user_id = $1 AND status = 'connected'`
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var connections []string
+	for rows.Next() {
+		var connectionID string
+		if err := rows.Scan(&connectionID); err != nil {
+			continue
+		}
+		connections = append(connections, connectionID)
+	}
+	return connections, nil
+}
+
+func (r *WebSocketRepoAdapter) CleanupInactiveConnections(ctx context.Context) error {
+	query := `
+		UPDATE websocket_connections 
+		SET status = 'disconnected' 
+		WHERE last_seen < NOW() - INTERVAL '10 minutes' AND status = 'connected'
+	`
+	_, err := r.db.ExecContext(ctx, query)
+	return err
+}
+
+func main() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using system environment variables")
+	}
+
+	// Initialize database connection
+	db, err := initDB()
+	if err != nil {
+		log.Printf("Database connection failed: %v", err)
+		log.Println("Continuing without database connection for demo purposes")
+	} else {
+		defer db.Close()
+		log.Println("Database connected successfully")
+	}
+
+	// Initialize services
+	var communicationRepo *postgres.CommunicationRepository
+	if db != nil {
+		communicationRepo = postgres.NewCommunicationRepository(db)
+	}
+
+	// Initialize enhanced services
+	aiService := services.NewAIService(os.Getenv("OPENAI_API_KEY"))
+
+	// Initialize file upload service
+	localFileProvider := services.NewLocalFileProvider("./uploads", "http://localhost:8080/uploads")
+	fileUploadService := services.NewFileUploadService(localFileProvider)
+
+	// Initialize notification service
+	smtpProvider := services.NewSMTPEmailProvider(
+		os.Getenv("SMTP_HOST"),
+		587,
+		os.Getenv("SMTP_USERNAME"),
+		os.Getenv("SMTP_PASSWORD"),
+		os.Getenv("SMTP_FROM_EMAIL"),
+	)
+	fcmProvider := services.NewFCMProvider(
+		os.Getenv("FCM_SERVER_KEY"),
+		os.Getenv("FCM_PROJECT_ID"),
+	)
+	notificationService := services.NewNotificationService(smtpProvider, fcmProvider, nil)
+
+	// Initialize WebSocket hub
+	var wsHub *websocket.Hub
+	if db != nil {
+		wsRepo := &WebSocketRepoAdapter{db: db}
+		wsHub = websocket.NewHub(wsRepo)
+		go wsHub.Run()
+	}
+
+	// Initialize enhanced communication handler
+	var enhancedCommunicationHandler *handler.EnhancedCommunicationHandler
+	if communicationRepo != nil && wsHub != nil {
+		enhancedCommunicationHandler = handler.NewEnhancedCommunicationHandler(
+			communicationRepo,
+			aiService,
+			fileUploadService,
+			notificationService,
+			wsHub,
+		)
+	}
+
+	// Initialize router
+	router := mux.NewRouter()
+
+	// Add CORS middleware
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"http://localhost:3000", "http://localhost:3001"}),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		handlers.AllowCredentials(),
+	)(router)
+
+	// Basic auth routes
+	router.HandleFunc("/api/auth/login", loginHandler).Methods("POST")
+	router.HandleFunc("/api/auth/me", currentUserHandler).Methods("GET")
+	router.HandleFunc("/health", healthHandler).Methods("GET")
+
+	// Enhanced communication routes (if available)
+	if enhancedCommunicationHandler != nil {
+		apiV2 := router.PathPrefix("/api/v2").Subrouter()
+		apiV2.Use(authMiddleware)
+
+		// Enhanced message endpoints
+		apiV2.HandleFunc("/messages", enhancedCommunicationHandler.GetMessages).Methods("GET")
+		apiV2.HandleFunc("/messages", enhancedCommunicationHandler.CreateMessage).Methods("POST")
+		apiV2.HandleFunc("/messages/{messageId}/read", enhancedCommunicationHandler.MarkMessageAsRead).Methods("POST")
+
+		// Conversation endpoints
+		apiV2.HandleFunc("/conversations", enhancedCommunicationHandler.GetConversations).Methods("GET")
+		apiV2.HandleFunc("/conversations", enhancedCommunicationHandler.CreateConversation).Methods("POST")
+
+		// Template endpoints
+		apiV2.HandleFunc("/templates", enhancedCommunicationHandler.GetMessageTemplates).Methods("GET")
+
+		// File upload endpoints
+		apiV2.HandleFunc("/attachments", enhancedCommunicationHandler.UploadAttachment).Methods("POST")
+
+		// AI assistance endpoints
+		apiV2.HandleFunc("/ai/assistance", enhancedCommunicationHandler.AIAssistance).Methods("POST")
+
+		// Analytics endpoints
+		apiV2.HandleFunc("/analytics", enhancedCommunicationHandler.GetAnalytics).Methods("GET")
+
+		// WebSocket endpoint
+		if wsHub != nil {
+			router.HandleFunc("/ws", wsHub.HandleWebSocket)
+		}
+	} else {
+		// Fallback route for when enhanced communication is not available
+		router.HandleFunc("/api/v2/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Enhanced communication not available - database connection required",
+				"data":    []interface{}{},
+			})
+		}).Methods("GET")
+	}
+
+	// Serve static files for file uploads
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads/"))))
+
+	// Start server
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Server starting on port %s", port)
+	log.Printf("Database connected: %v", db != nil)
+	log.Printf("Enhanced communication available: %v", enhancedCommunicationHandler != nil)
+
+	if err := http.ListenAndServe(":"+port, corsHandler); err != nil {
+		log.Fatal("Server failed to start:", err)
+	}
+}

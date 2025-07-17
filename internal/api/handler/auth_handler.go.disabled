@@ -1,0 +1,550 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+
+	"pay-rents-backend/internal/api/middleware"
+	"pay-rents-backend/internal/core/domain"
+	"pay-rents-backend/internal/core/port"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+)
+
+type AuthHandler struct {
+	authService port.AuthService
+}
+
+func NewAuthHandler(authService port.AuthService) *AuthHandler {
+	return &AuthHandler{
+		authService: authService,
+	}
+}
+
+// APIResponse represents a standard API response
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   *APIError   `json:"error,omitempty"`
+}
+
+type APIError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Details string `json:"details,omitempty"`
+}
+
+// LoginHandler handles user login with email/password
+func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Get client info
+	ipAddress := h.getClientIP(r)
+	userAgent := r.UserAgent()
+
+	// Authenticate user
+	response, err := h.authService.Login(r.Context(), &req, ipAddress, userAgent)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Login successful", response)
+}
+
+// LoginWithPhoneHandler initiates phone login by sending OTP
+func (h *AuthHandler) LoginWithPhoneHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.PhoneLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Get client info
+	ipAddress := h.getClientIP(r)
+	userAgent := r.UserAgent()
+
+	// Send OTP
+	response, err := h.authService.LoginWithPhone(r.Context(), &req, ipAddress, userAgent)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "OTP sent successfully", response)
+}
+
+// VerifyOTPHandler verifies OTP and completes phone login
+func (h *AuthHandler) VerifyOTPHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.OTPVerificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Get client info
+	ipAddress := h.getClientIP(r)
+	userAgent := r.UserAgent()
+
+	// Verify OTP
+	response, err := h.authService.VerifyOTP(r.Context(), &req, ipAddress, userAgent)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "OTP verified successfully", response)
+}
+
+// RefreshTokenHandler generates new access token using refresh token
+func (h *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Get client info
+	ipAddress := h.getClientIP(r)
+	userAgent := r.UserAgent()
+
+	// Refresh token
+	response, err := h.authService.RefreshToken(r.Context(), &req, ipAddress, userAgent)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Token refreshed successfully", response)
+}
+
+// LogoutHandler logs out the user
+func (h *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	// Get tokens from request
+	refreshToken := r.Header.Get("X-Refresh-Token")
+	sessionToken := r.Header.Get("X-Session-Token")
+
+	// Logout
+	if err := h.authService.Logout(r.Context(), refreshToken, sessionToken); err != nil {
+		h.sendErrorResponse(w, http.StatusInternalServerError, "LOGOUT_FAILED", "Failed to logout", err.Error())
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Logged out successfully", nil)
+}
+
+// LogoutAllSessionsHandler logs out all user sessions
+func (h *AuthHandler) LogoutAllSessionsHandler(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from JWT claims (set by middleware)
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	// Logout all sessions
+	if err := h.authService.LogoutAllSessions(r.Context(), userID); err != nil {
+		h.sendErrorResponse(w, http.StatusInternalServerError, "LOGOUT_FAILED", "Failed to logout all sessions", err.Error())
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "All sessions logged out successfully", nil)
+}
+
+// RegisterHandler handles user registration
+func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Get client info
+	ipAddress := h.getClientIP(r)
+	userAgent := r.UserAgent()
+
+	// Register user
+	response, err := h.authService.Register(r.Context(), &req, ipAddress, userAgent)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusCreated, "Registration successful", response)
+}
+
+// InviteUserHandler sends user invitation
+func (h *AuthHandler) InviteUserHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.InviteUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Get inviter user ID from JWT claims
+	inviterID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	// Send invitation
+	if err := h.authService.InviteUser(r.Context(), &req, inviterID); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Invitation sent successfully", nil)
+}
+
+// AcceptInvitationHandler handles invitation acceptance
+func (h *AuthHandler) AcceptInvitationHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		h.sendErrorResponse(w, http.StatusBadRequest, "MISSING_TOKEN", "Invitation token is required", "")
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	// Accept invitation
+	response, err := h.authService.AcceptInvitation(r.Context(), token, req.Password)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Invitation accepted successfully", response)
+}
+
+// SendEmailVerificationHandler sends email verification
+func (h *AuthHandler) SendEmailVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	if err := h.authService.SendEmailVerification(r.Context(), userID); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Email verification sent", nil)
+}
+
+// VerifyEmailHandler verifies email address
+func (h *AuthHandler) VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		h.sendErrorResponse(w, http.StatusBadRequest, "MISSING_TOKEN", "Verification token is required", "")
+		return
+	}
+
+	req := &domain.VerifyEmailRequest{Token: token}
+	if err := h.authService.VerifyEmail(r.Context(), req); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Email verified successfully", nil)
+}
+
+// ResendEmailVerificationHandler resends email verification
+func (h *AuthHandler) ResendEmailVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.ResendVerificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	if req.Type == "email" {
+		if err := h.authService.ResendEmailVerification(r.Context(), req.Email); err != nil {
+			h.handleAuthError(w, err)
+			return
+		}
+	} else if req.Type == "phone" {
+		_, err := h.authService.ResendPhoneVerification(r.Context(), req.PhoneNumber)
+		if err != nil {
+			h.handleAuthError(w, err)
+			return
+		}
+	} else {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_TYPE", "Invalid verification type", "")
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Verification resent successfully", nil)
+}
+
+// SendPhoneVerificationHandler sends phone verification OTP
+func (h *AuthHandler) SendPhoneVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PhoneNumber string `json:"phone_number"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	response, err := h.authService.SendPhoneVerification(r.Context(), req.PhoneNumber)
+	if err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Phone verification sent", response)
+}
+
+// ChangePasswordHandler changes user password
+func (h *AuthHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	if err := h.authService.ChangePassword(r.Context(), userID, &req); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Password changed successfully", nil)
+}
+
+// RequestPasswordResetHandler requests password reset
+func (h *AuthHandler) RequestPasswordResetHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	if err := h.authService.RequestPasswordReset(r.Context(), &req); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Password reset instructions sent", nil)
+}
+
+// ConfirmPasswordResetHandler confirms password reset
+func (h *AuthHandler) ConfirmPasswordResetHandler(w http.ResponseWriter, r *http.Request) {
+	var req domain.ConfirmResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request format", err.Error())
+		return
+	}
+
+	if err := h.authService.ConfirmPasswordReset(r.Context(), &req); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Password reset successfully", nil)
+}
+
+// GetUserSessionsHandler returns user's active sessions
+func (h *AuthHandler) GetUserSessionsHandler(w http.ResponseWriter, r *http.Request) {
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	sessions, err := h.authService.GetUserSessions(r.Context(), userID)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch sessions", err.Error())
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Sessions retrieved successfully", sessions)
+}
+
+// TerminateSessionHandler terminates a specific session
+func (h *AuthHandler) TerminateSessionHandler(w http.ResponseWriter, r *http.Request) {
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	vars := mux.Vars(r)
+	sessionID := vars["sessionId"]
+	if sessionID == "" {
+		h.sendErrorResponse(w, http.StatusBadRequest, "MISSING_SESSION_ID", "Session ID is required", "")
+		return
+	}
+
+	if err := h.authService.TerminateSession(r.Context(), userID, sessionID); err != nil {
+		h.handleAuthError(w, err)
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Session terminated successfully", nil)
+}
+
+// GetCurrentUserHandler returns current user information
+func (h *AuthHandler) GetCurrentUserHandler(w http.ResponseWriter, r *http.Request) {
+	// Get user from context (set by auth middleware)
+	user, err := h.getUserFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "User retrieved successfully", user)
+}
+
+// GetUserPermissionsHandler returns user permissions
+func (h *AuthHandler) GetUserPermissionsHandler(w http.ResponseWriter, r *http.Request) {
+	userID, err := h.getUserIDFromContext(r)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", "")
+		return
+	}
+
+	permissions, err := h.authService.GetUserPermissions(r.Context(), userID)
+	if err != nil {
+		h.sendErrorResponse(w, http.StatusInternalServerError, "FETCH_FAILED", "Failed to fetch permissions", err.Error())
+		return
+	}
+
+	h.sendSuccessResponse(w, http.StatusOK, "Permissions retrieved successfully", map[string]interface{}{
+		"permissions": permissions,
+	})
+}
+
+// Helper methods
+
+func (h *AuthHandler) getClientIP(r *http.Request) string {
+	// Check for forwarded IP first
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		return strings.Split(forwarded, ",")[0]
+	}
+
+	// Check for real IP
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP != "" {
+		return realIP
+	}
+
+	// Fall back to remote address
+	return strings.Split(r.RemoteAddr, ":")[0]
+}
+
+func (h *AuthHandler) getUserIDFromContext(r *http.Request) (uuid.UUID, error) {
+	claims := r.Context().Value(middleware.ClaimsContextKey)
+	if claims == nil {
+		return uuid.Nil, errors.New("no claims in context")
+	}
+
+	jwtClaims, ok := claims.(*domain.JWTClaims)
+	if !ok {
+		return uuid.Nil, errors.New("invalid claims type")
+	}
+
+	return jwtClaims.UserID, nil
+}
+
+func (h *AuthHandler) getUserFromContext(r *http.Request) (*domain.User, error) {
+	user := r.Context().Value(middleware.UserContextKey)
+	if user == nil {
+		return nil, errors.New("no user in context")
+	}
+
+	domainUser, ok := user.(*domain.User)
+	if !ok {
+		return nil, errors.New("invalid user type")
+	}
+
+	return domainUser, nil
+}
+
+func (h *AuthHandler) handleAuthError(w http.ResponseWriter, err error) {
+	switch err.Error() {
+	case "invalid credentials":
+		h.sendErrorResponse(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password", "")
+	case "user not found":
+		h.sendErrorResponse(w, http.StatusUnauthorized, "USER_NOT_FOUND", "User not found", "")
+	case "user account is inactive":
+		h.sendErrorResponse(w, http.StatusForbidden, "ACCOUNT_INACTIVE", "Account is inactive", "")
+	case "user account is locked":
+		h.sendErrorResponse(w, http.StatusForbidden, "ACCOUNT_LOCKED", "Account is locked due to too many failed attempts", "")
+	case "user account is not verified":
+		h.sendErrorResponse(w, http.StatusForbidden, "ACCOUNT_NOT_VERIFIED", "Please verify your email address", "")
+	case "invalid token":
+		h.sendErrorResponse(w, http.StatusUnauthorized, "INVALID_TOKEN", "Invalid or expired token", "")
+	case "token expired":
+		h.sendErrorResponse(w, http.StatusUnauthorized, "TOKEN_EXPIRED", "Token has expired", "")
+	case "too many attempts":
+		h.sendErrorResponse(w, http.StatusTooManyRequests, "TOO_MANY_ATTEMPTS", "Too many attempts, please try again later", "")
+	case "password does not meet requirements":
+		h.sendErrorResponse(w, http.StatusBadRequest, "WEAK_PASSWORD", "Password does not meet security requirements", "")
+	case "email already exists":
+		h.sendErrorResponse(w, http.StatusConflict, "EMAIL_EXISTS", "Email address is already registered", "")
+	case "phone number already exists":
+		h.sendErrorResponse(w, http.StatusConflict, "PHONE_EXISTS", "Phone number is already registered", "")
+	case "invalid OTP code":
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_OTP", "Invalid OTP code", "")
+	case "OTP code expired":
+		h.sendErrorResponse(w, http.StatusBadRequest, "OTP_EXPIRED", "OTP code has expired", "")
+	case "session not found":
+		h.sendErrorResponse(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session not found", "")
+	case "permission denied":
+		h.sendErrorResponse(w, http.StatusForbidden, "PERMISSION_DENIED", "Insufficient permissions", "")
+	default:
+		h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "An internal error occurred", err.Error())
+	}
+}
+
+func (h *AuthHandler) sendSuccessResponse(w http.ResponseWriter, statusCode int, message string, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	response := APIResponse{
+		Success: true,
+		Message: message,
+		Data:    data,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *AuthHandler) sendErrorResponse(w http.ResponseWriter, statusCode int, code, message, details string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	response := APIResponse{
+		Success: false,
+		Message: message,
+		Error: &APIError{
+			Code:    code,
+			Message: message,
+			Details: details,
+		},
+	}
+
+	json.NewEncoder(w).Encode(response)
+}

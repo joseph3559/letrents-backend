@@ -1,0 +1,151 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
+)
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+
+	// Parse request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(LoginResponse{
+			Success: false,
+			Message: "Invalid request format",
+		})
+		return
+	}
+
+	// Demo authentication - accept admin@payrents.com with admin123!
+	if req.Email == "admin@payrents.com" && req.Password == "admin123!" {
+		response := map[string]interface{}{
+			"token":         "demo-jwt-token-12345",
+			"refresh_token": "demo-refresh-token-67890",
+			"user": map[string]interface{}{
+				"id":         "admin-demo-id",
+				"email":      "admin@payrents.com",
+				"first_name": "Super",
+				"last_name":  "Admin",
+				"role":       "super_admin",
+				"status":     "active",
+			},
+			"expires_at": time.Now().Add(24 * time.Hour),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(LoginResponse{
+			Success: true,
+			Message: "Login successful - Demo mode",
+			Data:    response,
+		})
+		return
+	}
+
+	// Invalid credentials
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(LoginResponse{
+		Success: false,
+		Message: "Invalid credentials",
+	})
+}
+
+func currentUserHandler(w http.ResponseWriter, r *http.Request) {
+	user := map[string]interface{}{
+		"success": true,
+		"message": "Current user retrieved successfully",
+		"data": map[string]interface{}{
+			"id":         "admin-demo-id",
+			"email":      "admin@payrents.com",
+			"first_name": "Super",
+			"last_name":  "Admin",
+			"role":       "super_admin",
+			"status":     "active",
+			"created_at": "2024-01-01T00:00:00Z",
+			"updated_at": "2024-01-01T00:00:00Z",
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	health := map[string]interface{}{
+		"success": true,
+		"message": "Service is healthy",
+		"data": map[string]interface{}{
+			"status":  "healthy",
+			"service": "pay-rents-backend",
+			"version": "1.0.0-demo",
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(health)
+}
+
+func main() {
+	router := mux.NewRouter()
+
+	// API version prefix
+	api := router.PathPrefix("/api/v1").Subrouter()
+
+	// Public routes
+	api.HandleFunc("/health", healthHandler).Methods("GET")
+	api.HandleFunc("/auth/login", loginHandler).Methods("POST")
+	api.HandleFunc("/users/me", currentUserHandler).Methods("GET")
+
+	// Setup CORS
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowedHeaders: []string{
+			"Accept",
+			"Authorization",
+			"Content-Type",
+			"X-CSRF-Token",
+		},
+		ExposedHeaders: []string{
+			"Link",
+		},
+		AllowCredentials: true,
+		MaxAge:           300,
+	})
+
+	// Wrap router with CORS
+	handler := c.Handler(router)
+
+	port := "8080"
+	log.Printf("Starting demo auth server on port %s", port)
+	log.Printf("Demo credentials: admin@payrents.com / admin123!")
+
+	if err := http.ListenAndServe(":"+port, handler); err != nil {
+		log.Fatal("Server failed to start:", err)
+	}
+}

@@ -1,0 +1,57 @@
+package routes
+
+import (
+	"pay-rents-backend/internal/api/handler"
+	"pay-rents-backend/internal/api/middleware"
+
+	"github.com/gorilla/mux"
+)
+
+// SetupAgentRoutes configures all agent-related routes
+func SetupAgentRoutes(router *mux.Router, agentHandler *handler.AgentHandler, authMiddleware *middleware.AuthMiddleware) {
+	// Create agent subrouter with auth middleware
+	agentRouter := router.PathPrefix("/agent").Subrouter()
+	agentRouter.Use(authMiddleware.RequireAuth)
+	agentRouter.Use(authMiddleware.RequireRole([]string{"agent"}))
+
+	// Dashboard routes
+	agentRouter.HandleFunc("/dashboard", agentHandler.GetDashboardOverview).Methods("GET")
+	agentRouter.HandleFunc("/dashboard/stats", agentHandler.GetDashboardStats).Methods("GET")
+	agentRouter.HandleFunc("/dashboard/trends", agentHandler.GetRentCollectionTrends).Methods("GET")
+
+	// Property & Unit Management routes
+	agentRouter.HandleFunc("/properties", agentHandler.GetAssignedProperties).Methods("GET")
+	agentRouter.HandleFunc("/units", agentHandler.GetUnitsOverview).Methods("GET")
+	agentRouter.HandleFunc("/units/search", agentHandler.SearchUnits).Methods("GET")
+	agentRouter.HandleFunc("/units/{unit_id}", agentHandler.GetUnitDetails).Methods("GET")
+	agentRouter.HandleFunc("/units/{unit_id}/status", agentHandler.UpdateUnitStatus).Methods("PATCH")
+
+	// Tenant Management routes
+	agentRouter.HandleFunc("/tenants", agentHandler.GetTenantsOverview).Methods("GET")
+	agentRouter.HandleFunc("/tenants", agentHandler.AddNewTenant).Methods("POST")
+	agentRouter.HandleFunc("/tenants/{tenant_id}", agentHandler.GetTenantDetails).Methods("GET")
+	agentRouter.HandleFunc("/tenants/{tenant_id}/message", agentHandler.SendTenantMessage).Methods("POST")
+	agentRouter.HandleFunc("/tenants/arrears", agentHandler.GetTenantsInArrears).Methods("GET")
+
+	// Rent & Invoice Management routes
+	agentRouter.HandleFunc("/invoices", agentHandler.CreateRentInvoice).Methods("POST")
+	agentRouter.HandleFunc("/invoices/bulk", agentHandler.BulkCreateInvoices).Methods("POST")
+	agentRouter.HandleFunc("/invoices", agentHandler.GetInvoices).Methods("GET")
+	agentRouter.HandleFunc("/invoices/{invoice_id}/payment", agentHandler.MarkPaymentReceived).Methods("POST")
+	agentRouter.HandleFunc("/invoices/{invoice_id}/send", agentHandler.SendInvoiceToTenant).Methods("POST")
+	agentRouter.HandleFunc("/invoices/overdue", agentHandler.GetOverdueInvoices).Methods("GET")
+
+	// Maintenance Management routes
+	agentRouter.HandleFunc("/maintenance", agentHandler.GetMaintenanceRequests).Methods("GET")
+	agentRouter.HandleFunc("/maintenance/{request_id}/forward/{caretaker_id}", agentHandler.ForwardToCaretaker).Methods("POST")
+	agentRouter.HandleFunc("/maintenance/pending", agentHandler.GetPendingMaintenance).Methods("GET")
+
+	// Notifications routes
+	agentRouter.HandleFunc("/notifications", agentHandler.GetNotifications).Methods("GET")
+	agentRouter.HandleFunc("/notifications/{notification_id}/read", agentHandler.MarkNotificationRead).Methods("PATCH")
+	agentRouter.HandleFunc("/notifications/unread-count", agentHandler.GetUnreadCount).Methods("GET")
+
+	// Communication routes
+	agentRouter.HandleFunc("/tenants/{tenant_id}/sms", agentHandler.SendSMSToTenant).Methods("POST")
+	agentRouter.HandleFunc("/tenants/{tenant_id}/email", agentHandler.SendEmailToTenant).Methods("POST")
+}

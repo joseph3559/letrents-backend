@@ -1,0 +1,76 @@
+package routes
+
+import (
+	"pay-rents-backend/internal/api/handler"
+	"pay-rents-backend/internal/api/middleware"
+	"pay-rents-backend/internal/core/port"
+
+	"github.com/gorilla/mux"
+)
+
+// SetupAgencyAdminRoutes configures all agency admin routes
+func SetupAgencyAdminRoutes(
+	router *mux.Router,
+	userRepo port.UserRepository,
+	propertyRepo port.PropertyRepository,
+	unitRepo port.UnitRepository,
+	authMiddleware *middleware.AuthMiddleware,
+) {
+	// Initialize agency admin handler
+	agencyAdminHandler := handler.NewAgencyAdminHandler(userRepo, propertyRepo, unitRepo)
+
+	// Agency admin routes (requires agency_admin role)
+	agencyAdmin := router.PathPrefix("/agency-admin").Subrouter()
+	agencyAdmin.Use(authMiddleware.RequireAuth)
+	agencyAdmin.Use(authMiddleware.RequireRole([]string{"agency_admin"}))
+
+	// Dashboard KPIs & Overview Panel
+	dashboard := agencyAdmin.PathPrefix("/dashboard").Subrouter()
+	dashboard.HandleFunc("/kpis", agencyAdminHandler.GetDashboardKPIs).Methods("GET")
+	dashboard.HandleFunc("/charts", agencyAdminHandler.GetDashboardChartData).Methods("GET")
+
+	// Agents & Caretakers Management
+	staff := agencyAdmin.PathPrefix("/staff").Subrouter()
+
+	// Agent management
+	agents := staff.PathPrefix("/agents").Subrouter()
+	agents.HandleFunc("", agencyAdminHandler.GetAgents).Methods("GET")
+	agents.HandleFunc("", agencyAdminHandler.CreateAgent).Methods("POST")
+	agents.HandleFunc("/{agent_id}/assign-units", agencyAdminHandler.AssignUnitsToAgent).Methods("POST")
+
+	// Caretaker management
+	caretakers := staff.PathPrefix("/caretakers").Subrouter()
+	caretakers.HandleFunc("", agencyAdminHandler.GetCaretakers).Methods("GET")
+	caretakers.HandleFunc("", agencyAdminHandler.CreateCaretaker).Methods("POST")
+
+	// Unit Assignments
+	assignments := agencyAdmin.PathPrefix("/assignments").Subrouter()
+	assignments.HandleFunc("", agencyAdminHandler.GetUnitAssignments).Methods("GET")
+
+	// Tenant Management
+	tenants := agencyAdmin.PathPrefix("/tenants").Subrouter()
+	tenants.HandleFunc("", agencyAdminHandler.GetTenants).Methods("GET")
+	tenants.HandleFunc("", agencyAdminHandler.CreateTenant).Methods("POST")
+
+	// Lease Management
+	leases := agencyAdmin.PathPrefix("/leases").Subrouter()
+	leases.HandleFunc("", agencyAdminHandler.GetLeases).Methods("GET")
+	leases.HandleFunc("", agencyAdminHandler.CreateLease).Methods("POST")
+
+	// Reports Module
+	reports := agencyAdmin.PathPrefix("/reports").Subrouter()
+	reports.HandleFunc("/rent-collection", agencyAdminHandler.GetRentCollectionReport).Methods("GET")
+	reports.HandleFunc("/occupancy", agencyAdminHandler.GetOccupancyReport).Methods("GET")
+	reports.HandleFunc("/maintenance", agencyAdminHandler.GetMaintenanceReport).Methods("GET")
+
+	// Internal Messaging
+	messaging := agencyAdmin.PathPrefix("/messages").Subrouter()
+	messaging.HandleFunc("", agencyAdminHandler.GetMessages).Methods("GET")
+	messaging.HandleFunc("", agencyAdminHandler.SendMessage).Methods("POST")
+
+	// Billing Management
+	billing := agencyAdmin.PathPrefix("/billing").Subrouter()
+	billing.HandleFunc("/setup", agencyAdminHandler.GetBillingSetup).Methods("GET")
+	billing.HandleFunc("/setup", agencyAdminHandler.UpdateBillingSetup).Methods("PUT")
+	billing.HandleFunc("/invoices/generate", agencyAdminHandler.GenerateInvoices).Methods("POST")
+}

@@ -1,0 +1,746 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"pay-rents-backend/internal/db/postgres"
+	"pay-rents-backend/internal/services"
+	"pay-rents-backend/internal/utils"
+	"pay-rents-backend/internal/websocket"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+)
+
+type EnhancedCommunicationHandler struct {
+	repo                *postgres.CommunicationRepository
+	aiService           *services.AIService
+	fileUploadService   *services.FileUploadService
+	notificationService *services.NotificationService
+	wsHub               *websocket.Hub
+}
+
+type CommunicationResponse struct {
+	Data    interface{} `json:"data,omitempty"`
+	Message string      `json:"message"`
+	Success bool        `json:"success"`
+	Meta    *MetaData   `json:"meta,omitempty"`
+}
+
+type MetaData struct {
+	Total      int `json:"total,omitempty"`
+	Page       int `json:"page,omitempty"`
+	Limit      int `json:"limit,omitempty"`
+	TotalPages int `json:"total_pages,omitempty"`
+}
+
+type EnhancedCreateMessageRequest struct {
+	ConversationID *uuid.UUID  `json:"conversation_id,omitempty"`
+	Type           string      `json:"type"`
+	Subject        string      `json:"subject"`
+	Content        string      `json:"content"`
+	Recipients     []uuid.UUID `json:"recipients"`
+	SentVia        []string    `json:"sent_via"`
+	Priority       string      `json:"priority"`
+	Tags           []string    `json:"tags"`
+	TemplateID     *uuid.UUID  `json:"template_id,omitempty"`
+	ScheduledFor   *time.Time  `json:"scheduled_for,omitempty"`
+	UseAI          bool        `json:"use_ai,omitempty"`
+	AIEnhancement  string      `json:"ai_enhancement,omitempty"` // grammar, tone, clarity
+}
+
+type AIAssistanceRequest struct {
+	Action              string                         `json:"action"` // smart_reply, summarize, enhance, template
+	OriginalMessage     string                         `json:"original_message,omitempty"`
+	ConversationContext []services.ConversationMessage `json:"conversation_context,omitempty"`
+	SenderRole          string                         `json:"sender_role,omitempty"`
+	RecipientRole       string                         `json:"recipient_role,omitempty"`
+	Tone                string                         `json:"tone,omitempty"`
+	MaxReplies          int                            `json:"max_replies,omitempty"`
+	Messages            []services.ConversationMessage `json:"messages,omitempty"`
+	SummaryType         string                         `json:"summary_type,omitempty"`
+	EnhancementType     string                         `json:"enhancement_type,omitempty"`
+	TemplateCategory    string                         `json:"template_category,omitempty"`
+}
+
+func NewEnhancedCommunicationHandler(
+	repo *postgres.CommunicationRepository,
+	aiService *services.AIService,
+	fileUploadService *services.FileUploadService,
+	notificationService *services.NotificationService,
+	wsHub *websocket.Hub,
+) *EnhancedCommunicationHandler {
+	return &EnhancedCommunicationHandler{
+		repo:                repo,
+		aiService:           aiService,
+		fileUploadService:   fileUploadService,
+		notificationService: notificationService,
+		wsHub:               wsHub,
+	}
+}
+
+// Enhanced message endpoints
+func (h *EnhancedCommunicationHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.GetUserIDFromContext(r.Context())
+	if err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	// Parse query parameters
+	query := r.URL.Query()
+	filters := postgres.MessageFilters{
+		Limit:  20, // default
+		Offset: 0,  // default
+	}
+
+	// Parse filters
+	if typeStr := query.Get("type"); typeStr != "" {
+		filters.Type = &typeStr
+	}
+	if status := query.Get("status"); status != "" {
+		filters.Status = &status
+	}
+	if priority := query.Get("priority"); priority != "" {
+		filters.Priority = &priority
+	}
+	if senderID := query.Get("sender_id"); senderID != "" {
+		if id, err := uuid.Parse(senderID); err == nil {
+			filters.SenderID = &id
+		}
+	}
+	if search := query.Get("search"); search != "" {
+		filters.SearchQuery = &search
+	}
+	if limit := query.Get("limit"); limit != "" {
+		if l, err := strconv.Atoi(limit); err == nil && l > 0 && l <= 100 {
+			filters.Limit = l
+		}
+	}
+	if offset := query.Get("offset"); offset != "" {
+		if o, err := strconv.Atoi(offset); err == nil && o >= 0 {
+			filters.Offset = o
+		}
+	}
+
+	// Date filters
+	if dateFrom := query.Get("date_from"); dateFrom != "" {
+		if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			filters.DateFrom = &t
+		}
+	}
+	if dateTo := query.Get("date_to"); dateTo != "" {
+		if t, err := time.Parse("2006-01-02", dateTo); err == nil {
+			filters.DateTo = &t
+		}
+	}
+
+	// Tags filter
+	if tags := query.Get("tags"); tags != "" {
+		filters.Tags = strings.Split(tags, ",")
+	}
+
+	// Get messages from database
+	messages, total, err := h.repo.GetMessages(r.Context(), userID, filters)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to retrieve messages", err)
+		return
+	}
+
+	// Calculate pagination metadata
+	totalPages := (total + filters.Limit - 1) / filters.Limit
+	page := (filters.Offset / filters.Limit) + 1
+
+	response := CommunicationResponse{
+		Data:    messages,
+		Message: "Messages retrieved successfully",
+		Success: true,
+		Meta: &MetaData{
+			Total:      total,
+			Page:       page,
+			Limit:      filters.Limit,
+			TotalPages: totalPages,
+		},
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *EnhancedCommunicationHandler) CreateMessage(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	var req CreateMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Validate required fields
+	if req.Type == "" || req.Subject == "" || req.Content == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Missing required fields", nil)
+		return
+	}
+
+	// AI enhancement if requested
+	if req.UseAI && req.AIEnhancement != "" {
+		enhancementReq := services.ContentEnhancementRequest{
+			OriginalContent: req.Content,
+			EnhancementType: req.AIEnhancement,
+			Context:         "Property management communication",
+		}
+
+		enhancedContent, err := h.aiService.EnhanceContent(r.Context(), enhancementReq)
+		if err == nil && enhancedContent.EnhancedContent != "" {
+			req.Content = enhancedContent.EnhancedContent
+		}
+	}
+
+	// Create message in database
+	dbReq := postgres.CreateMessageRequest{
+		ConversationID: req.ConversationID,
+		Type:           req.Type,
+		Subject:        req.Subject,
+		Content:        req.Content,
+		Recipients:     req.Recipients,
+		SentVia:        req.SentVia,
+		Priority:       req.Priority,
+		Tags:           req.Tags,
+		TemplateID:     req.TemplateID,
+		ScheduledFor:   req.ScheduledFor,
+	}
+
+	message, err := h.repo.CreateMessage(r.Context(), userClaims.UserID, dbReq)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create message", err)
+		return
+	}
+
+	// Send real-time notification via WebSocket
+	if req.ConversationID != nil {
+		wsMessage := websocket.WebSocketMessage{
+			Type:      "chat_message",
+			Action:    "new_message",
+			Room:      req.ConversationID.String(),
+			MessageID: message.ID,
+			Sender: websocket.MessageSender{
+				ID:   userClaims.UserID,
+				Name: fmt.Sprintf("%s %s", userClaims.FirstName, userClaims.LastName),
+				Role: userClaims.Role,
+			},
+			Timestamp: time.Now(),
+		}
+
+		// Marshal message data
+		if msgData, err := json.Marshal(map[string]interface{}{
+			"id":      message.ID,
+			"subject": message.Subject,
+			"content": message.Content,
+			"sender":  message.Sender,
+		}); err == nil {
+			wsMessage.Data = msgData
+		}
+
+		h.wsHub.SendToRoom(req.ConversationID.String(), wsMessage)
+	}
+
+	// Send push notifications
+	if len(req.Recipients) > 0 {
+		senderName := fmt.Sprintf("%s %s", userClaims.FirstName, userClaims.LastName)
+		messagePreview := req.Content
+		if len(messagePreview) > 100 {
+			messagePreview = messagePreview[:97] + "..."
+		}
+
+		go h.notificationService.SendMessageNotification(
+			context.Background(),
+			req.Recipients,
+			senderName,
+			messagePreview,
+			req.Subject,
+			message.ID,
+		)
+	}
+
+	response := CommunicationResponse{
+		Data:    message,
+		Message: "Message created successfully",
+		Success: true,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusCreated, response)
+}
+
+func (h *EnhancedCommunicationHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	// Parse query parameters
+	query := r.URL.Query()
+	filters := postgres.ConversationFilters{
+		Limit:  20, // default
+		Offset: 0,  // default
+	}
+
+	if typeStr := query.Get("type"); typeStr != "" {
+		filters.Type = &typeStr
+	}
+	if status := query.Get("status"); status != "" {
+		filters.Status = &status
+	}
+	if propertyID := query.Get("property_id"); propertyID != "" {
+		if id, err := uuid.Parse(propertyID); err == nil {
+			filters.PropertyID = &id
+		}
+	}
+	if unitID := query.Get("unit_id"); unitID != "" {
+		if id, err := uuid.Parse(unitID); err == nil {
+			filters.UnitID = &id
+		}
+	}
+	if search := query.Get("search"); search != "" {
+		filters.SearchQuery = &search
+	}
+	if limit := query.Get("limit"); limit != "" {
+		if l, err := strconv.Atoi(limit); err == nil && l > 0 && l <= 100 {
+			filters.Limit = l
+		}
+	}
+	if offset := query.Get("offset"); offset != "" {
+		if o, err := strconv.Atoi(offset); err == nil && o >= 0 {
+			filters.Offset = o
+		}
+	}
+
+	conversations, total, err := h.repo.GetConversations(r.Context(), userClaims.UserID, filters)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to retrieve conversations", err)
+		return
+	}
+
+	totalPages := (total + filters.Limit - 1) / filters.Limit
+	page := (filters.Offset / filters.Limit) + 1
+
+	response := CommunicationResponse{
+		Data:    conversations,
+		Message: "Conversations retrieved successfully",
+		Success: true,
+		Meta: &MetaData{
+			Total:      total,
+			Page:       page,
+			Limit:      filters.Limit,
+			TotalPages: totalPages,
+		},
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *EnhancedCommunicationHandler) CreateConversation(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	var req postgres.CreateConversationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if req.Title == "" || len(req.Participants) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Missing required fields", nil)
+		return
+	}
+
+	conversation, err := h.repo.CreateConversation(r.Context(), userClaims.UserID, req)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create conversation", err)
+		return
+	}
+
+	// Notify participants via WebSocket
+	wsMessage := websocket.WebSocketMessage{
+		Type:   "conversation",
+		Action: "new_conversation",
+		Sender: websocket.MessageSender{
+			ID:   userClaims.UserID,
+			Name: fmt.Sprintf("%s %s", userClaims.FirstName, userClaims.LastName),
+			Role: userClaims.Role,
+		},
+		Timestamp: time.Now(),
+	}
+
+	if msgData, err := json.Marshal(conversation); err == nil {
+		wsMessage.Data = msgData
+	}
+
+	// Send to all participants
+	for _, participantID := range req.Participants {
+		h.wsHub.SendToUser(participantID, wsMessage)
+	}
+
+	response := CommunicationResponse{
+		Data:    conversation,
+		Message: "Conversation created successfully",
+		Success: true,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusCreated, response)
+}
+
+func (h *EnhancedCommunicationHandler) GetMessageTemplates(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	category := r.URL.Query().Get("category")
+	templates, err := h.repo.GetMessageTemplates(r.Context(), userClaims.UserID, category)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to retrieve templates", err)
+		return
+	}
+
+	response := CommunicationResponse{
+		Data:    templates,
+		Message: "Templates retrieved successfully",
+		Success: true,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *EnhancedCommunicationHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	// Parse multipart form
+	err = r.ParseMultipartForm(32 << 20) // 32MB max
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Failed to parse form", err)
+		return
+	}
+
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "No files provided", nil)
+		return
+	}
+
+	// Parse optional message ID
+	var messageID *uuid.UUID
+	if msgIDStr := r.FormValue("message_id"); msgIDStr != "" {
+		if id, err := uuid.Parse(msgIDStr); err == nil {
+			messageID = &id
+		}
+	}
+
+	// Upload options
+	options := services.UploadOptions{
+		MessageID:         messageID,
+		GenerateThumbnail: true,
+		ThumbnailSize:     300,
+		Metadata: map[string]string{
+			"uploaded_from": "communication_system",
+		},
+	}
+
+	results, errors := h.fileUploadService.UploadMultipleFiles(r.Context(), files, userClaims.UserID, options)
+
+	// Filter successful uploads
+	var successfulUploads []*services.UploadResult
+	var uploadErrors []string
+
+	for i, result := range results {
+		if errors[i] != nil {
+			uploadErrors = append(uploadErrors, fmt.Sprintf("%s: %s", files[i].Filename, errors[i].Error()))
+		} else if result != nil {
+			successfulUploads = append(successfulUploads, result)
+		}
+	}
+
+	// Return results
+	responseData := map[string]interface{}{
+		"successful_uploads": successfulUploads,
+		"upload_errors":      uploadErrors,
+		"total_files":        len(files),
+		"successful_count":   len(successfulUploads),
+		"error_count":        len(uploadErrors),
+	}
+
+	message := fmt.Sprintf("Uploaded %d of %d files successfully", len(successfulUploads), len(files))
+	if len(uploadErrors) > 0 {
+		message += fmt.Sprintf(" (%d failed)", len(uploadErrors))
+	}
+
+	response := CommunicationResponse{
+		Data:    responseData,
+		Message: message,
+		Success: len(successfulUploads) > 0,
+	}
+
+	statusCode := http.StatusOK
+	if len(successfulUploads) == 0 {
+		statusCode = http.StatusBadRequest
+	} else if len(uploadErrors) > 0 {
+		statusCode = http.StatusPartialContent
+	}
+
+	utils.WriteJSONResponse(w, statusCode, response)
+}
+
+func (h *EnhancedCommunicationHandler) AIAssistance(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	var req AIAssistanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	var result interface{}
+	var message string
+
+	switch req.Action {
+	case "smart_reply":
+		if req.OriginalMessage == "" {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Original message is required for smart replies", nil)
+			return
+		}
+
+		smartReplyReq := services.SmartReplyRequest{
+			OriginalMessage:     req.OriginalMessage,
+			ConversationContext: req.ConversationContext,
+			SenderRole:          req.SenderRole,
+			RecipientRole:       req.RecipientRole,
+			Tone:                req.Tone,
+			MaxReplies:          req.MaxReplies,
+		}
+
+		if smartReplyReq.MaxReplies == 0 {
+			smartReplyReq.MaxReplies = 3
+		}
+		if smartReplyReq.Tone == "" {
+			smartReplyReq.Tone = "professional"
+		}
+
+		smartReply, err := h.aiService.GenerateSmartReplies(r.Context(), smartReplyReq)
+		if err != nil {
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to generate smart replies", err)
+			return
+		}
+
+		result = smartReply
+		message = "Smart replies generated successfully"
+
+	case "summarize":
+		if len(req.Messages) == 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Messages are required for summarization", nil)
+			return
+		}
+
+		summaryReq := services.MessageSummaryRequest{
+			Messages:         req.Messages,
+			SummaryType:      req.SummaryType,
+			IncludeActions:   true,
+			IncludeSentiment: true,
+		}
+
+		if summaryReq.SummaryType == "" {
+			summaryReq.SummaryType = "detailed"
+		}
+
+		summary, err := h.aiService.SummarizeMessages(r.Context(), summaryReq)
+		if err != nil {
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to generate summary", err)
+			return
+		}
+
+		result = summary
+		message = "Message summary generated successfully"
+
+	case "enhance":
+		if req.OriginalMessage == "" {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Original message is required for enhancement", nil)
+			return
+		}
+
+		enhanceReq := services.ContentEnhancementRequest{
+			OriginalContent: req.OriginalMessage,
+			EnhancementType: req.EnhancementType,
+			Context:         "Property management communication",
+		}
+
+		if enhanceReq.EnhancementType == "" {
+			enhanceReq.EnhancementType = "clarity"
+		}
+
+		enhanced, err := h.aiService.EnhanceContent(r.Context(), enhanceReq)
+		if err != nil {
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to enhance content", err)
+			return
+		}
+
+		result = enhanced
+		message = "Content enhanced successfully"
+
+	case "template":
+		if req.TemplateCategory == "" {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Template category is required", nil)
+			return
+		}
+
+		templateReq := services.TemplateGenerationRequest{
+			Category:       req.TemplateCategory,
+			Tone:           req.Tone,
+			Length:         "medium",
+			IncludeSubject: true,
+		}
+
+		if templateReq.Tone == "" {
+			templateReq.Tone = "professional"
+		}
+
+		template, err := h.aiService.GenerateTemplate(r.Context(), templateReq)
+		if err != nil {
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to generate template", err)
+			return
+		}
+
+		result = template
+		message = "Template generated successfully"
+
+	default:
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid AI assistance action", nil)
+		return
+	}
+
+	response := CommunicationResponse{
+		Data:    result,
+		Message: message,
+		Success: true,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *EnhancedCommunicationHandler) MarkMessageAsRead(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	vars := mux.Vars(r)
+	messageID, err := uuid.Parse(vars["messageId"])
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid message ID", err)
+		return
+	}
+
+	err = h.repo.MarkMessageAsRead(r.Context(), userClaims.UserID, messageID)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to mark message as read", err)
+		return
+	}
+
+	// Send WebSocket notification about read status
+	wsMessage := websocket.WebSocketMessage{
+		Type:      "message_status",
+		Action:    "message_read",
+		MessageID: messageID,
+		Sender: websocket.MessageSender{
+			ID:   userClaims.UserID,
+			Name: fmt.Sprintf("%s %s", userClaims.FirstName, userClaims.LastName),
+			Role: userClaims.Role,
+		},
+		Timestamp: time.Now(),
+	}
+
+	if msgData, err := json.Marshal(map[string]interface{}{
+		"message_id": messageID,
+		"status":     "read",
+		"read_by":    userClaims.UserID,
+		"read_at":    time.Now(),
+	}); err == nil {
+		wsMessage.Data = msgData
+	}
+
+	// This would ideally be sent to the conversation room
+	// For now, we'll broadcast to all connected users
+	h.wsHub.SendToUser(userClaims.UserID, wsMessage)
+
+	response := CommunicationResponse{
+		Message: "Message marked as read",
+		Success: true,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *EnhancedCommunicationHandler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
+	userClaims, err := utils.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
+	// This would typically query analytics data from the database
+	// For now, return mock analytics data
+	analytics := map[string]interface{}{
+		"messages_sent":     150,
+		"messages_received": 89,
+		"response_rate":     0.85,
+		"avg_response_time": "2h 30m",
+		"templates_used":    12,
+		"popular_templates": []string{
+			"Rent Reminder",
+			"Maintenance Notice",
+			"Welcome Message",
+		},
+		"activity_by_day": map[string]int{
+			"Monday":    25,
+			"Tuesday":   30,
+			"Wednesday": 22,
+			"Thursday":  28,
+			"Friday":    20,
+			"Saturday":  8,
+			"Sunday":    12,
+		},
+		"message_types": map[string]int{
+			"individual": 120,
+			"group":      25,
+			"broadcast":  5,
+		},
+	}
+
+	response := CommunicationResponse{
+		Data:    analytics,
+		Message: "Analytics retrieved successfully",
+		Success: true,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}

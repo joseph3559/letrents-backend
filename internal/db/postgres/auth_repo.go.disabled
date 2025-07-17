@@ -1,0 +1,405 @@
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+
+	"pay-rents-backend/internal/core/domain"
+	"pay-rents-backend/internal/core/port"
+
+	"github.com/google/uuid"
+)
+
+type authRepository struct {
+	db *DB
+}
+
+// NewAuthRepository creates a new auth repository
+func NewAuthRepository(db *DB) port.AuthRepository {
+	return &authRepository{db: db}
+}
+
+// CreateRefreshToken creates a new refresh token
+func (r *authRepository) CreateRefreshToken(ctx context.Context, refreshToken *domain.RefreshToken) error {
+	query := `
+		INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at, is_revoked)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	refreshToken.ID = uuid.New()
+	refreshToken.CreatedAt = time.Now()
+
+	_, err := r.db.ExecContext(ctx, query,
+		refreshToken.ID,
+		refreshToken.UserID,
+		refreshToken.TokenHash,
+		refreshToken.ExpiresAt,
+		refreshToken.CreatedAt,
+		refreshToken.IsRevoked,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create refresh token: %w", err)
+	}
+
+	return nil
+}
+
+// GetRefreshToken retrieves a refresh token by token string
+func (r *authRepository) GetRefreshToken(ctx context.Context, token string) (*domain.RefreshToken, error) {
+	query := `
+		SELECT id, user_id, token, expires_at, created_at, is_revoked
+		FROM refresh_tokens
+		WHERE token = $1
+	`
+
+	refreshToken := &domain.RefreshToken{}
+
+	err := r.db.QueryRowContext(ctx, query, token).Scan(
+		&refreshToken.ID,
+		&refreshToken.UserID,
+		&refreshToken.TokenHash,
+		&refreshToken.ExpiresAt,
+		&refreshToken.CreatedAt,
+		&refreshToken.IsRevoked,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("refresh token not found")
+		}
+		return nil, fmt.Errorf("failed to get refresh token: %w", err)
+	}
+
+	return refreshToken, nil
+}
+
+// RevokeRefreshToken revokes a refresh token
+func (r *authRepository) RevokeRefreshToken(ctx context.Context, token string) error {
+	query := `
+		UPDATE refresh_tokens 
+		SET is_revoked = true
+		WHERE token = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, token)
+	if err != nil {
+		return fmt.Errorf("failed to revoke refresh token: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("refresh token not found")
+	}
+
+	return nil
+}
+
+// RevokeAllUserRefreshTokens revokes all refresh tokens for a user
+func (r *authRepository) RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error {
+	query := `
+		UPDATE refresh_tokens 
+		SET is_revoked = true
+		WHERE user_id = $1 AND is_revoked = false
+	`
+
+	_, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke all user refresh tokens: %w", err)
+	}
+
+	return nil
+}
+
+// CleanupExpiredRefreshTokens removes expired refresh tokens
+func (r *authRepository) CleanupExpiredRefreshTokens(ctx context.Context) error {
+	query := `
+		DELETE FROM refresh_tokens 
+		WHERE expires_at < CURRENT_TIMESTAMP
+	`
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired refresh tokens: %w", err)
+	}
+
+	return nil
+}
+
+// CreatePasswordResetToken creates a new password reset token
+func (r *authRepository) CreatePasswordResetToken(ctx context.Context, resetToken *domain.PasswordResetToken) error {
+	query := `
+		INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at, is_used)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	resetToken.ID = uuid.New()
+	resetToken.CreatedAt = time.Now()
+
+	_, err := r.db.ExecContext(ctx, query,
+		resetToken.ID,
+		resetToken.UserID,
+		resetToken.TokenHash,
+		resetToken.ExpiresAt,
+		resetToken.CreatedAt,
+		resetToken.IsUsed,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create password reset token: %w", err)
+	}
+
+	return nil
+}
+
+// GetPasswordResetToken retrieves a password reset token by token string
+func (r *authRepository) GetPasswordResetToken(ctx context.Context, token string) (*domain.PasswordResetToken, error) {
+	query := `
+		SELECT id, user_id, token, expires_at, created_at, is_used
+		FROM password_reset_tokens
+		WHERE token = $1
+	`
+
+	resetToken := &domain.PasswordResetToken{}
+
+	err := r.db.QueryRowContext(ctx, query, token).Scan(
+		&resetToken.ID,
+		&resetToken.UserID,
+		&resetToken.TokenHash,
+		&resetToken.ExpiresAt,
+		&resetToken.CreatedAt,
+		&resetToken.IsUsed,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("password reset token not found")
+		}
+		return nil, fmt.Errorf("failed to get password reset token: %w", err)
+	}
+
+	return resetToken, nil
+}
+
+// UsePasswordResetToken marks a password reset token as used
+func (r *authRepository) UsePasswordResetToken(ctx context.Context, token string) error {
+	query := `
+		UPDATE password_reset_tokens 
+		SET is_used = true
+		WHERE token = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, token)
+	if err != nil {
+		return fmt.Errorf("failed to use password reset token: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("password reset token not found")
+	}
+
+	return nil
+}
+
+// CleanupExpiredPasswordResetTokens removes expired password reset tokens
+func (r *authRepository) CleanupExpiredPasswordResetTokens(ctx context.Context) error {
+	query := `
+		DELETE FROM password_reset_tokens 
+		WHERE expires_at < CURRENT_TIMESTAMP
+	`
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired password reset tokens: %w", err)
+	}
+
+	return nil
+}
+
+// CreateUserSession creates a new user session
+func (r *authRepository) CreateUserSession(ctx context.Context, session *domain.UserSession) error {
+	query := `
+		INSERT INTO user_sessions (id, user_id, token, ip_address, user_agent, expires_at, created_at, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
+
+	session.ID = uuid.New()
+	session.CreatedAt = time.Now()
+
+	_, err := r.db.ExecContext(ctx, query,
+		session.ID,
+		session.UserID,
+		session.SessionToken,
+		session.IPAddress,
+		session.UserAgent,
+		session.ExpiresAt,
+		session.CreatedAt,
+		session.IsActive,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create user session: %w", err)
+	}
+
+	return nil
+}
+
+// GetUserSession retrieves a user session by token
+func (r *authRepository) GetUserSession(ctx context.Context, token string) (*domain.UserSession, error) {
+	query := `
+		SELECT id, user_id, token, ip_address, user_agent, expires_at, created_at, is_active
+		FROM user_sessions
+		WHERE token = $1
+	`
+
+	session := &domain.UserSession{}
+
+	err := r.db.QueryRowContext(ctx, query, token).Scan(
+		&session.ID,
+		&session.UserID,
+		&session.SessionToken,
+		&session.IPAddress,
+		&session.UserAgent,
+		&session.ExpiresAt,
+		&session.CreatedAt,
+		&session.IsActive,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user session not found")
+		}
+		return nil, fmt.Errorf("failed to get user session: %w", err)
+	}
+
+	return session, nil
+}
+
+// UpdateUserSession updates a user session
+func (r *authRepository) UpdateUserSession(ctx context.Context, session *domain.UserSession) error {
+	query := `
+		UPDATE user_sessions 
+		SET ip_address = $2, user_agent = $3, expires_at = $4, is_active = $5
+		WHERE id = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query,
+		session.ID,
+		session.IPAddress,
+		session.UserAgent,
+		session.ExpiresAt,
+		session.IsActive,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update user session: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user session not found")
+	}
+
+	return nil
+}
+
+// DeactivateUserSession deactivates a user session
+func (r *authRepository) DeactivateUserSession(ctx context.Context, token string) error {
+	query := `
+		UPDATE user_sessions 
+		SET is_active = false
+		WHERE token = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, token)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate user session: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user session not found")
+	}
+
+	return nil
+}
+
+// DeactivateAllUserSessions deactivates all sessions for a user
+func (r *authRepository) DeactivateAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	query := `
+		UPDATE user_sessions 
+		SET is_active = false
+		WHERE user_id = $1 AND is_active = true
+	`
+
+	_, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate all user sessions: %w", err)
+	}
+
+	return nil
+}
+
+// CleanupExpiredSessions removes expired sessions
+func (r *authRepository) CleanupExpiredSessions(ctx context.Context) error {
+	query := `
+		DELETE FROM user_sessions 
+		WHERE expires_at < CURRENT_TIMESTAMP
+	`
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired sessions: %w", err)
+	}
+
+	return nil
+}
+
+// CleanupExpiredEmailVerificationTokens removes expired email verification tokens
+func (r *authRepository) CleanupExpiredEmailVerificationTokens(ctx context.Context) error {
+	query := `
+		DELETE FROM email_verification_tokens 
+		WHERE expires_at < CURRENT_TIMESTAMP
+	`
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired email verification tokens: %w", err)
+	}
+
+	return nil
+}
+
+// CleanupExpiredPhoneVerificationTokens removes expired phone verification tokens
+func (r *authRepository) CleanupExpiredPhoneVerificationTokens(ctx context.Context) error {
+	query := `
+		DELETE FROM phone_verification_tokens 
+		WHERE expires_at < CURRENT_TIMESTAMP
+	`
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired phone verification tokens: %w", err)
+	}
+
+	return nil
+}

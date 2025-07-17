@@ -1,0 +1,178 @@
+{
+  "prop-1": {
+    "address": {
+      "city": "Nairobi",
+      "country": "Kenya",
+      "street": "123 Demo Street"
+    },
+    "agency_id": null,
+    "amenities": [],
+    "caretaker": null,
+    "caretaker_id": null,
+    "caretaker_phone": null,
+    "city": "Nairobi",
+    "created_at": "2025-06-19T20:24:59+03:00",
+    "created_by": "demo-user-id",
+    "description": "A demo property for testing",
+    "estimated_value": null,
+    "features": [],
+    "id": "prop-1",
+    "images": [],
+    "monthly_revenue": 0,
+    "name": "Demo Property",
+    "occupied_units": 0,
+    "owner_id": "demo-landlord-id",
+    "status": "active",
+    "tags": [],
+    "total_units": 5,
+    "type": "residential",
+    "updated_at": "2025-06-19T20:24:59+03:00",
+    "vacant_units": 5
+  },
+  "prop-2": {
+    "address": {
+      "city": "Nairobi",
+      "country": "Kenya",
+      "postal_code": "",
+      "state": "",
+      "street": "1st Hunter Link court"
+    },
+    "agency_id": null,
+    "amenities": [],
+    "caretaker": "",
+    "caretaker_id": "",
+    "caretaker_phone": "",
+    "city": "Nairobi",
+    "created_at": "2025-06-19T20:30:23+03:00",
+    "created_by": "demo-user-id",
+    "description": "Around Hunters",
+    "estimated_value": 0,
+    "features": [],
+    "id": "prop-2",
+    "images": [
+      "https://ik.imagekit.io/qjiiqvbrb/properties/house1_vuZnJwSMv.jpg"
+    ],
+    "monthly_revenue": 0,
+    "name": "FairDeal Apartments",
+    "occupied_units": 0,
+    "owner_id": "demo-landlord-id",
+    "status": "active",
+    "tags": [
+      "Luxury"
+    ],
+    "total_units": 0,
+    "type": "residential",
+    "updated_at": "2025-06-19T20:30:23+03:00",
+    "vacant_units": 0
+  },
+  "prop-3": {
+    "address": {
+      "city": "Nairobi",
+      "country": "Kenya",
+      "postal_code": "00100",
+      "state": "Nairobi County",
+      "street": "123 Test Street"
+    },
+    "agency_id": null,
+    "amenities": [
+      "Parking",
+      "Security"
+    ],
+    "caretaker": null,
+    "caretaker_id": "caretaker-1",
+    "caretaker_phone": null,
+    "city": "Nairobi",
+    "created_at": "2025-06-21T02:46:42+03:00",
+    "created_by": "demo-user-id",
+    "description": "A test property for unit creation",
+    "estimated_value": null,
+    "features": [
+      "Parking",
+      "Security"
+    ],
+    "id": "prop-3",
+    "images": [],
+    "monthly_revenue": 0,
+    "name": "Test Property",
+    "occupied_units": 0,
+    "owner_id": "demo-landlord-id",
+    "status": "active",
+    "tags": [
+      "test"
+    ],
+    "total_units": 5,
+    "type": "residential",
+    "updated_at": "2025-06-21T02:46:42+03:00",
+    "vacant_units": 5
+  },
+  "prop-4": {
+    "address": {
+      "city": "Nairobi",
+      "country": "Kenya",
+      "postal_code": "",
+      "state": "",
+      "street": "1St Hunters Link Court"
+    },
+    "agency_id": null,
+    "amenities": [],
+    "caretaker": "",
+    "caretaker_id": "",
+    "caretaker_phone": "",
+    "city": "Nairobi",
+    "created_at": "2025-06-22T21:25:51+03:00",
+    "created_by": "demo-user-id",
+    "description": "Best home in Nairobi",
+    "estimated_value": 0,
+    "features": [],
+    "id": "prop-4",
+    "images": [
+      "https://ik.imagekit.io/qjiiqvbrb/properties/payrent_Kyo2_MOLbT.jpeg"
+    ],
+    "monthly_revenue": 0,
+    "name": "Minto Home",
+    "occupied_units": 0,
+    "owner_id": "demo-landlord-id",
+    "status": "active",
+    "tags": [
+      "Luxury"
+    ],
+    "total_units": 0,
+    "type": "commercial",
+    "updated_at": "2025-06-22T21:25:51+03:00",
+    "vacant_units": 0
+  },
+  "prop-5": {
+    "address": {
+      "city": "Nairobi",
+      "country": "Kenya",
+      "postal_code": "",
+      "state": "",
+      "street": "1st Minto"
+    },
+    "agency_id": null,
+    "amenities": [],
+    "caretaker": "",
+    "caretaker_id": "caretaker-1",
+    "caretaker_phone": "",
+    "city": "Nairobi",
+    "created_at": "2025-07-04T00:46:52+03:00",
+    "created_by": "demo-user-id",
+    "description": "For testing",
+    "estimated_value": 0,
+    "features": [],
+    "id": "prop-5",
+    "images": [],
+    "monthly_revenue": 0,
+    "name": "Test One",
+    "occupied_units": 0,
+    "owner_id": "demo-landlord-id",
+    "status": "active",
+    "tags": [
+      "Sexy"
+    ],
+    "total_units": 0,
+    "type": "residential",
+    "updated_at": "2025-07-04T00:46:52+03:00",
+    "vacant_units": 0
+  }
+}

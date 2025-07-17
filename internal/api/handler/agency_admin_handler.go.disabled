@@ -1,0 +1,680 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"time"
+
+	"pay-rents-backend/internal/core/port"
+	"pay-rents-backend/internal/utils"
+
+	"github.com/gorilla/mux"
+)
+
+// AgencyAdminHandler handles agency admin operations
+type AgencyAdminHandler struct {
+	userRepo     port.UserRepository
+	propertyRepo port.PropertyRepository
+	unitRepo     port.UnitRepository
+}
+
+// NewAgencyAdminHandler creates a new agency admin handler
+func NewAgencyAdminHandler(
+	userRepo port.UserRepository,
+	propertyRepo port.PropertyRepository,
+	unitRepo port.UnitRepository,
+) *AgencyAdminHandler {
+	return &AgencyAdminHandler{
+		userRepo:     userRepo,
+		propertyRepo: propertyRepo,
+		unitRepo:     unitRepo,
+	}
+}
+
+// Dashboard KPIs & Overview Panel
+
+// GetDashboardKPIs returns key metrics for the agency dashboard
+func (h *AgencyAdminHandler) GetDashboardKPIs(w http.ResponseWriter, r *http.Request) {
+	// Use mock data for demo purposes
+	kpis := map[string]interface{}{
+		"total_properties":  15,
+		"total_units":       180,
+		"occupancy_rate":    86.7,
+		"total_tenants":     156,
+		"income_this_month": 2450000.00,
+		"unpaid_rent_count": 12,
+		"vacant_units":      24,
+		"open_tickets":      8,
+		"last_updated":      time.Now(),
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Dashboard KPIs retrieved successfully", kpis)
+}
+
+// GetDashboardChartData returns data for dashboard charts
+func (h *AgencyAdminHandler) GetDashboardChartData(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Mock data for charts - in real implementation, this would come from database
+	chartData := map[string]interface{}{
+		"rent_collection_6_months": []map[string]interface{}{
+			{"month": "Jan", "amount": 2100000},
+			{"month": "Feb", "amount": 2350000},
+			{"month": "Mar", "amount": 2200000},
+			{"month": "Apr", "amount": 2450000},
+			{"month": "May", "amount": 2380000},
+			{"month": "Jun", "amount": 2450000},
+		},
+		"occupancy_breakdown": map[string]interface{}{
+			"occupied": 156,
+			"vacant":   18,
+			"reserved": 6,
+		},
+		"late_payments_trend": []map[string]interface{}{
+			{"month": "Jan", "count": 8},
+			{"month": "Feb", "count": 12},
+			{"month": "Mar", "count": 6},
+			{"month": "Apr", "count": 15},
+			{"month": "May", "count": 9},
+			{"month": "Jun", "count": 12},
+		},
+		"upcoming_renewals": []map[string]interface{}{
+			{"date": "2024-07-15", "tenant": "John Doe", "unit": "A-101"},
+			{"date": "2024-07-22", "tenant": "Jane Smith", "unit": "B-205"},
+			{"date": "2024-08-01", "tenant": "Mike Johnson", "unit": "C-301"},
+		},
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Chart data retrieved successfully", chartData)
+}
+
+// Agents & Caretakers Management
+
+// GetAgents returns all agents in the agency
+func (h *AgencyAdminHandler) GetAgents(w http.ResponseWriter, r *http.Request) {
+	// Use mock data for demo purposes
+	agents := []map[string]interface{}{
+		{
+			"id":           "agent-1",
+			"email":        "jane.agent@demo.com",
+			"first_name":   "Jane",
+			"last_name":    "Agent",
+			"phone_number": "+254712345678",
+			"role":         "agent",
+			"created_at":   time.Now().Add(-30 * 24 * time.Hour),
+			"is_active":    true,
+		},
+		{
+			"id":           "agent-2",
+			"email":        "john.agent@demo.com",
+			"first_name":   "John",
+			"last_name":    "Agent",
+			"phone_number": "+254712345679",
+			"role":         "agent",
+			"created_at":   time.Now().Add(-15 * 24 * time.Hour),
+			"is_active":    true,
+		},
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Agents retrieved successfully", agents)
+}
+
+// CreateAgent creates a new agent
+func (h *AgencyAdminHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	var req struct {
+		Email       string `json:"email" validate:"required,email"`
+		FirstName   string `json:"first_name" validate:"required"`
+		LastName    string `json:"last_name" validate:"required"`
+		PhoneNumber string `json:"phone_number"`
+		Password    string `json:"password" validate:"required,min=8"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Create agent user
+	agent, err := h.userRepo.CreateUser(req.Email, req.Password, req.FirstName, req.LastName,
+		req.PhoneNumber, "agent", agencyID, userClaims["user_id"].(string))
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to create agent")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusCreated, "Agent created successfully", agent)
+}
+
+// GetCaretakers returns all caretakers in the agency
+func (h *AgencyAdminHandler) GetCaretakers(w http.ResponseWriter, r *http.Request) {
+	// Use mock data for demo purposes
+	caretakers := []map[string]interface{}{
+		{
+			"id":           "caretaker-1",
+			"email":        "john.caretaker@demo.com",
+			"first_name":   "John",
+			"last_name":    "Caretaker",
+			"phone_number": "+254712345680",
+			"role":         "caretaker",
+			"created_at":   time.Now().Add(-45 * 24 * time.Hour),
+			"is_active":    true,
+		},
+		{
+			"id":           "caretaker-2",
+			"email":        "mary.caretaker@demo.com",
+			"first_name":   "Mary",
+			"last_name":    "Caretaker",
+			"phone_number": "+254712345681",
+			"role":         "caretaker",
+			"created_at":   time.Now().Add(-20 * 24 * time.Hour),
+			"is_active":    true,
+		},
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Caretakers retrieved successfully", caretakers)
+}
+
+// CreateCaretaker creates a new caretaker
+func (h *AgencyAdminHandler) CreateCaretaker(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	var req struct {
+		Email       string `json:"email" validate:"required,email"`
+		FirstName   string `json:"first_name" validate:"required"`
+		LastName    string `json:"last_name" validate:"required"`
+		PhoneNumber string `json:"phone_number"`
+		Password    string `json:"password" validate:"required,min=8"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Create caretaker user
+	caretaker, err := h.userRepo.CreateUser(req.Email, req.Password, req.FirstName, req.LastName,
+		req.PhoneNumber, "caretaker", agencyID, userClaims["user_id"].(string))
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to create caretaker")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusCreated, "Caretaker created successfully", caretaker)
+}
+
+// Tenant Management
+
+// GetTenants returns all tenants in the agency
+func (h *AgencyAdminHandler) GetTenants(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	tenants, err := h.userRepo.GetUsersByAgencyAndRole(agencyID, "tenant")
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to retrieve tenants")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Tenants retrieved successfully", tenants)
+}
+
+// CreateTenant creates a new tenant
+func (h *AgencyAdminHandler) CreateTenant(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	var req struct {
+		Email       string `json:"email" validate:"required,email"`
+		FirstName   string `json:"first_name" validate:"required"`
+		LastName    string `json:"last_name" validate:"required"`
+		PhoneNumber string `json:"phone_number"`
+		Password    string `json:"password" validate:"required,min=8"`
+		UnitID      string `json:"unit_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Create tenant user
+	tenant, err := h.userRepo.CreateUser(req.Email, req.Password, req.FirstName, req.LastName,
+		req.PhoneNumber, "tenant", agencyID, userClaims["user_id"].(string))
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to create tenant")
+		return
+	}
+
+	// If unit ID provided, assign tenant to unit
+	if req.UnitID != "" {
+		// This would be implemented in unit service
+		// unitService.AssignTenant(req.UnitID, tenant.ID)
+	}
+
+	utils.WriteSuccess(w, http.StatusCreated, "Tenant created successfully", tenant)
+}
+
+// Reports Module
+
+// GetRentCollectionReport generates rent collection summary
+func (h *AgencyAdminHandler) GetRentCollectionReport(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Get query parameters
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+
+	if startDate == "" {
+		startDate = time.Now().AddDate(0, -1, 0).Format("2006-01-02")
+	}
+	if endDate == "" {
+		endDate = time.Now().Format("2006-01-02")
+	}
+
+	// Mock report data - in real implementation, this would query the database
+	report := map[string]interface{}{
+		"period": map[string]string{
+			"start_date": startDate,
+			"end_date":   endDate,
+		},
+		"summary": map[string]interface{}{
+			"total_expected":  2450000.00,
+			"total_collected": 2200000.00,
+			"collection_rate": 89.8,
+			"outstanding":     250000.00,
+		},
+		"by_property": []map[string]interface{}{
+			{
+				"property_name": "Sunrise Apartments",
+				"expected":      850000.00,
+				"collected":     780000.00,
+				"outstanding":   70000.00,
+			},
+			{
+				"property_name": "Garden View Complex",
+				"expected":      650000.00,
+				"collected":     620000.00,
+				"outstanding":   30000.00,
+			},
+		},
+		"generated_at": time.Now(),
+		"agency_id":    agencyID,
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Rent collection report generated", report)
+}
+
+// GetOccupancyReport generates occupancy report
+func (h *AgencyAdminHandler) GetOccupancyReport(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Mock occupancy report data
+	report := map[string]interface{}{
+		"overview": map[string]interface{}{
+			"total_units":    180,
+			"occupied":       156,
+			"vacant":         18,
+			"reserved":       6,
+			"occupancy_rate": 86.7,
+		},
+		"by_property": []map[string]interface{}{
+			{
+				"property_name":  "Sunrise Apartments",
+				"total_units":    80,
+				"occupied":       72,
+				"occupancy_rate": 90.0,
+			},
+			{
+				"property_name":  "Garden View Complex",
+				"total_units":    60,
+				"occupied":       52,
+				"occupancy_rate": 86.7,
+			},
+		},
+		"by_unit_type": []map[string]interface{}{
+			{
+				"unit_type":      "Bedsitter",
+				"total":          45,
+				"occupied":       42,
+				"occupancy_rate": 93.3,
+			},
+			{
+				"unit_type":      "1 Bedroom",
+				"total":          85,
+				"occupied":       76,
+				"occupancy_rate": 89.4,
+			},
+		},
+		"generated_at": time.Now(),
+		"agency_id":    agencyID,
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Occupancy report generated", report)
+}
+
+// GetMaintenanceReport generates maintenance report
+func (h *AgencyAdminHandler) GetMaintenanceReport(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Mock maintenance report data
+	report := map[string]interface{}{
+		"overview": map[string]interface{}{
+			"total_tickets": 45,
+			"open":          8,
+			"in_progress":   12,
+			"resolved":      25,
+		},
+		"by_category": []map[string]interface{}{
+			{
+				"category":            "Plumbing",
+				"total":               18,
+				"open":                3,
+				"avg_resolution_time": "2.5 days",
+			},
+			{
+				"category":            "Electrical",
+				"total":               12,
+				"open":                2,
+				"avg_resolution_time": "1.8 days",
+			},
+		},
+		"by_priority": []map[string]interface{}{
+			{
+				"priority":          "High",
+				"count":             8,
+				"avg_response_time": "4 hours",
+			},
+			{
+				"priority":          "Medium",
+				"count":             22,
+				"avg_response_time": "12 hours",
+			},
+		},
+		"generated_at": time.Now(),
+		"agency_id":    agencyID,
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Maintenance report generated", report)
+}
+
+// Unit Assignments
+
+// GetUnitAssignments returns unit assignments for agents/caretakers
+func (h *AgencyAdminHandler) GetUnitAssignments(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Mock assignment data
+	assignments := []map[string]interface{}{
+		{
+			"agent_id":            "agent-1",
+			"agent_name":          "John Smith",
+			"assigned_properties": 3,
+			"assigned_units":      45,
+			"load_percentage":     75,
+		},
+		{
+			"caretaker_id":        "caretaker-1",
+			"caretaker_name":      "Mary Johnson",
+			"assigned_properties": 2,
+			"assigned_units":      30,
+			"load_percentage":     60,
+		},
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Unit assignments retrieved", assignments)
+}
+
+// AssignUnitsToAgent assigns units to an agent
+func (h *AgencyAdminHandler) AssignUnitsToAgent(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	agentID := vars["agent_id"]
+
+	var req struct {
+		UnitIDs []string `json:"unit_ids" validate:"required"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Mock assignment logic
+	result := map[string]interface{}{
+		"agent_id":       agentID,
+		"assigned_units": len(req.UnitIDs),
+		"message":        "Units assigned successfully",
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Units assigned to agent", result)
+}
+
+// Internal Messaging
+
+// GetMessages returns internal messages
+func (h *AgencyAdminHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	userID := userClaims["user_id"].(string)
+
+	// Mock messages data
+	messages := []map[string]interface{}{
+		{
+			"id":         "msg-1",
+			"from":       "agent-1",
+			"from_name":  "John Smith",
+			"subject":    "Maintenance Update",
+			"message":    "Plumbing issue in Unit A-101 has been resolved",
+			"read":       false,
+			"created_at": time.Now().Add(-2 * time.Hour),
+		},
+		{
+			"id":         "msg-2",
+			"from":       "caretaker-1",
+			"from_name":  "Mary Johnson",
+			"subject":    "Weekly Report",
+			"message":    "Completed cleaning of common areas in Building B",
+			"read":       true,
+			"created_at": time.Now().Add(-24 * time.Hour),
+		},
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Messages retrieved", messages)
+}
+
+// SendMessage sends an internal message
+func (h *AgencyAdminHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	fromUserID := userClaims["user_id"].(string)
+
+	var req struct {
+		ToUserID string `json:"to_user_id" validate:"required"`
+		Subject  string `json:"subject" validate:"required"`
+		Message  string `json:"message" validate:"required"`
+		Priority string `json:"priority"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Mock message sending
+	result := map[string]interface{}{
+		"id":      "msg-" + strconv.FormatInt(time.Now().Unix(), 10),
+		"from":    fromUserID,
+		"to":      req.ToUserID,
+		"subject": req.Subject,
+		"sent_at": time.Now(),
+		"status":  "sent",
+	}
+
+	utils.WriteSuccess(w, http.StatusCreated, "Message sent successfully", result)
+}
+
+// Lease Management
+
+// GetLeases returns all leases in the agency
+func (h *AgencyAdminHandler) GetLeases(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Mock lease data
+	leases := []map[string]interface{}{
+		{
+			"id":           "lease-1",
+			"tenant_name":  "John Doe",
+			"unit":         "A-101",
+			"property":     "Sunrise Apartments",
+			"start_date":   "2024-01-01",
+			"end_date":     "2024-12-31",
+			"rent_amount":  45000,
+			"status":       "active",
+			"next_renewal": "2024-12-15",
+		},
+		{
+			"id":           "lease-2",
+			"tenant_name":  "Jane Smith",
+			"unit":         "B-205",
+			"property":     "Garden View Complex",
+			"start_date":   "2024-02-01",
+			"end_date":     "2025-01-31",
+			"rent_amount":  38000,
+			"status":       "active",
+			"next_renewal": "2025-01-15",
+		},
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Leases retrieved successfully", leases)
+}
+
+// CreateLease creates a new lease
+func (h *AgencyAdminHandler) CreateLease(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TenantID   string  `json:"tenant_id" validate:"required"`
+		UnitID     string  `json:"unit_id" validate:"required"`
+		StartDate  string  `json:"start_date" validate:"required"`
+		EndDate    string  `json:"end_date" validate:"required"`
+		RentAmount float64 `json:"rent_amount" validate:"required"`
+		Deposit    float64 `json:"deposit"`
+		Terms      string  `json:"terms"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Mock lease creation
+	lease := map[string]interface{}{
+		"id":          "lease-" + strconv.FormatInt(time.Now().Unix(), 10),
+		"tenant_id":   req.TenantID,
+		"unit_id":     req.UnitID,
+		"start_date":  req.StartDate,
+		"end_date":    req.EndDate,
+		"rent_amount": req.RentAmount,
+		"deposit":     req.Deposit,
+		"status":      "active",
+		"created_at":  time.Now(),
+	}
+
+	utils.WriteSuccess(w, http.StatusCreated, "Lease created successfully", lease)
+}
+
+// Billing Management
+
+// GetBillingSetup returns billing configuration
+func (h *AgencyAdminHandler) GetBillingSetup(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	// Mock billing setup data
+	setup := map[string]interface{}{
+		"auto_billing_enabled": true,
+		"billing_day":          1, // 1st of every month
+		"grace_period_days":    7,
+		"late_fee_percentage":  5.0,
+		"payment_methods":      []string{"mpesa", "bank_transfer", "card"},
+		"email_reminders":      true,
+		"sms_reminders":        true,
+		"agency_id":            agencyID,
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Billing setup retrieved", setup)
+}
+
+// UpdateBillingSetup updates billing configuration
+func (h *AgencyAdminHandler) UpdateBillingSetup(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	var req struct {
+		AutoBillingEnabled bool     `json:"auto_billing_enabled"`
+		BillingDay         int      `json:"billing_day"`
+		GracePeriodDays    int      `json:"grace_period_days"`
+		LateFeePercentage  float64  `json:"late_fee_percentage"`
+		PaymentMethods     []string `json:"payment_methods"`
+		EmailReminders     bool     `json:"email_reminders"`
+		SMSReminders       bool     `json:"sms_reminders"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Mock update logic
+	updatedSetup := map[string]interface{}{
+		"auto_billing_enabled": req.AutoBillingEnabled,
+		"billing_day":          req.BillingDay,
+		"grace_period_days":    req.GracePeriodDays,
+		"late_fee_percentage":  req.LateFeePercentage,
+		"payment_methods":      req.PaymentMethods,
+		"email_reminders":      req.EmailReminders,
+		"sms_reminders":        req.SMSReminders,
+		"agency_id":            agencyID,
+		"updated_at":           time.Now(),
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, "Billing setup updated", updatedSetup)
+}
+
+// GenerateInvoices generates rent invoices
+func (h *AgencyAdminHandler) GenerateInvoices(w http.ResponseWriter, r *http.Request) {
+	userClaims := r.Context().Value("user").(map[string]interface{})
+	agencyID := userClaims["agency_id"].(string)
+
+	var req struct {
+		TenantIDs []string `json:"tenant_ids"`
+		DueDate   string   `json:"due_date"`
+		Charges   []struct {
+			Type        string  `json:"type"`
+			Amount      float64 `json:"amount"`
+			Description string  `json:"description"`
+		} `json:"charges"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Mock invoice generation
+	result := map[string]interface{}{
+		"invoices_generated": len(req.TenantIDs),
+		"due_date":           req.DueDate,
+		"total_amount":       125000.00,
+		"agency_id":          agencyID,
+		"generated_at":       time.Now(),
+	}
+
+	utils.WriteSuccess(w, http.StatusCreated, "Invoices generated successfully", result)
+}
