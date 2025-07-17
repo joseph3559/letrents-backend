@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"letrents-backend/internal/db/postgres"
-	"letrents-backend/internal/services"
 	"letrents-backend/internal/websocket"
 	"log"
 	"net/http"
@@ -278,31 +276,28 @@ func main() {
 	}
 
 	// Initialize services
-	var communicationRepo *postgres.CommunicationRepository
-	if db != nil {
-		communicationRepo = postgres.NewCommunicationRepository(db)
-	}
+	// Communication repository initialization removed - not currently used
 
 	// Initialize enhanced services
-	aiService := services.NewAIService(os.Getenv("OPENAI_API_KEY"))
+	// aiService := services.NewAIService(os.Getenv("OPENAI_API_KEY")) // Commented out - not currently used
 
-	// Initialize file upload service
-	localFileProvider := services.NewLocalFileProvider("./uploads", "http://localhost:8080/uploads")
-	fileUploadService := services.NewFileUploadService(localFileProvider)
+	// Initialize file upload service (commented out - not currently used)
+	// localFileProvider := services.NewLocalFileProvider("./uploads", "http://localhost:8080/uploads")
+	// fileUploadService := services.NewFileUploadService(localFileProvider)
 
-	// Initialize notification service
-	smtpProvider := services.NewSMTPEmailProvider(
-		os.Getenv("SMTP_HOST"),
-		587,
-		os.Getenv("SMTP_USERNAME"),
-		os.Getenv("SMTP_PASSWORD"),
-		os.Getenv("SMTP_FROM_EMAIL"),
-	)
-	fcmProvider := services.NewFCMProvider(
-		os.Getenv("FCM_SERVER_KEY"),
-		os.Getenv("FCM_PROJECT_ID"),
-	)
-	notificationService := services.NewNotificationService(smtpProvider, fcmProvider, nil)
+	// Initialize notification service (commented out - not currently used)
+	// smtpProvider := services.NewSMTPEmailProvider(
+	// 	os.Getenv("SMTP_HOST"),
+	// 	587,
+	// 	os.Getenv("SMTP_USERNAME"),
+	// 	os.Getenv("SMTP_PASSWORD"),
+	// 	os.Getenv("SMTP_FROM_EMAIL"),
+	// )
+	// fcmProvider := services.NewFCMProvider(
+	// 	os.Getenv("FCM_SERVER_KEY"),
+	// 	os.Getenv("FCM_PROJECT_ID"),
+	// )
+	// notificationService := services.NewNotificationService(smtpProvider, fcmProvider, nil)
 
 	// Initialize WebSocket hub
 	var wsHub *websocket.Hub
