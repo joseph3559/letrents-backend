@@ -1,8 +1,15 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
+# Set Go environment variables to ensure Go 1.24 is used
+ENV GOTOOLCHAIN=go1.24
+ENV GO111MODULE=on
+
 # Install git and ca-certificates for fetching dependencies
 RUN apk add --no-cache git ca-certificates
+
+# Verify Go version
+RUN go version
 
 # Set working directory
 WORKDIR /app
