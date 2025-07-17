@@ -2,7 +2,7 @@
 FROM golang:1.23-alpine AS builder
 
 # Set Go environment variables to ensure Go 1.23 is used
-ENV GOTOOLCHAIN=go1.23.4
+ENV GOTOOLCHAIN=local
 ENV GO111MODULE=on
 
 # Install git and ca-certificates for fetching dependencies
