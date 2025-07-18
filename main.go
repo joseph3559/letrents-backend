@@ -69,68 +69,383 @@ func initDB() (*sql.DB, error) {
 	return db, nil
 }
 
-// Login handler for demo
-func loginHandler(w http.ResponseWriter, r *http.Request) {
-	var req map[string]string
+// In-memory storage for demo (in production, use database)
+var users = map[string]interface{}{
+	"admin@letrents.com": map[string]interface{}{
+		"id":             "admin-demo-id",
+		"email":          "admin@letrents.com",
+		"password":       "admin123!",
+		"first_name":     "Super",
+		"last_name":      "Admin",
+		"role":           "super_admin",
+		"phone_number":   "+254700000001",
+		"email_verified": true,
+		"created_at":     time.Now().Format(time.RFC3339),
+		"updated_at":     time.Now().Format(time.RFC3339),
+		"status":         "active",
+	},
+	"agency@demo.com": map[string]interface{}{
+		"id":             "agency-demo-id",
+		"email":          "agency@demo.com",
+		"password":       "admin123!",
+		"first_name":     "Agency",
+		"last_name":      "Admin",
+		"role":           "agency_admin",
+		"phone_number":   "+254700000002",
+		"email_verified": true,
+		"created_at":     time.Now().Format(time.RFC3339),
+		"updated_at":     time.Now().Format(time.RFC3339),
+		"status":         "active",
+	},
+	"landlord@demo.com": map[string]interface{}{
+		"id":             "landlord-demo-id",
+		"email":          "landlord@demo.com",
+		"password":       "admin123!",
+		"first_name":     "John",
+		"last_name":      "Landlord",
+		"role":           "landlord",
+		"phone_number":   "+254700000003",
+		"email_verified": true,
+		"created_at":     time.Now().Format(time.RFC3339),
+		"updated_at":     time.Now().Format(time.RFC3339),
+		"status":         "active",
+	},
+}
+
+var userCounter = 1
+var verificationCodes = map[string]interface{}{}
+
+// Register handler
+func registerHandler(w http.ResponseWriter, r *http.Request) {
+	var req map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	// Demo authentication
-	var role string
-	var firstName, lastName string
-	var userID uuid.UUID
-	var valid bool
+	email, _ := req["email"].(string)
+	password, _ := req["password"].(string)
+	firstName, _ := req["first_name"].(string)
+	lastName, _ := req["last_name"].(string)
+	role, _ := req["role"].(string)
+	phoneNumber, _ := req["phone_number"].(string)
 
-	switch req["email"] {
-	case "admin@letrents.com":
-		if req["password"] == "admin123!" {
-			role = "super_admin"
-			firstName = "Super"
-			lastName = "Admin"
-			userID = uuid.MustParse("c4c8b0bd-821d-4ca9-bce9-efaa1da85caa")
-			valid = true
-		}
-	case "landlord@demo.com":
-		if req["password"] == "admin123!" {
-			role = "landlord"
-			firstName = "John"
-			lastName = "Landlord"
-			userID = uuid.MustParse("b2c8b0bd-821d-4ca9-bce9-efaa1da85caa")
-			valid = true
-		}
-	case "caretaker@demo.com":
-		if req["password"] == "admin123!" {
-			role = "caretaker"
-			firstName = "Jane"
-			lastName = "Caretaker"
-			userID = uuid.MustParse("e5c8b0bd-821d-4ca9-bce9-efaa1da85caa")
-			valid = true
-		}
-	}
-
-	if !valid {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	// Validate required fields
+	if email == "" || password == "" || firstName == "" || lastName == "" || role == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Email, password, first name, last name, and role are required",
+		})
 		return
 	}
 
-	response := map[string]interface{}{
-		"token":         fmt.Sprintf("demo-jwt-token-%s-%d", role, time.Now().Unix()),
-		"refresh_token": fmt.Sprintf("demo-refresh-token-%s", userID.String()),
-		"user": map[string]interface{}{
-			"id":         userID.String(),
-			"email":      req["email"],
-			"first_name": firstName,
-			"last_name":  lastName,
-			"role":       role,
-			"status":     "active",
-		},
-		"expires_at": time.Now().Add(24 * time.Hour),
+	// Restrict to Agency Admin and Landlord only
+	if role != "agency_admin" && role != "landlord" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Registration is currently only available for Agency Admins and Landlords",
+		})
+		return
+	}
+
+	// Check if user exists
+	if users[email] != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "User with this email already exists",
+		})
+		return
+	}
+
+	// Create new user
+	userID := fmt.Sprintf("user-%d", userCounter)
+	userCounter++
+
+	newUser := map[string]interface{}{
+		"id":             userID,
+		"email":          email,
+		"password":       password,
+		"first_name":     firstName,
+		"last_name":      lastName,
+		"phone_number":   phoneNumber,
+		"role":           role,
+		"email_verified": false,
+		"created_at":     time.Now().Format(time.RFC3339),
+		"updated_at":     time.Now().Format(time.RFC3339),
+		"status":         "pending_verification",
+	}
+
+	users[email] = newUser
+
+	// Generate verification code
+	verificationCode := fmt.Sprintf("%06d", time.Now().Unix()%1000000)
+	verificationCodes[email] = map[string]interface{}{
+		"code":       verificationCode,
+		"expires_at": time.Now().Add(10 * time.Minute),
+		"user_id":    userID,
+	}
+
+	// Log verification code for demo
+	log.Printf("📧 Verification code for %s: %s", email, verificationCode)
+
+	// Return response (without password)
+	userResponse := make(map[string]interface{})
+	for k, v := range newUser {
+		if k != "password" {
+			userResponse[k] = v
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Registration successful. Please check your email for verification code.",
+		"data": map[string]interface{}{
+			"user":                  userResponse,
+			"verification_required": true,
+			"verification_sent_to":  email,
+		},
+	})
+}
+
+// Verify email handler
+func verifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	email, _ := req["email"].(string)
+	code, _ := req["verification_code"].(string)
+
+	if email == "" || code == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Email and verification code are required",
+		})
+		return
+	}
+
+	verification := verificationCodes[email]
+	if verification == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "No verification code found for this email",
+		})
+		return
+	}
+
+	verificationMap := verification.(map[string]interface{})
+	expiresAt := verificationMap["expires_at"].(time.Time)
+	if time.Now().After(expiresAt) {
+		delete(verificationCodes, email)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Verification code has expired",
+		})
+		return
+	}
+
+	if verificationMap["code"].(string) != code {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid verification code",
+		})
+		return
+	}
+
+	// Update user as verified
+	if user := users[email]; user != nil {
+		userMap := user.(map[string]interface{})
+		userMap["email_verified"] = true
+		userMap["status"] = "active"
+		userMap["updated_at"] = time.Now().Format(time.RFC3339)
+	}
+
+	// Clean up verification code
+	delete(verificationCodes, email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Email verified successfully. You can now log in.",
+		"data": map[string]interface{}{
+			"email_verified": true,
+			"redirect_to":    "/login",
+		},
+	})
+}
+
+// Resend verification handler
+func resendVerificationHandler(w http.ResponseWriter, r *http.Request) {
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	email, _ := req["email"].(string)
+	if email == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Email is required",
+		})
+		return
+	}
+
+	user := users[email]
+	if user == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "User not found",
+		})
+		return
+	}
+
+	userMap := user.(map[string]interface{})
+	if userMap["email_verified"].(bool) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Email is already verified",
+		})
+		return
+	}
+
+	// Generate new verification code
+	verificationCode := fmt.Sprintf("%06d", time.Now().Unix()%1000000)
+	verificationCodes[email] = map[string]interface{}{
+		"code":       verificationCode,
+		"expires_at": time.Now().Add(10 * time.Minute),
+		"user_id":    userMap["id"],
+	}
+
+	log.Printf("📧 New verification code for %s: %s", email, verificationCode)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Verification code sent successfully",
+		"data": map[string]interface{}{
+			"verification_sent_to": email,
+		},
+	})
+}
+
+// Logout handler
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Logged out successfully",
+	})
+}
+
+// Login handler for demo
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var req map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid request format",
+		})
+		return
+	}
+
+	email := req["email"]
+	password := req["password"]
+
+	if email == "" || password == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Email and password are required",
+		})
+		return
+	}
+
+	// Get user from storage
+	user := users[email]
+	if user == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid credentials",
+		})
+		return
+	}
+
+	userMap := user.(map[string]interface{})
+	storedPassword := userMap["password"].(string)
+
+	if storedPassword != password {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Invalid credentials",
+		})
+		return
+	}
+
+	// Check if email is verified
+	emailVerified, _ := userMap["email_verified"].(bool)
+	if !emailVerified {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Please verify your email before logging in",
+		})
+		return
+	}
+
+	// Create response without password
+	userResponse := make(map[string]interface{})
+	for k, v := range userMap {
+		if k != "password" {
+			userResponse[k] = v
+		}
+	}
+
+	response := map[string]interface{}{
+		"token":         fmt.Sprintf("demo-jwt-token-%s-%d", userMap["role"], time.Now().Unix()),
+		"refresh_token": fmt.Sprintf("demo-refresh-token-%s", userMap["id"]),
+		"user":          userResponse,
+		"expires_at":    time.Now().Add(24 * time.Hour),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Login successful",
+		"data":    response,
+	})
 }
 
 // Current user handler
@@ -309,23 +624,37 @@ func main() {
 
 	// Add CORS middleware
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"http://localhost:3000", "http://localhost:3001"}),
+		handlers.AllowedOrigins([]string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"https://letrents-frontend.vercel.app",
+			"*", // Allow all origins for demo
+		}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 		handlers.AllowCredentials(),
 	)(router)
 
-	// Basic auth routes
-	router.HandleFunc("/api/auth/login", loginHandler).Methods("POST")
-	router.HandleFunc("/api/auth/me", currentUserHandler).Methods("GET")
+	// Health check route
 	router.HandleFunc("/health", healthHandler).Methods("GET")
 
-	// Landlord routes
+	// API v1 routes
 	apiV1 := router.PathPrefix("/api/v1").Subrouter()
-	apiV1.Use(authMiddleware)
+
+	// Public auth routes (no middleware)
+	apiV1.HandleFunc("/auth/login", loginHandler).Methods("POST")
+	apiV1.HandleFunc("/auth/register", registerHandler).Methods("POST")
+	apiV1.HandleFunc("/auth/verify-email", verifyEmailHandler).Methods("POST")
+	apiV1.HandleFunc("/auth/resend-verification", resendVerificationHandler).Methods("POST")
+	apiV1.HandleFunc("/auth/logout", logoutHandler).Methods("POST")
+	apiV1.HandleFunc("/auth/me", currentUserHandler).Methods("GET")
+
+	// Protected routes (with middleware)
+	protected := apiV1.PathPrefix("").Subrouter()
+	protected.Use(authMiddleware)
 
 	// Properties routes
-	apiV1.HandleFunc("/properties", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/properties", func(w http.ResponseWriter, r *http.Request) {
 		properties := []map[string]interface{}{
 			{
 				"id":              "1",
@@ -467,7 +796,7 @@ func main() {
 	}).Methods("GET")
 
 	// Units routes
-	apiV1.HandleFunc("/units", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/units", func(w http.ResponseWriter, r *http.Request) {
 		// Mock units data
 		allUnits := []map[string]interface{}{
 			{"id": "unit-1-1", "property_id": "1", "unit_number": "A01", "rent_amount": 45000, "deposit_amount": 45000, "status": "vacant", "unit_type": "1BR"},
