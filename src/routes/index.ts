@@ -283,6 +283,21 @@ router.get('/health', (_req, res) => {
 	});
 });
 
+// Manual database setup endpoint (temporary)
+router.post('/manual-setup', async (_req, res) => {
+	try {
+		const { setupDatabase } = require('../../manual-setup.js');
+		const result = await setupDatabase();
+		res.json(result);
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: 'Manual setup failed',
+			error: error.message
+		});
+	}
+});
+
 // Migration test endpoint
 router.get('/migration/test', (_req, res) => {
 	res.json({ success: true, message: 'New unified API structure is active!', migration_status: 'Phase 1 - Parallel deployment' });
