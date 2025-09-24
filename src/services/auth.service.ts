@@ -139,6 +139,7 @@ export class AuthService {
 			await this.prisma.emailVerificationToken.create({
 				data: {
 					user_id: user.id,
+					token: raw,
 					token_hash: this.hashToken(raw),
 					email: user.email!,
 					expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -244,6 +245,8 @@ export class AuthService {
 		await this.prisma.passwordResetToken.create({
 			data: {
 				user_id: user.id,
+				email: user.email!,
+				token: raw,
 				token_hash: tokenHash,
 				expires_at: expiresAt,
 				is_used: false,
@@ -344,6 +347,7 @@ export class AuthService {
 			this.prisma.emailVerificationToken.create({
 				data: {
 					user_id: user.id,
+					token: raw,
 					token_hash: tokenHash,
 					email: user.email!,
 					expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
