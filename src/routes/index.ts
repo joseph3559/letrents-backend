@@ -272,15 +272,32 @@ router.get('/system/settings', requireAuth, requireSuperAdmin, async (req, res) 
 // Full super-admin routes
 router.use('/super-admin', superAdmin);
 
-// Health check endpoint
-router.get('/health', (_req, res) => {
-	res.json({ 
+// Health check endpoint with optional database setup
+router.get('/health', async (req, res) => {
+	const setupDB = req.query.setup === 'true';
+	
+	let result: any = { 
 		success: true, 
 		status: 'healthy',
 		service: 'letrents-backend-v2',
 		version: '2.0.0',
 		timestamp: new Date().toISOString()
-	});
+	};
+	
+	if (setupDB) {
+		try {
+			const { setupDatabase } = require('../../manual-setup.js');
+			const setupResult = await setupDatabase();
+			result.database_setup = setupResult;
+		} catch (error: any) {
+			result.database_setup = {
+				success: false,
+				error: error.message
+			};
+		}
+	}
+	
+	res.json(result);
 });
 
 // Manual database setup endpoint (temporary)
