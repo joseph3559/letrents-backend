@@ -21,6 +21,7 @@ import billing from './billing.js';
 import superAdmin from './super-admin.js';
 import enums from './enums.js';
 import email from './email.js';
+import scheduler from './scheduler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 
@@ -76,6 +77,7 @@ router.post('/mpesa/c2b/confirmation', async (req, res) => {
   return c2bConfirmation(req, res);
 });
 router.use('/enums', enums);
+router.use('/scheduler', scheduler);
 
 // Super Admin middleware - only allow super_admin role
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
