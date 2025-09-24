@@ -1,0 +1,48 @@
+nohup: ignoring input
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+[2025-09-22 20:52:50.707 +0300] [32mINFO[39m (206500): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+🔄 Auto-reconciliation: 5 unlinked payments, 1 unpaid invoices
+💰 Payment reconciliation - Invoice: 35700, Paid: 35700
+✅ Invoice INV-000001 automatically marked as paid (Amount: 35700, Paid: 35700)
+✅ Auto-linked payment RCP-1758563151504 to invoice INV-000001
+✅ Auto-reconciliation completed: 1 payments linked, 1 invoices paid
+[0mPOST /api/v1/invoices/auto-reconcile [32m200[0m 288.101 ms - 121[0m
+[0mGET /api/v1/invoices [32m200[0m 14.713 ms - 2554[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/maintenance [33m404[0m 17.228 ms - 202[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/activity [33m404[0m 12.794 ms - 199[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/maintenance [33m404[0m 3.488 ms - 202[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256 [36m304[0m 54.157 ms - -[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/activity [33m404[0m 8.669 ms - 199[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/payments [32m200[0m 56.927 ms - 2991[0m
+[0mGET /api/v1/invoices?tenant_id=d61ec25a-3145-4a66-8792-3cd152bc1256 [32m200[0m 52.948 ms - 2554[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256 [36m304[0m 11.845 ms - -[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/payments [36m304[0m 17.962 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 62.126 ms - -[0m
+[0mGET /api/v1/leases?tenant_id=d61ec25a-3145-4a66-8792-3cd152bc1256 [36m304[0m 17.155 ms - -[0m
+[0mGET /api/v1/invoices?tenant_id=d61ec25a-3145-4a66-8792-3cd152bc1256 [36m304[0m 24.828 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 17.522 ms - -[0m
+[0mGET /api/v1/maintenance/overview [36m304[0m 3.274 ms - -[0m
+[0mGET /api/v1/maintenance/overview [36m304[0m 3.094 ms - -[0m
+[0mGET /api/v1/leases?tenant_id=d61ec25a-3145-4a66-8792-3cd152bc1256 [36m304[0m 11.882 ms - -[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/documents [36m304[0m 1.637 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 108.049 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 4.401 ms - -[0m
+[0mGET /api/v1/tenants/d61ec25a-3145-4a66-8792-3cd152bc1256/documents [36m304[0m 1.903 ms - -[0m
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/maintenance/requests [32m200[0m 2.954 ms - 536[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 21.536 ms - -[0m
+[0mGET /api/v1/landlord/properties?_t=1758564263420 [32m200[0m 16.808 ms - 1300[0m
+[0mGET /api/v1/landlord/properties?_t=1758564263423 [32m200[0m 13.495 ms - 1300[0m
+[0mGET /api/v1/properties [36m304[0m 10.407 ms - -[0m
+[0mGET /api/v1/maintenance/requests [32m200[0m 3.138 ms - 536[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 8.727 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 7.329 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 8.489 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 7.655 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 6.114 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 7.623 ms - -[0m
+[0mGET /api/v1/invoices [32m200[0m 10.117 ms - 2554[0m
+[0mGET /api/v1/invoices [36m304[0m 9.454 ms - -[0m

@@ -1,0 +1,232 @@
+import { JWTClaims } from '../types/index.js';
+
+/**
+ * Utility functions for role-based data filtering
+ * This allows us to use unified endpoints while automatically scoping data based on user role
+ */
+
+export interface FilterOptions {
+  companyId?: string;
+  agencyId?: string;
+  landlordId?: string;
+  userId?: string;
+}
+
+/**
+ * Get filtering options based on user role and claims
+ */
+export function getRoleBasedFilters(user: JWTClaims): FilterOptions {
+  const filters: FilterOptions = {};
+
+  switch (user.role) {
+    case 'super_admin':
+      // Super admin can see everything - no filters
+      break;
+      
+    case 'agency_admin':
+      // Agency admin can see their agency's data
+      if (user.agency_id) {
+        filters.agencyId = user.agency_id;
+      }
+      if (user.company_id) {
+        filters.companyId = user.company_id;
+      }
+      break;
+      
+    case 'landlord':
+      // Landlord can see their own properties and tenants
+      if (user.company_id) {
+        filters.companyId = user.company_id;
+      }
+      filters.landlordId = user.user_id;
+      break;
+      
+    case 'agent':
+      // Agent can see properties assigned to them
+      if (user.company_id) {
+        filters.companyId = user.company_id;
+      }
+      if (user.agency_id) {
+        filters.agencyId = user.agency_id;
+      }
+      if (user.landlord_id) {
+        filters.landlordId = user.landlord_id;
+      }
+      break;
+      
+    case 'caretaker':
+      // Caretaker can see properties they manage
+      if (user.company_id) {
+        filters.companyId = user.company_id;
+      }
+      filters.userId = user.user_id;
+      break;
+      
+    case 'tenant':
+      // Tenant can only see their own data
+      filters.userId = user.user_id;
+      if (user.company_id) {
+        filters.companyId = user.company_id;
+      }
+      break;
+      
+    default:
+      // Default to user's own data only
+      filters.userId = user.user_id;
+      if (user.company_id) {
+        filters.companyId = user.company_id;
+      }
+  }
+
+  return filters;
+}
+
+/**
+ * Build Prisma where clause based on role filters
+ */
+export function buildWhereClause(user: JWTClaims, additionalFilters: any = {}, modelType: string = 'property'): any {
+  const roleFilters = getRoleBasedFilters(user);
+  const whereClause: any = { ...additionalFilters };
+
+  // Apply company scoping (most important for multi-tenancy)
+  if (roleFilters.companyId) {
+    whereClause.company_id = roleFilters.companyId;
+  }
+
+  // Apply agency scoping
+  if (roleFilters.agencyId) {
+    whereClause.agency_id = roleFilters.agencyId;
+  }
+
+  // Apply landlord scoping (field name depends on model type)
+  if (roleFilters.landlordId) {
+    if (modelType === 'user') {
+      // For user queries, landlords should see tenants where landlord_id = current user's ID
+      if (user.role === 'landlord') {
+        whereClause.landlord_id = user.user_id;
+      } else {
+        whereClause.landlord_id = roleFilters.landlordId;
+      }
+    } else if (modelType === 'property') {
+      whereClause.owner_id = roleFilters.landlordId;
+    } else if (modelType === 'payment') {
+      // For payments, landlords should see payments for their tenants' properties
+      whereClause.property = {
+        owner_id: roleFilters.landlordId
+      };
+    } else if (modelType === 'mpesa') {
+      // For M-Pesa transactions, landlords should see transactions for their properties
+      whereClause.property = {
+        owner_id: roleFilters.landlordId
+      };
+    }
+  }
+
+  // Apply user scoping (for personal data)
+  if (roleFilters.userId && user.role === 'tenant') {
+    if (modelType === 'user') {
+      whereClause.id = roleFilters.userId;
+    } else if (modelType === 'payment') {
+      whereClause.tenant_id = roleFilters.userId;
+    } else {
+      whereClause.user_id = roleFilters.userId;
+    }
+  }
+
+  return whereClause;
+}
+
+/**
+ * Check if user can access specific resource
+ */
+export function canAccessResource(user: JWTClaims, resourceOwnerId: string, resourceCompanyId?: string): boolean {
+  switch (user.role) {
+    case 'super_admin':
+      return true;
+      
+    case 'agency_admin':
+      // Can access if same company or agency
+      return user.company_id === resourceCompanyId;
+      
+    case 'landlord':
+      // Can access if they own it or same company
+      return user.user_id === resourceOwnerId || user.company_id === resourceCompanyId;
+      
+    case 'agent':
+      // Can access if assigned or same company/agency
+      return user.company_id === resourceCompanyId;
+      
+    case 'caretaker':
+      // Can access if they manage it or same company
+      return user.company_id === resourceCompanyId;
+      
+    case 'tenant':
+      // Can only access their own data
+      return user.user_id === resourceOwnerId;
+      
+    default:
+      return false;
+  }
+}
+
+/**
+ * Get dashboard data scope based on user role
+ */
+export function getDashboardScope(user: JWTClaims): 'global' | 'company' | 'agency' | 'personal' {
+  switch (user.role) {
+    case 'super_admin':
+      return 'global';
+    case 'agency_admin':
+      return 'agency';
+    case 'landlord':
+    case 'agent':
+    case 'caretaker':
+      return 'company';
+    case 'tenant':
+      return 'personal';
+    default:
+      return 'personal';
+  }
+}
+
+/**
+ * Format data based on user role (hide sensitive info for lower roles)
+ */
+export function formatDataForRole(user: JWTClaims, data: any): any {
+  // Super admin and agency admin can see everything
+  if (user.role === 'super_admin' || user.role === 'agency_admin') {
+    return data;
+  }
+
+  // For other roles, we might want to hide certain sensitive fields
+  if (Array.isArray(data)) {
+    return data.map(item => formatSingleItemForRole(user, item));
+  }
+
+  return formatSingleItemForRole(user, data);
+}
+
+function formatSingleItemForRole(user: JWTClaims, item: any): any {
+  if (!item || typeof item !== 'object') {
+    return item;
+  }
+
+  const formatted = { ...item };
+
+  // Hide sensitive financial data from tenants and caretakers
+  if (user.role === 'tenant' || user.role === 'caretaker') {
+    delete formatted.monthlyRevenue;
+    delete formatted.totalRevenue;
+    delete formatted.profitMargin;
+    delete formatted.expenses;
+  }
+
+  // Hide personal info from agents (unless it's their own data)
+  if (user.role === 'agent' && formatted.userId !== user.user_id) {
+    delete formatted.phoneNumber;
+    delete formatted.email;
+    delete formatted.address;
+  }
+
+  return formatted;
+}

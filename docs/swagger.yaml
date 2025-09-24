@@ -1,0 +1,1961 @@
+openapi: 3.0.3
+info:
+  title: LetRents - Unified Property Management API
+  description: |
+    **Unified Resource-Based REST API** for LetRents Property Management Platform
+    
+    ## 🚀 **What's New (API v2.0)**
+    This API consolidates **68+ duplicate endpoints** into **45 clean, resource-based endpoints** with:
+    - ✅ **Unified RBAC** - Role-based access control across all resources
+    - ✅ **Multi-tenancy** - Company-level data isolation 
+    - ✅ **Consistent structure** - No more role-based endpoint duplicates
+    - ✅ **Better performance** - Reduced API complexity and maintenance overhead
+    
+    ## 🔐 **Authentication & Authorization**
+    All endpoints require Bearer token authentication:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+    
+    ## 🎯 **Role-Based Access Control (RBAC)**
+    | Role | Access Level | 
+    |------|-------------|
+    | **Super Admin** | Full access to all resources across all companies |
+    | **Agency Admin** | Full access within their company |
+    | **Landlord** | Access to own properties and associated resources |
+    | **Agent** | Access to assigned properties/units only |
+    | **Caretaker** | Access to assigned properties for maintenance |
+    | **Tenant** | Read-only access to own unit and invoices |
+    
+    ## 🏢 **Multi-Tenancy**
+    Data is automatically filtered by `company_id` except for Super Admins.
+    
+    ## 📊 **Migration from v1.0**
+    | Old Endpoints (v1.0) | New Unified Endpoints (v2.0) |
+    |---------------------|------------------------------|
+    | `GET /landlord/properties`<br>`GET /agency-admin/properties` | `GET /properties` (RBAC-filtered) |
+    | `GET /landlord/notifications`<br>`GET /agency-admin/notifications` | `GET /notifications` (RBAC-filtered) |
+    | `GET /landlord/dashboard/stats`<br>`GET /agency-admin/dashboard/kpis` | `GET /dashboard/stats` (role-specific) |
+    
+  version: 2.0.0
+  contact:
+    name: LetRents API Support
+    email: support@letrents.com
+    url: https://letrents.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+  - url: https://api.letrents.com/v1  
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  # =============================================================================
+  # AUTHENTICATION
+  # =============================================================================
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      description: Authenticate user and return JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "admin@letrents.com"
+                password:
+                  type: string
+                  format: password
+                  example: "admin123!"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      description: Register a new user account (Agency Admin or Landlord only)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      description: Get current authenticated user information
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+
+  # =============================================================================
+  # PROPERTIES (Unified - replaces /landlord/properties + /agency-admin/properties)
+  # =============================================================================
+  /properties:
+    get:
+      tags: [Properties]
+      summary: List properties
+      description: |
+        **Unified endpoint** that replaces:
+        - `GET /landlord/properties` 
+        - `GET /agency-admin/properties`
+        
+        Returns properties filtered by user role and company:
+        - **Super Admin**: All properties
+        - **Agency Admin**: Properties in their company  
+        - **Landlord**: Own properties only
+        - **Agent**: Assigned properties only
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, under_construction, renovation, inactive]
+        - name: property_type
+          in: query
+          schema:
+            type: string
+            enum: [residential, commercial, industrial, mixed_use]
+      responses:
+        '200':
+          description: Properties retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Properties retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Property'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Properties]
+      summary: Create property
+      description: Create a new property (Agency Admin, Landlord, Super Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyRequest'
+      responses:
+        '201':
+          description: Property created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Property created successfully"
+                  data:
+                    $ref: '#/components/schemas/Property'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /properties/{id}:
+    get:
+      tags: [Properties]
+      summary: Get property details
+      description: Get detailed information about a specific property
+      parameters:
+        - $ref: '#/components/parameters/PropertyId'
+      responses:
+        '200':
+          description: Property details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/PropertyDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    put:
+      tags: [Properties]
+      summary: Update property
+      description: Update property information (Owner, Agency Admin, Super Admin)
+      parameters:
+        - $ref: '#/components/parameters/PropertyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePropertyRequest'
+      responses:
+        '200':
+          description: Property updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Property updated successfully"
+                  data:
+                    $ref: '#/components/schemas/Property'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Properties]
+      summary: Delete property
+      description: Delete a property and all associated data (Agency Admin, Super Admin)
+      parameters:
+        - $ref: '#/components/parameters/PropertyId'
+      responses:
+        '200':
+          description: Property deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /properties/{id}/archive:
+    patch:
+      tags: [Properties]
+      summary: Archive property
+      description: Archive a property (Agency Admin, Super Admin)
+      parameters:
+        - $ref: '#/components/parameters/PropertyId'
+      responses:
+        '200':
+          description: Property archived successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /properties/{id}/units:
+    get:
+      tags: [Properties]
+      summary: Get property units
+      description: Get all units for a specific property
+      parameters:
+        - $ref: '#/components/parameters/PropertyId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Property units retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Unit'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  # =============================================================================
+  # UNITS (Unified - replaces /agency-admin/units + caretaker unit endpoints)
+  # =============================================================================
+  /units:
+    get:
+      tags: [Units]
+      summary: List units
+      description: |
+        **Unified endpoint** that consolidates multiple unit listing endpoints.
+        Returns units filtered by user role and company.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: property_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by property ID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [available, occupied, reserved, maintenance, inactive]
+        - name: unit_type
+          in: query
+          schema:
+            type: string
+            enum: [studio, 1_bedroom, 2_bedroom, 3_bedroom, office_space, retail_shop]
+      responses:
+        '200':
+          description: Units retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Unit'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags: [Units]
+      summary: Create unit
+      description: Create a new unit (Agency Admin, Landlord, Super Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnitRequest'
+      responses:
+        '201':
+          description: Unit created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Unit created successfully"
+                  data:
+                    $ref: '#/components/schemas/Unit'
+
+  /units/{id}:
+    get:
+      tags: [Units]
+      summary: Get unit details
+      description: Get detailed information about a specific unit
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      responses:
+        '200':
+          description: Unit details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UnitDetails'
+
+    put:
+      tags: [Units]
+      summary: Update unit
+      description: Update unit information
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUnitRequest'
+      responses:
+        '200':
+          description: Unit updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Unit updated successfully"
+                  data:
+                    $ref: '#/components/schemas/Unit'
+
+  /units/{id}/status:
+    patch:
+      tags: [Units]
+      summary: Update unit status
+      description: Update the status of a unit (available, occupied, maintenance, etc.)
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [available, occupied, reserved, maintenance, inactive]
+                reason:
+                  type: string
+                  description: Reason for status change
+      responses:
+        '200':
+          description: Unit status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # =============================================================================
+  # TENANTS (Unified - replaces /landlord/tenants + /agency-admin/tenants)
+  # =============================================================================
+  /tenants:
+    get:
+      tags: [Tenants]
+      summary: List tenants
+      description: |
+        **Unified endpoint** that replaces:
+        - `GET /landlord/tenants`
+        - `GET /agency-admin/tenants`
+        
+        Returns tenants filtered by user role and access permissions.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+        - name: property_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: unit_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, pending]
+      responses:
+        '200':
+          description: Tenants retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tenant'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags: [Tenants]
+      summary: Create tenant
+      description: Add a new tenant to the system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Tenant created successfully"
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+
+  # =============================================================================
+  # DASHBOARD (Unified - replaces /landlord/dashboard/* + /agency-admin/dashboard/*)
+  # =============================================================================
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard statistics
+      description: |
+        **Unified endpoint** that replaces:
+        - `GET /landlord/dashboard/stats`
+        - `GET /agency-admin/dashboard/kpis`
+        
+        Returns role-specific dashboard statistics.
+      responses:
+        '200':
+          description: Dashboard statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/DashboardStats'
+
+  /dashboard/overview:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard overview
+      description: Get comprehensive dashboard overview (Landlord, Agency Admin)
+      responses:
+        '200':
+          description: Dashboard overview retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/DashboardOverview'
+
+  # =============================================================================
+  # NOTIFICATIONS (Unified - replaces /landlord/notifications + /agency-admin/notifications)
+  # =============================================================================
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Get user notifications
+      description: |
+        **Unified endpoint** that replaces:
+        - `GET /landlord/notifications`
+        - `GET /agency-admin/notifications`
+        
+        Returns notifications for the authenticated user.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: is_read
+          in: query
+          schema:
+            type: boolean
+          description: Filter by read status
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [payment, maintenance, lease, system]
+      responses:
+        '200':
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notification count
+      description: Get the count of unread notifications for the current user
+      responses:
+        '200':
+          description: Unread count retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      unread_count:
+                        type: integer
+                        example: 5
+
+  /notifications/{id}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      description: Mark a specific notification as read
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # =============================================================================
+  # COMMUNICATIONS (Unified - replaces inconsistent communication endpoints)
+  # =============================================================================
+  /communications/messages:
+    get:
+      tags: [Communications]
+      summary: Get messages
+      description: |
+        **Unified endpoint** that replaces multiple inconsistent communication paths:
+        - `GET /api/communication/messages`
+        - `GET /landlord/communication/messages`
+        - `GET /agency-admin/messages`
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: conversation_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Messages retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags: [Communications]
+      summary: Send message
+      description: Send a new message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Message sent successfully"
+                  data:
+                    $ref: '#/components/schemas/Message'
+
+  # =============================================================================
+  # REPORTS (Unified - replaces /landlord/reports/* + /agency-admin/reports/*)
+  # =============================================================================
+  /reports/occupancy:
+    get:
+      tags: [Reports]
+      summary: Generate occupancy report
+      description: |
+        **Unified endpoint** that replaces:
+        - `GET /landlord/reports/occupancy`
+        - `GET /agency-admin/reports/occupancy`
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          required: true
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          required: true
+        - name: property_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Occupancy report generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/OccupancyReport'
+
+  /reports/financial:
+    get:
+      tags: [Reports]
+      summary: Generate financial report
+      description: Generate financial report (Landlord, Agency Admin, Super Admin)
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          required: true
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          required: true
+        - name: property_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Financial report generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/FinancialReport'
+
+  # =============================================================================
+  # MAINTENANCE (Unified - replaces multiple maintenance endpoints)
+  # =============================================================================
+  /maintenance/requests:
+    get:
+      tags: [Maintenance]
+      summary: Get maintenance requests
+      description: |
+        **Unified endpoint** that replaces:
+        - `GET /maintenance/requests`
+        - `GET /landlord/maintenance/requests`
+        - `GET /caretaker/maintenance`
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: property_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: unit_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, cancelled]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+      responses:
+        '200':
+          description: Maintenance requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MaintenanceRequest'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags: [Maintenance]
+      summary: Create maintenance request
+      description: Create a new maintenance request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMaintenanceRequest'
+      responses:
+        '201':
+          description: Maintenance request created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Maintenance request created successfully"
+                  data:
+                    $ref: '#/components/schemas/MaintenanceRequest'
+
+# =============================================================================
+# COMPONENTS
+# =============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token for authentication
+
+  parameters:
+    PropertyId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Property UUID
+      example: "123e4567-e89b-12d3-a456-426614174000"
+
+    UnitId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unit UUID
+      example: "123e4567-e89b-12d3-a456-426614174001"
+
+    NotificationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Notification UUID
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number for pagination
+
+    PerPage:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+      description: Number of items per page
+
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+      description: Search query for filtering results
+
+  schemas:
+    # Authentication Schemas
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Login successful"
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            refresh_token:
+              type: string
+              example: "refresh-token-uuid"
+            user:
+              $ref: '#/components/schemas/User'
+            expires_at:
+              type: string
+              format: date-time
+
+    RegisterRequest:
+      type: object
+      required: [email, password, first_name, last_name, role]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "john@example.com"
+        password:
+          type: string
+          format: password
+          example: "SecurePass123!"
+        first_name:
+          type: string
+          example: "John"
+        last_name:
+          type: string
+          example: "Doe"
+        phone_number:
+          type: string
+          example: "+254712345678"
+        role:
+          type: string
+          enum: [agency_admin, landlord]
+          example: "landlord"
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Registration successful. Please check your email for a verification message."
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            verification_required:
+              type: boolean
+              example: true
+            verification_sent_to:
+              type: string
+              format: email
+
+    # User Schema
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "john@example.com"
+        first_name:
+          type: string
+          example: "John"
+        last_name:
+          type: string
+          example: "Doe"
+        phone_number:
+          type: string
+          example: "+254712345678"
+        role:
+          type: string
+          enum: [super_admin, agency_admin, landlord, agent, caretaker, tenant]
+          example: "landlord"
+        status:
+          type: string
+          enum: [active, inactive, suspended, pending]
+          example: "active"
+        company_id:
+          type: string
+          format: uuid
+          nullable: true
+        email_verified:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # Property Schemas
+    Property:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          example: "Westlands Apartments"
+        description:
+          type: string
+          example: "Modern apartment complex in Westlands"
+        property_type:
+          type: string
+          enum: [residential, commercial, industrial, mixed_use]
+          example: "residential"
+        status:
+          type: string
+          enum: [active, under_construction, renovation, inactive]
+          example: "active"
+        total_units:
+          type: integer
+          example: 24
+        occupied_units:
+          type: integer
+          example: 22
+        vacant_units:
+          type: integer
+          example: 2
+        street:
+          type: string
+          example: "123 Westlands Road"
+        city:
+          type: string
+          example: "Nairobi"
+        region:
+          type: string
+          example: "Nairobi County"
+        country:
+          type: string
+          example: "Kenya"
+        postal_code:
+          type: string
+          example: "00100"
+        owner_id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PropertyDetails:
+      allOf:
+        - $ref: '#/components/schemas/Property'
+        - type: object
+          properties:
+            units:
+              type: array
+              items:
+                $ref: '#/components/schemas/Unit'
+            amenities:
+              type: array
+              items:
+                type: string
+              example: ["parking", "security", "generator", "water_backup"]
+            monthly_revenue:
+              type: number
+              format: decimal
+              example: 680000.00
+            occupancy_rate:
+              type: number
+              format: decimal
+              example: 91.67
+
+    CreatePropertyRequest:
+      type: object
+      required: [name, property_type, street, city, country]
+      properties:
+        name:
+          type: string
+          example: "Westlands Apartments"
+        description:
+          type: string
+          example: "Modern apartment complex in Westlands"
+        property_type:
+          type: string
+          enum: [residential, commercial, industrial, mixed_use]
+          example: "residential"
+        street:
+          type: string
+          example: "123 Westlands Road"
+        city:
+          type: string
+          example: "Nairobi"
+        region:
+          type: string
+          example: "Nairobi County"
+        country:
+          type: string
+          example: "Kenya"
+        postal_code:
+          type: string
+          example: "00100"
+        amenities:
+          type: array
+          items:
+            type: string
+          example: ["parking", "security", "generator"]
+
+    UpdatePropertyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, under_construction, renovation, inactive]
+        amenities:
+          type: array
+          items:
+            type: string
+
+    # Unit Schemas
+    Unit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        property_id:
+          type: string
+          format: uuid
+        unit_number:
+          type: string
+          example: "A1"
+        unit_type:
+          type: string
+          enum: [studio, 1_bedroom, 2_bedroom, 3_bedroom, 4_bedroom, office_space, retail_shop]
+          example: "2_bedroom"
+        status:
+          type: string
+          enum: [available, occupied, reserved, maintenance, inactive]
+          example: "occupied"
+        floor_number:
+          type: integer
+          example: 2
+        size_sqm:
+          type: number
+          format: decimal
+          example: 85.5
+        bedrooms:
+          type: integer
+          example: 2
+        bathrooms:
+          type: integer
+          example: 2
+        rent_amount:
+          type: number
+          format: decimal
+          example: 45000.00
+        deposit_amount:
+          type: number
+          format: decimal
+          example: 90000.00
+        furnishing_type:
+          type: string
+          enum: [furnished, unfurnished, semi_furnished]
+          example: "unfurnished"
+        condition:
+          type: string
+          enum: [new, excellent, good, fair, poor, needs_repairs]
+          example: "good"
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UnitDetails:
+      allOf:
+        - $ref: '#/components/schemas/Unit'
+        - type: object
+          properties:
+            property:
+              $ref: '#/components/schemas/Property'
+            tenant:
+              $ref: '#/components/schemas/Tenant'
+              nullable: true
+            photos:
+              type: array
+              items:
+                type: string
+                format: uri
+            features:
+              type: array
+              items:
+                type: string
+              example: ["balcony", "parking", "air_conditioning"]
+
+    CreateUnitRequest:
+      type: object
+      required: [property_id, unit_number, unit_type, rent_amount]
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        unit_number:
+          type: string
+          example: "A1"
+        unit_type:
+          type: string
+          enum: [studio, 1_bedroom, 2_bedroom, 3_bedroom, 4_bedroom, office_space, retail_shop]
+          example: "2_bedroom"
+        floor_number:
+          type: integer
+          example: 2
+        size_sqm:
+          type: number
+          format: decimal
+          example: 85.5
+        bedrooms:
+          type: integer
+          example: 2
+        bathrooms:
+          type: integer
+          example: 2
+        rent_amount:
+          type: number
+          format: decimal
+          example: 45000.00
+        deposit_amount:
+          type: number
+          format: decimal
+          example: 90000.00
+        furnishing_type:
+          type: string
+          enum: [furnished, unfurnished, semi_furnished]
+          example: "unfurnished"
+
+    UpdateUnitRequest:
+      type: object
+      properties:
+        unit_number:
+          type: string
+        unit_type:
+          type: string
+          enum: [studio, 1_bedroom, 2_bedroom, 3_bedroom, 4_bedroom, office_space, retail_shop]
+        floor_number:
+          type: integer
+        size_sqm:
+          type: number
+          format: decimal
+        bedrooms:
+          type: integer
+        bathrooms:
+          type: integer
+        rent_amount:
+          type: number
+          format: decimal
+        deposit_amount:
+          type: number
+          format: decimal
+        furnishing_type:
+          type: string
+          enum: [furnished, unfurnished, semi_furnished]
+
+    # Tenant Schema
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174002"
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          example: "tenant@example.com"
+        first_name:
+          type: string
+          example: "Jane"
+        last_name:
+          type: string
+          example: "Smith"
+        phone_number:
+          type: string
+          example: "+254712345679"
+        id_number:
+          type: string
+          example: "12345678"
+        unit_id:
+          type: string
+          format: uuid
+        lease_start_date:
+          type: string
+          format: date
+        lease_end_date:
+          type: string
+          format: date
+        monthly_rent:
+          type: number
+          format: decimal
+          example: 45000.00
+        deposit_amount:
+          type: number
+          format: decimal
+          example: 90000.00
+        status:
+          type: string
+          enum: [active, inactive, pending]
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTenantRequest:
+      type: object
+      required: [email, first_name, last_name, phone_number, unit_id, lease_start_date, monthly_rent]
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone_number:
+          type: string
+        id_number:
+          type: string
+        unit_id:
+          type: string
+          format: uuid
+        lease_start_date:
+          type: string
+          format: date
+        lease_end_date:
+          type: string
+          format: date
+        monthly_rent:
+          type: number
+          format: decimal
+        deposit_amount:
+          type: number
+          format: decimal
+
+    # Dashboard Schemas
+    DashboardStats:
+      type: object
+      properties:
+        total_properties:
+          type: integer
+          example: 8
+        total_units:
+          type: integer
+          example: 45
+        occupied_units:
+          type: integer
+          example: 42
+        vacant_units:
+          type: integer
+          example: 3
+        occupancy_rate:
+          type: number
+          format: decimal
+          example: 93.3
+        total_tenants:
+          type: integer
+          example: 42
+        monthly_revenue:
+          type: number
+          format: decimal
+          example: 680000.00
+        pending_maintenance:
+          type: integer
+          example: 7
+        overdue_payments:
+          type: integer
+          example: 2
+
+    DashboardOverview:
+      type: object
+      properties:
+        stats:
+          $ref: '#/components/schemas/DashboardStats'
+        recent_activities:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              type:
+                type: string
+                example: "payment_received"
+              description:
+                type: string
+                example: "Rent payment received from Unit A1"
+              amount:
+                type: number
+                format: decimal
+                nullable: true
+              created_at:
+                type: string
+                format: date-time
+        revenue_chart:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                example: "January"
+              revenue:
+                type: number
+                format: decimal
+                example: 680000.00
+
+    # Notification Schema
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174003"
+        type:
+          type: string
+          enum: [payment, maintenance, lease, system]
+          example: "payment"
+        title:
+          type: string
+          example: "Payment Received"
+        message:
+          type: string
+          example: "Rent payment of KSh 45,000 received for Unit A1"
+        is_read:
+          type: boolean
+          example: false
+        data:
+          type: object
+          description: Additional notification data
+        created_at:
+          type: string
+          format: date-time
+
+    # Message Schema
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174004"
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        receiver_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+          example: "Maintenance Request Update"
+        content:
+          type: string
+          example: "Your maintenance request has been scheduled for tomorrow."
+        is_read:
+          type: boolean
+          example: false
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required: [receiver_id, subject, content]
+      properties:
+        receiver_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        content:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    # Maintenance Schema
+    MaintenanceRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174005"
+        property_id:
+          type: string
+          format: uuid
+        unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          example: "Leaking tap in bathroom"
+        description:
+          type: string
+          example: "Tenant reported leaking tap in Unit A1 bathroom"
+        category:
+          type: string
+          enum: [plumbing, electrical, hvac, appliances, general, pest_control, cleaning]
+          example: "plumbing"
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          example: "medium"
+        status:
+          type: string
+          enum: [pending, in_progress, completed, cancelled]
+          example: "pending"
+        reported_by:
+          type: string
+          format: uuid
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        estimated_cost:
+          type: number
+          format: decimal
+          nullable: true
+        actual_cost:
+          type: number
+          format: decimal
+          nullable: true
+        scheduled_date:
+          type: string
+          format: date-time
+          nullable: true
+        completed_date:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateMaintenanceRequest:
+      type: object
+      required: [property_id, title, description, category, priority]
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        unit_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [plumbing, electrical, hvac, appliances, general, pest_control, cleaning]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        estimated_cost:
+          type: number
+          format: decimal
+
+    # Report Schemas
+    OccupancyReport:
+      type: object
+      properties:
+        report_period:
+          type: object
+          properties:
+            start_date:
+              type: string
+              format: date
+            end_date:
+              type: string
+              format: date
+        overall_occupancy:
+          type: number
+          format: decimal
+          example: 93.3
+        by_property:
+          type: array
+          items:
+            type: object
+            properties:
+              property_id:
+                type: string
+                format: uuid
+              property_name:
+                type: string
+              total_units:
+                type: integer
+              occupied_units:
+                type: integer
+              occupancy_rate:
+                type: number
+                format: decimal
+        trend_data:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              occupancy_rate:
+                type: number
+                format: decimal
+
+    FinancialReport:
+      type: object
+      properties:
+        report_period:
+          type: object
+          properties:
+            start_date:
+              type: string
+              format: date
+            end_date:
+              type: string
+              format: date
+        total_revenue:
+          type: number
+          format: decimal
+          example: 2040000.00
+        total_expenses:
+          type: number
+          format: decimal
+          example: 340000.00
+        net_income:
+          type: number
+          format: decimal
+          example: 1700000.00
+        by_property:
+          type: array
+          items:
+            type: object
+            properties:
+              property_id:
+                type: string
+                format: uuid
+              property_name:
+                type: string
+              revenue:
+                type: number
+                format: decimal
+              expenses:
+                type: number
+                format: decimal
+              net_income:
+                type: number
+                format: decimal
+
+    # Utility Schemas
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 150
+        total_pages:
+          type: integer
+          example: 15
+        has_next_page:
+          type: boolean
+          example: true
+        has_prev_page:
+          type: boolean
+          example: false
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "An error occurred"
+        error:
+          type: string
+          example: "VALIDATION_ERROR"
+        details:
+          type: object
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Invalid request data"
+            error: "VALIDATION_ERROR"
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Authentication required"
+            error: "UNAUTHORIZED"
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Insufficient permissions for this resource"
+            error: "FORBIDDEN"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Resource not found"
+            error: "NOT_FOUND"
+
+    Conflict:
+      description: Conflict - resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Resource already exists"
+            error: "CONFLICT"
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Properties
+    description: |
+      **Unified property management** (replaces /landlord/properties + /agency-admin/properties)
+      
+      Manages properties with role-based access control:
+      - Super Admin: All properties
+      - Agency Admin: Company properties  
+      - Landlord: Own properties
+      - Agent: Assigned properties
+  - name: Units
+    description: |
+      **Unified unit management** (consolidates agency-admin + caretaker endpoints)
+      
+      Manages property units with appropriate permissions for each role.
+  - name: Tenants
+    description: |
+      **Unified tenant management** (replaces /landlord/tenants + /agency-admin/tenants)
+      
+      Manages tenants with role-based filtering and access control.
+  - name: Dashboard
+    description: |
+      **Unified dashboard** (replaces /landlord/dashboard/* + /agency-admin/dashboard/*)
+      
+      Provides role-specific dashboard data and analytics.
+  - name: Notifications
+    description: |
+      **Unified notifications** (replaces /landlord/notifications + /agency-admin/notifications)
+      
+      User-specific notifications with proper filtering.
+  - name: Communications
+    description: |
+      **Unified communications** (replaces inconsistent communication paths)
+      
+      Standardized messaging and communication endpoints.
+  - name: Reports
+    description: |
+      **Unified reporting** (replaces /landlord/reports/* + /agency-admin/reports/*)
+      
+      Generate various reports with role-based data access.
+  - name: Maintenance
+    description: |
+      **Unified maintenance** (consolidates multiple maintenance endpoints)
+      
+      Maintenance request management for all user roles.

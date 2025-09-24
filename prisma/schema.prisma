@@ -1,0 +1,1188 @@
+// ============================================================================
+// LetRents Property Management System - Professional Prisma Schema
+// ============================================================================
+// Multi-tenant schema with company_id in ALL models for proper data isolation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  super_admin
+  agency_admin
+  landlord
+  agent
+  caretaker
+  tenant
+
+  @@map("user_role")
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+  pending
+  pending_setup
+
+  @@map("user_status")
+}
+
+enum PropertyType {
+  residential
+  commercial
+  industrial
+  mixed_use
+  institutional
+  vacant_land
+  hospitality
+  recreational
+
+  @@map("property_type")
+}
+
+enum PropertyStatus {
+  active
+  under_construction
+  renovation
+  inactive
+
+  @@map("property_status")
+}
+
+enum OwnershipType {
+  individual
+  company
+  joint
+
+  @@map("ownership_type")
+}
+
+enum UnitType {
+  single_room
+  double_room
+  bedsitter
+  studio
+  one_bedroom
+  two_bedroom
+  three_bedroom
+  four_bedroom
+  five_plus_bedroom
+  servant_quarter
+  maisonette
+  penthouse
+  office_space
+  retail_shop
+  kiosk
+  stall
+  warehouse
+  restaurant_space
+  studio_office
+  coworking_unit
+  medical_suite
+
+  @@map("unit_type")
+}
+
+enum UnitStatus {
+  vacant
+  occupied
+  reserved
+  maintenance
+  under_repair
+  arrears
+
+  @@map("unit_status")
+}
+
+enum UnitCondition {
+  new
+  excellent
+  good
+  fair
+  poor
+  needs_repairs
+  renovated
+
+  @@map("unit_condition")
+}
+
+enum FurnishingType {
+  furnished
+  unfurnished
+  semi_furnished
+
+  @@map("furnishing_type")
+}
+
+enum UtilityBillingType {
+  prepaid
+  postpaid
+  inclusive
+
+  @@map("utility_billing_type")
+}
+
+enum MaintenanceStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+
+  @@map("maintenance_status")
+}
+
+enum PriorityLevel {
+  low
+  medium
+  high
+  urgent
+
+  @@map("priority_level")
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  paid
+  overdue
+  cancelled
+
+  @@map("invoice_status")
+}
+
+enum NotificationStatus {
+  unread
+  read
+  archived
+
+  @@map("notification_status")
+}
+
+enum MessageStatus {
+  draft
+  sent
+  delivered
+  read
+  failed
+
+  @@map("message_status")
+}
+
+// ============================================================================
+// CORE MODELS
+// ============================================================================
+
+model Company {
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                String    @db.VarChar(255)
+  business_type       String?   @db.VarChar(100)
+  registration_number String?   @db.VarChar(100)
+  tax_id              String?   @db.VarChar(100)
+  email               String?   @db.VarChar(255)
+  phone_number        String?   @db.VarChar(20)
+  website             String?   @db.VarChar(255)
+  street              String?   @db.VarChar(255)
+  city                String?   @db.VarChar(100)
+  region              String?   @db.VarChar(100)
+  country             String    @default("Kenya") @db.VarChar(100)
+  postal_code         String?   @db.VarChar(20)
+  industry            String?   @db.VarChar(100)
+  company_size        String?   @db.VarChar(50)
+  status              String    @default("active") @db.VarChar(20)
+  subscription_plan   String    @default("basic") @db.VarChar(50)
+  max_properties      Int       @default(10)
+  max_units           Int       @default(100)
+  max_tenants         Int       @default(100)
+  max_staff           Int       @default(10)
+  settings            Json      @default("{}")
+  created_by          String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  users                 User[]
+  agencies              Agency[]
+  properties            Property[]
+  units                 Unit[]
+  conversations         Conversation[]
+  messages              Message[]
+  notifications         Notification[]
+  maintenance_requests  MaintenanceRequest[]
+  invoices              Invoice[]
+  message_templates     MessageTemplate[]
+  leases                Lease[]
+  payments              Payment[]
+  subscriptions         Subscription[]
+  billing_invoices      BillingInvoice[]
+  paybill_settings      PaybillSettings?
+  mpesa_transactions    MpesaTransaction[]
+
+  @@map("companies")
+}
+
+model Agency {
+  id           String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id   String     @db.Uuid
+  name         String     @db.VarChar(255)
+  email        String     @unique @db.VarChar(255)
+  phone_number String?    @db.VarChar(20)
+  address      String?
+  status       UserStatus @default(active)
+  created_by   String     @db.Uuid
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company    Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  creator    User    @relation("AgencyCreator", fields: [created_by], references: [id])
+  users      User[]  @relation("AgencyUsers")
+  properties Property[]
+
+  @@map("agencies")
+}
+
+model User {
+  id                     String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id             String?    @db.Uuid
+  email                  String?    @unique @db.VarChar(255)
+  password_hash          String?    @db.VarChar(255)
+  first_name             String     @db.VarChar(100)
+  last_name              String     @db.VarChar(100)
+  phone_number           String?    @db.VarChar(20)
+  role                   UserRole
+  status                 UserStatus @default(pending)
+  agency_id              String?    @db.Uuid
+  landlord_id            String?    @db.Uuid
+  email_verified         Boolean    @default(false)
+  phone_verified         Boolean    @default(false)
+  account_locked_until   DateTime?  @db.Timestamptz(6)
+  failed_login_attempts  Int        @default(0)
+  created_by             String?    @db.Uuid
+  created_at             DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime   @default(now()) @db.Timestamptz(6)
+  last_login_at          DateTime?  @db.Timestamptz(6)
+
+  // Relations
+  company                Company?   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  agency                 Agency?    @relation("AgencyUsers", fields: [agency_id], references: [id], onDelete: SetNull)
+  landlord               User?      @relation("UserLandlord", fields: [landlord_id], references: [id], onDelete: SetNull)
+  tenants                User[]     @relation("UserLandlord")
+  creator                User?      @relation("UserCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  created_users          User[]     @relation("UserCreator")
+
+  // Auth relations
+  refresh_tokens         RefreshToken[]
+  password_reset_tokens  PasswordResetToken[]
+  email_verification_tokens EmailVerificationToken[]
+  user_sessions          UserSession[]
+
+  // Property relations
+  owned_properties       Property[] @relation("PropertyOwner")
+  created_properties     Property[] @relation("PropertyCreator")
+  assigned_units         Unit[]     @relation("UnitTenant")
+  created_units          Unit[]     @relation("UnitCreator")
+
+  // Communication relations
+  created_agencies       Agency[]   @relation("AgencyCreator")
+  created_conversations  Conversation[] @relation("ConversationCreator")
+  conversation_participants ConversationParticipant[]
+  sent_messages          Message[]  @relation("MessageSender")
+  received_messages      MessageRecipient[]
+  created_templates      MessageTemplate[]
+
+  // Notification relations
+  sent_notifications     Notification[] @relation("NotificationSender")
+  received_notifications Notification[] @relation("NotificationRecipient")
+  notification_preferences NotificationPreference[]
+
+  // Maintenance relations
+  requested_maintenance  MaintenanceRequest[] @relation("MaintenanceRequester")
+  assigned_maintenance   MaintenanceRequest[] @relation("MaintenanceAssignee")
+
+  // Invoice relations
+  issued_invoices        Invoice[]  @relation("InvoiceIssuer")
+  received_invoices      Invoice[]  @relation("InvoiceRecipient")
+
+  // Tenant profile
+  tenant_profile         TenantProfile?
+  
+  // Lease relations
+  tenant_leases          Lease[]       @relation("LeaseTenant")
+  created_leases         Lease[]       @relation("LeaseCreator")
+  
+  // Payment relations
+  tenant_payments        Payment[]     @relation("PaymentTenant")
+  processed_payments     Payment[]     @relation("PaymentProcessor")
+  created_payments       Payment[]     @relation("PaymentCreator")
+  
+  // Billing relations
+  created_subscriptions  Subscription[] @relation("SubscriptionCreator")
+  created_paybills       PaybillSettings[] @relation("PaybillCreator")
+  mpesa_transactions     MpesaTransaction[] @relation("MpesaTenant")
+
+  @@map("users")
+}
+
+// ============================================================================
+// AUTHENTICATION MODELS
+// ============================================================================
+
+model RefreshToken {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id      String    @db.Uuid
+  token_hash   String    @unique @db.VarChar(255)
+  device_info  Json?
+  ip_address   String?   @db.Inet
+  user_agent   String?
+  expires_at   DateTime  @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  is_revoked   Boolean   @default(false)
+  revoked_at   DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @unique @db.VarChar(255)
+  expires_at DateTime  @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  is_used    Boolean   @default(false)
+  used_at    DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @unique @db.VarChar(255)
+  email      String    @db.VarChar(255)
+  expires_at DateTime  @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  is_used    Boolean   @default(false)
+  used_at    DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+model UserSession {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id       String    @db.Uuid
+  session_token String    @unique @db.VarChar(255)
+  device_info   Json?
+  ip_address    String?   @db.Inet
+  user_agent    String?
+  last_activity DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at    DateTime  @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  is_active     Boolean   @default(true)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+// ============================================================================
+// PROPERTY MODELS
+// ============================================================================
+
+model Property {
+  id                   String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id           String         @db.Uuid
+  name                 String         @db.VarChar(255)
+  type                 PropertyType
+  description          String?
+  street               String         @db.VarChar(255)
+  city                 String         @db.VarChar(100)
+  region               String         @db.VarChar(100)
+  country              String         @default("Kenya") @db.VarChar(100)
+  postal_code          String?        @db.VarChar(20)
+  latitude             Decimal?       @db.Decimal(10, 8)
+  longitude            Decimal?       @db.Decimal(11, 8)
+  ownership_type       OwnershipType  @default(individual)
+  owner_id             String         @db.Uuid
+  agency_id            String?        @db.Uuid
+  number_of_units      Int            @default(1)
+  number_of_blocks     Int?
+  number_of_floors     Int?
+  service_charge_rate  Decimal?       @db.Decimal(10, 2)
+  service_charge_type  String?        @db.VarChar(20)
+  amenities            Json           @default("[]")
+  access_control       String?        @db.VarChar(100)
+  maintenance_schedule String?        @db.VarChar(100)
+  status               PropertyStatus @default(active)
+  year_built           Int?
+  last_renovation      DateTime?      @db.Timestamptz(6)
+  documents            Json           @default("[]")
+  images               Json           @default("[]")
+  created_by           String         @db.Uuid
+  created_at           DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime       @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company              Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  owner                User           @relation("PropertyOwner", fields: [owner_id], references: [id], onDelete: Restrict)
+  agency               Agency?        @relation(fields: [agency_id], references: [id], onDelete: SetNull)
+  creator              User           @relation("PropertyCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  units                Unit[]
+  maintenance_requests MaintenanceRequest[]
+  invoices             Invoice[]
+  current_tenants      TenantProfile[] @relation("TenantCurrentProperty")
+  leases               Lease[]         @relation("LeaseProperty")
+  payments             Payment[]       @relation("PaymentProperty")
+  mpesa_transactions   MpesaTransaction[] @relation("MpesaProperty")
+
+  @@map("properties")
+}
+
+model Unit {
+  id                    String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String            @db.Uuid
+  property_id           String            @db.Uuid
+  unit_number           String            @db.VarChar(50)
+  unit_type             UnitType
+  block_number          String?           @db.VarChar(20)
+  floor_number          Int?
+  size_square_feet      Decimal?          @db.Decimal(10, 2)
+  size_square_meters    Decimal?          @db.Decimal(10, 2)
+  number_of_bedrooms    Int?
+  number_of_bathrooms   Int?
+  has_ensuite           Boolean           @default(false)
+  has_balcony           Boolean           @default(false)
+  has_parking           Boolean           @default(false)
+  parking_spaces        Int               @default(0)
+  rent_amount           Decimal           @db.Decimal(12, 2)
+  currency              String            @default("KES") @db.VarChar(3)
+  deposit_amount        Decimal           @db.Decimal(12, 2)
+  deposit_months        Int               @default(1)
+  status                UnitStatus        @default(vacant)
+  condition             UnitCondition     @default(good)
+  furnishing_type       FurnishingType    @default(unfurnished)
+  water_meter_number    String?           @db.VarChar(50)
+  electric_meter_number String?           @db.VarChar(50)
+  utility_billing_type  UtilityBillingType @default(postpaid)
+  in_unit_amenities     Json              @default("[]")
+  appliances            Json              @default("[]")
+  current_tenant_id     String?           @db.Uuid
+  lease_start_date      DateTime?         @db.Date
+  lease_end_date        DateTime?         @db.Date
+  lease_type            String?           @db.VarChar(20)
+  documents             Json              @default("[]")
+  images                Json              @default("[]")
+  estimated_value       Decimal?          @db.Decimal(15, 2)
+  market_rent_estimate  Decimal?          @db.Decimal(12, 2)
+  last_valuation_date   DateTime?         @db.Date
+  created_by            String            @db.Uuid
+  created_at            DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime          @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  property              Property          @relation(fields: [property_id], references: [id], onDelete: Cascade)
+  current_tenant        User?             @relation("UnitTenant", fields: [current_tenant_id], references: [id], onDelete: SetNull)
+  creator               User              @relation("UnitCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  maintenance_requests  MaintenanceRequest[]
+  invoices              Invoice[]
+  tenant_profiles       TenantProfile[]   @relation("TenantCurrentUnit")
+  leases                Lease[]           @relation("LeaseUnit")
+  payments              Payment[]         @relation("PaymentUnit")
+  mpesa_transactions    MpesaTransaction[] @relation("MpesaUnit")
+
+  @@unique([property_id, unit_number])
+  @@map("units")
+}
+
+// ============================================================================
+// COMMUNICATIONS MODELS
+// ============================================================================
+
+model Conversation {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id   String   @db.Uuid
+  subject      String   @db.VarChar(255)
+  type         String   @default("direct") @db.VarChar(20)
+  created_by   String   @db.Uuid
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company      Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  creator      User     @relation("ConversationCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversation_id String    @db.Uuid
+  user_id         String    @db.Uuid
+  joined_at       DateTime  @default(now()) @db.Timestamptz(6)
+  left_at         DateTime? @db.Timestamptz(6)
+  role            String    @default("participant") @db.VarChar(20)
+
+  // Relations
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id                String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id        String         @db.Uuid
+  conversation_id   String?        @db.Uuid
+  sender_id         String         @db.Uuid
+  subject           String?        @db.VarChar(255)
+  content           String
+  message_type      String         @default("text") @db.VarChar(20)
+  priority          PriorityLevel  @default(medium)
+  status            MessageStatus  @default(draft)
+  sent_at           DateTime?      @db.Timestamptz(6)
+  scheduled_for     DateTime?      @db.Timestamptz(6)
+  parent_message_id String?        @db.Uuid
+  thread_id         String?        @db.Uuid
+  template_id       String?        @db.Uuid
+  is_ai_generated   Boolean        @default(false)
+  ai_confidence     Decimal?       @db.Decimal(3, 2)
+  attachments       Json           @default("[]")
+  metadata          Json           @default("{}")
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime       @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company           Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  conversation      Conversation?  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender            User           @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+  parent_message    Message?       @relation("MessageThread", fields: [parent_message_id], references: [id], onDelete: Cascade)
+  child_messages    Message[]      @relation("MessageThread")
+  recipients        MessageRecipient[]
+
+  @@map("messages")
+}
+
+model MessageRecipient {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  message_id   String    @db.Uuid
+  recipient_id String    @db.Uuid
+  is_read      Boolean   @default(false)
+  read_at      DateTime? @db.Timestamptz(6)
+  delivered_at DateTime? @db.Timestamptz(6)
+  is_starred   Boolean   @default(false)
+  is_archived  Boolean   @default(false)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  message      Message   @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  recipient    User      @relation(fields: [recipient_id], references: [id], onDelete: Cascade)
+
+  @@unique([message_id, recipient_id])
+  @@map("message_recipients")
+}
+
+model MessageTemplate {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id    String   @db.Uuid
+  name          String   @db.VarChar(100)
+  subject       String?  @db.VarChar(255)
+  content       String
+  template_type String   @db.VarChar(50)
+  variables     Json     @default("[]")
+  is_global     Boolean  @default(false)
+  created_by    String   @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company       Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  creator       User     @relation(fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@map("message_templates")
+}
+
+// ============================================================================
+// NOTIFICATIONS MODELS
+// ============================================================================
+
+model Notification {
+  id                   String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id           String             @db.Uuid
+  sender_id            String?            @db.Uuid
+  recipient_id         String             @db.Uuid
+  title                String             @db.VarChar(255)
+  message              String
+  notification_type    String             @db.VarChar(50)
+  category             String?            @db.VarChar(50)
+  priority             PriorityLevel      @default(medium)
+  status               NotificationStatus @default(unread)
+  is_read              Boolean            @default(false)
+  read_at              DateTime?          @db.Timestamptz(6)
+  action_required      Boolean            @default(false)
+  action_url           String?            @db.VarChar(500)
+  action_data          Json?
+  related_entity_type  String?            @db.VarChar(50)
+  related_entity_id    String?            @db.Uuid
+  channels             Json               @default("[\"app\"]")
+  metadata             Json               @default("{}")
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company              Company            @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  sender               User?              @relation("NotificationSender", fields: [sender_id], references: [id], onDelete: SetNull)
+  recipient            User               @relation("NotificationRecipient", fields: [recipient_id], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id           String   @db.Uuid
+  notification_type String   @db.VarChar(50)
+  channels          Json     @default("[\"app\"]")
+  is_enabled        Boolean  @default(true)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user              User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, notification_type])
+  @@map("notification_preferences")
+}
+
+// ============================================================================
+// MAINTENANCE MODELS
+// ============================================================================
+
+model MaintenanceRequest {
+  id             String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id     String            @db.Uuid
+  property_id    String            @db.Uuid
+  unit_id        String?           @db.Uuid
+  title          String            @db.VarChar(255)
+  description    String
+  category       String            @db.VarChar(50)
+  priority       PriorityLevel     @default(medium)
+  status         MaintenanceStatus @default(pending)
+  requested_by   String            @db.Uuid
+  assigned_to    String?           @db.Uuid
+  requested_date DateTime          @default(now()) @db.Date
+  scheduled_date DateTime?         @db.Date
+  completed_date DateTime?         @db.Date
+  estimated_cost Decimal?          @db.Decimal(12, 2)
+  actual_cost    Decimal?          @db.Decimal(12, 2)
+  images         Json              @default("[]")
+  documents      Json              @default("[]")
+  notes          String?
+  internal_notes String?
+  created_at     DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime          @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company        Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  property       Property          @relation(fields: [property_id], references: [id], onDelete: Cascade)
+  unit           Unit?             @relation(fields: [unit_id], references: [id], onDelete: Cascade)
+  requester      User              @relation("MaintenanceRequester", fields: [requested_by], references: [id], onDelete: Restrict)
+  assignee       User?             @relation("MaintenanceAssignee", fields: [assigned_to], references: [id], onDelete: SetNull)
+
+  @@map("maintenance_requests")
+}
+
+// ============================================================================
+// FINANCIAL MODELS
+// ============================================================================
+
+model Invoice {
+  id                String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id        String        @db.Uuid
+  invoice_number    String        @unique @db.VarChar(50)
+  title             String        @db.VarChar(255)
+  description       String?
+  invoice_type      String        @db.VarChar(50)
+  issued_by         String        @db.Uuid
+  issued_to         String        @db.Uuid
+  property_id       String?       @db.Uuid
+  unit_id           String?       @db.Uuid
+  subtotal          Decimal       @default(0) @db.Decimal(12, 2)
+  tax_amount        Decimal       @default(0) @db.Decimal(12, 2)
+  discount_amount   Decimal       @default(0) @db.Decimal(12, 2)
+  total_amount      Decimal       @db.Decimal(12, 2)
+  currency          String        @default("KES") @db.VarChar(3)
+  issue_date        DateTime      @default(now()) @db.Date
+  due_date          DateTime      @db.Date
+  paid_date         DateTime?     @db.Date
+  status            InvoiceStatus @default(draft)
+  payment_method    String?       @db.VarChar(50)
+  payment_reference String?       @db.VarChar(100)
+  metadata          Json          @default("{}")
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime      @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company           Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  issuer            User          @relation("InvoiceIssuer", fields: [issued_by], references: [id], onDelete: Restrict)
+  recipient         User          @relation("InvoiceRecipient", fields: [issued_to], references: [id], onDelete: Restrict)
+  property          Property?     @relation(fields: [property_id], references: [id], onDelete: SetNull)
+  unit              Unit?         @relation(fields: [unit_id], references: [id], onDelete: SetNull)
+  line_items        InvoiceLineItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  invoice_id  String  @db.Uuid
+  description String  @db.VarChar(255)
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unit_price  Decimal @db.Decimal(12, 2)
+  total_price Decimal @db.Decimal(12, 2)
+  metadata    Json    @default("{}")
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  invoice     Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@map("invoice_line_items")
+}
+
+// ============================================================================
+// LEASE MODELS
+// ============================================================================
+
+enum LeaseStatus {
+  draft
+  active
+  expired
+  terminated
+  renewed
+
+  @@map("lease_status")
+}
+
+enum LeaseType {
+  fixed_term
+  month_to_month
+  periodic
+  commercial
+  residential
+
+  @@map("lease_type")
+}
+
+model Lease {
+  id                    String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String      @db.Uuid
+  tenant_id             String      @db.Uuid
+  unit_id               String      @db.Uuid
+  property_id           String      @db.Uuid
+  
+  // Lease details
+  lease_number          String      @unique @db.VarChar(50)
+  lease_type            LeaseType   @default(fixed_term)
+  status                LeaseStatus @default(draft)
+  
+  // Dates
+  start_date            DateTime    @db.Date
+  end_date              DateTime    @db.Date
+  move_in_date          DateTime?   @db.Date
+  move_out_date         DateTime?   @db.Date
+  notice_period_days    Int         @default(30)
+  
+  // Financial terms
+  rent_amount           Decimal     @db.Decimal(12, 2)
+  deposit_amount        Decimal     @db.Decimal(12, 2)
+  currency              String      @default("KES") @db.VarChar(3)
+  payment_frequency     String      @default("monthly") @db.VarChar(20)
+  payment_day           Int         @default(1)
+  late_fee_amount       Decimal?    @db.Decimal(10, 2)
+  late_fee_grace_days   Int         @default(5)
+  
+  // Lease terms
+  renewable             Boolean     @default(true)
+  auto_renewal          Boolean     @default(false)
+  renewal_notice_days   Int         @default(60)
+  pets_allowed          Boolean     @default(false)
+  smoking_allowed       Boolean     @default(false)
+  subletting_allowed    Boolean     @default(false)
+  
+  // Additional terms
+  special_terms         String?
+  notes                 String?
+  documents             Json        @default("[]")
+  
+  // Audit fields
+  created_by            String      @db.Uuid
+  created_at            DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime    @default(now()) @db.Timestamptz(6)
+  signed_at             DateTime?   @db.Timestamptz(6)
+  terminated_at         DateTime?   @db.Timestamptz(6)
+  termination_reason    String?     @db.VarChar(255)
+
+  // Relations
+  company               Company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  tenant                User        @relation("LeaseTenant", fields: [tenant_id], references: [id], onDelete: Restrict)
+  unit                  Unit        @relation("LeaseUnit", fields: [unit_id], references: [id], onDelete: Restrict)
+  property              Property    @relation("LeaseProperty", fields: [property_id], references: [id], onDelete: Restrict)
+  creator               User        @relation("LeaseCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  
+  // Lease history and renewals
+  parent_lease_id       String?     @db.Uuid
+  parent_lease          Lease?      @relation("LeaseRenewal", fields: [parent_lease_id], references: [id], onDelete: SetNull)
+  renewal_leases        Lease[]     @relation("LeaseRenewal")
+  payments              Payment[]   @relation("PaymentLease")
+
+  @@map("leases")
+}
+
+// ============================================================================
+// TENANT MODELS
+// ============================================================================
+
+model TenantProfile {
+  id                              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id                         String    @unique @db.Uuid
+  current_property_id             String?   @db.Uuid
+  current_unit_id                 String?   @db.Uuid
+  id_number                       String?   @db.VarChar(50)
+  nationality                     String?   @default("Kenyan") @db.VarChar(100)
+  move_in_date                    DateTime? @db.Date
+  lease_type                      String?   @default("fixed_term") @db.VarChar(50)
+  lease_start_date                DateTime? @db.Date
+  lease_end_date                  DateTime? @db.Date
+  rent_amount                     Decimal?  @db.Decimal(10, 2)
+  deposit_amount                  Decimal?  @db.Decimal(10, 2)
+  payment_frequency               String?   @default("monthly") @db.VarChar(20)
+  payment_day                     Int?      @default(1)
+  emergency_contact_name          String?   @db.VarChar(100)
+  emergency_contact_phone         String?   @db.VarChar(20)
+  emergency_contact_relationship  String?   @db.VarChar(50)
+  preferred_communication_method  String?   @default("email") @db.VarChar(20)
+  created_at                      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime  @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  user                            User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  current_property                Property? @relation("TenantCurrentProperty", fields: [current_property_id], references: [id], onDelete: SetNull)
+  current_unit                    Unit?     @relation("TenantCurrentUnit", fields: [current_unit_id], references: [id], onDelete: SetNull)
+
+  @@map("tenant_profiles")
+}
+
+// ============================================================================
+// PAYMENT MODELS
+// ============================================================================
+
+enum PaymentMethod {
+  cash
+  mpesa
+  bank_transfer
+  cheque
+  mobile_money
+  card
+  online
+  
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  pending
+  approved
+  completed
+  failed
+  cancelled
+  refunded
+  
+  @@map("payment_status")
+}
+
+enum PaymentType {
+  rent
+  security_deposit
+  utility
+  maintenance
+  late_fee
+  penalty
+  other
+  
+  @@map("payment_type")
+}
+
+model Payment {
+  id                    String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String          @db.Uuid
+  
+  // Payment details
+  tenant_id             String          @db.Uuid
+  unit_id               String?         @db.Uuid
+  property_id           String?         @db.Uuid
+  lease_id              String?         @db.Uuid
+  invoice_id            String?         @db.Uuid
+  
+  // Payment information
+  amount                Decimal         @db.Decimal(10, 2)
+  currency              String          @default("KES") @db.VarChar(10)
+  payment_method        PaymentMethod
+  payment_type          PaymentType
+  status                PaymentStatus   @default(pending)
+  
+  // Payment metadata
+  payment_date          DateTime        @db.Timestamptz(6)
+  payment_period        String?         @db.VarChar(50) // e.g., "January 2025"
+  receipt_number        String          @unique @db.VarChar(100)
+  transaction_id        String?         @db.VarChar(100)
+  reference_number      String?         @db.VarChar(100)
+  
+  // Cash payment specific fields
+  received_by           String?         @db.VarChar(100) // Person who received the cash
+  received_from         String?         @db.VarChar(100) // Person who made the payment
+  
+  // Payment processing
+  processed_by          String?         @db.Uuid // User who processed/approved the payment
+  processed_at          DateTime?       @db.Timestamptz(6)
+  approval_notes        String?         @db.Text
+  
+  // Additional information
+  notes                 String?         @db.Text
+  attachments           Json            @default("[]") // File attachments/receipts
+  
+  // Notification flags
+  receipt_sent          Boolean         @default(false)
+  notification_sent     Boolean         @default(false)
+  
+  // Audit fields
+  created_by            String          @db.Uuid
+  created_at            DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime        @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  tenant                User            @relation("PaymentTenant", fields: [tenant_id], references: [id], onDelete: Restrict)
+  unit                  Unit?           @relation("PaymentUnit", fields: [unit_id], references: [id], onDelete: SetNull)
+  property              Property?       @relation("PaymentProperty", fields: [property_id], references: [id], onDelete: SetNull)
+  lease                 Lease?          @relation("PaymentLease", fields: [lease_id], references: [id], onDelete: SetNull)
+  processor             User?           @relation("PaymentProcessor", fields: [processed_by], references: [id], onDelete: SetNull)
+  creator               User            @relation("PaymentCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  mpesa_transactions    MpesaTransaction[]
+
+  @@map("payments")
+}
+
+// ============================================================================
+// BILLING & SUBSCRIPTION MODELS
+// ============================================================================
+
+enum SubscriptionPlan {
+  starter
+  professional
+  enterprise
+  
+  @@map("subscription_plan")
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  past_due
+  canceled
+  unpaid
+  
+  @@map("subscription_status")
+}
+
+enum PaymentGateway {
+  paystack
+  mpesa
+  stripe
+  flutterwave
+  
+  @@map("payment_gateway")
+}
+
+model Subscription {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String              @db.Uuid
+  
+  // Subscription details
+  plan                  SubscriptionPlan
+  status                SubscriptionStatus  @default(trial)
+  gateway               PaymentGateway      @default(paystack)
+  
+  // Paystack integration
+  paystack_plan_code    String?             @db.VarChar(100)
+  paystack_subscription_code String?        @db.VarChar(100)
+  paystack_customer_code String?            @db.VarChar(100)
+  
+  // Billing information
+  amount                Decimal             @db.Decimal(10, 2)
+  currency              String              @default("KES") @db.VarChar(10)
+  billing_cycle         String              @default("monthly") @db.VarChar(20)
+  
+  // Trial information
+  trial_start_date      DateTime?           @db.Timestamptz(6)
+  trial_end_date        DateTime?           @db.Timestamptz(6)
+  
+  // Subscription dates
+  start_date            DateTime            @db.Timestamptz(6)
+  end_date              DateTime?           @db.Timestamptz(6)
+  next_billing_date     DateTime?           @db.Timestamptz(6)
+  canceled_at           DateTime?           @db.Timestamptz(6)
+  
+  // Metadata
+  metadata              Json                @default("{}")
+  
+  // Audit fields
+  created_by            String              @db.Uuid
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  creator               User                @relation("SubscriptionCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  billing_invoices      BillingInvoice[]
+
+  @@map("subscriptions")
+}
+
+model BillingInvoice {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String              @db.Uuid
+  subscription_id       String              @db.Uuid
+  
+  // Invoice details
+  invoice_number        String              @unique @db.VarChar(100)
+  amount                Decimal             @db.Decimal(10, 2)
+  currency              String              @default("KES") @db.VarChar(10)
+  status                String              @default("pending") @db.VarChar(50)
+  
+  // Payment gateway information
+  gateway               PaymentGateway
+  gateway_reference     String?             @db.VarChar(200)
+  gateway_invoice_id    String?             @db.VarChar(200)
+  
+  // Billing period
+  billing_period_start  DateTime            @db.Date
+  billing_period_end    DateTime            @db.Date
+  
+  // Payment information
+  due_date              DateTime            @db.Date
+  paid_at               DateTime?           @db.Timestamptz(6)
+  
+  // Metadata
+  description           String?             @db.Text
+  metadata              Json                @default("{}")
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  subscription          Subscription        @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@map("billing_invoices")
+}
+
+model PaybillSettings {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String              @unique @db.Uuid
+  
+  // M-Pesa Paybill Configuration
+  paybill_number        String              @db.VarChar(20)
+  business_shortcode    String              @db.VarChar(20)
+  
+  // API Configuration (encrypted)
+  consumer_key          String              @db.Text
+  consumer_secret       String              @db.Text
+  
+  // Callback URLs
+  validation_url        String              @db.VarChar(500)
+  confirmation_url      String              @db.VarChar(500)
+  
+  // Settings
+  is_active             Boolean             @default(true)
+  auto_reconcile        Boolean             @default(true)
+  
+  // Metadata
+  metadata              Json                @default("{}")
+  
+  // Audit fields
+  created_by            String              @db.Uuid
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  creator               User                @relation("PaybillCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  mpesa_transactions    MpesaTransaction[]
+
+  @@map("paybill_settings")
+}
+
+model MpesaTransaction {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String              @db.Uuid
+  paybill_settings_id   String              @db.Uuid
+  
+  // M-Pesa Transaction Details
+  transaction_type      String              @db.VarChar(50)
+  trans_id              String              @unique @db.VarChar(50)
+  trans_time            String              @db.VarChar(50)
+  trans_amount          Decimal             @db.Decimal(10, 2)
+  
+  // Customer Information
+  msisdn                String              @db.VarChar(20)
+  bill_ref_number       String              @db.VarChar(50) // This should be unit number
+  
+  // Business Information
+  business_short_code   String              @db.VarChar(20)
+  invoice_number        String?             @db.VarChar(100)
+  org_account_balance   String?             @db.VarChar(50)
+  
+  // Processing Status
+  status                String              @default("pending") @db.VarChar(50)
+  processed_at          DateTime?           @db.Timestamptz(6)
+  
+  // Reconciliation
+  payment_id            String?             @db.Uuid // Link to Payment model
+  tenant_id             String?             @db.Uuid
+  unit_id               String?             @db.Uuid
+  property_id           String?             @db.Uuid
+  
+  // Raw M-Pesa Response
+  raw_response          Json
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  paybill_settings      PaybillSettings     @relation(fields: [paybill_settings_id], references: [id], onDelete: Cascade)
+  payment               Payment?            @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+  tenant                User?               @relation("MpesaTenant", fields: [tenant_id], references: [id], onDelete: SetNull)
+  unit                  Unit?               @relation("MpesaUnit", fields: [unit_id], references: [id], onDelete: SetNull)
+  property              Property?           @relation("MpesaProperty", fields: [property_id], references: [id], onDelete: SetNull)
+
+  @@map("mpesa_transactions")
+}

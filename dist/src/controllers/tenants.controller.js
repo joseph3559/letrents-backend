@@ -1,0 +1,267 @@
+import { TenantsService } from '../services/tenants.service.js';
+import { writeSuccess, writeError } from '../utils/response.js';
+const service = new TenantsService();
+export const createTenant = async (req, res) => {
+    try {
+        const user = req.user;
+        const tenantData = req.body;
+        // Validate required fields
+        if (!tenantData.email || !tenantData.first_name || !tenantData.last_name) {
+            return writeError(res, 400, 'Email, first name, and last name are required');
+        }
+        const tenant = await service.createTenant(tenantData, user);
+        writeSuccess(res, 201, 'Tenant created successfully', tenant);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to create tenant';
+        const status = message.includes('permissions') ? 403 :
+            message.includes('not found') ? 404 :
+                message.includes('already exists') ? 409 :
+                    message.includes('not available') ? 409 : 500;
+        writeError(res, status, message);
+    }
+};
+export const getTenant = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        const tenant = await service.getTenant(id, user);
+        writeSuccess(res, 200, 'Tenant retrieved successfully', tenant);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to get tenant';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+export const updateTenant = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        const updateData = req.body;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        const tenant = await service.updateTenant(id, updateData, user);
+        writeSuccess(res, 200, 'Tenant updated successfully', tenant);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to update tenant';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 :
+                message.includes('already exists') ? 409 : 500;
+        writeError(res, status, message);
+    }
+};
+export const deleteTenant = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        await service.deleteTenant(id, user);
+        writeSuccess(res, 200, 'Tenant deleted successfully');
+    }
+    catch (error) {
+        const message = error.message || 'Failed to delete tenant';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 :
+                message.includes('assigned to units') ? 409 : 500;
+        writeError(res, status, message);
+    }
+};
+export const listTenants = async (req, res) => {
+    try {
+        const user = req.user;
+        // Parse query parameters
+        const filters = {
+            property_id: req.query.property_id,
+            unit_id: req.query.unit_id,
+            status: req.query.status,
+            search_query: req.query.search,
+            sort_by: req.query.sort_by,
+            sort_order: req.query.sort_order,
+            limit: req.query.limit ? Math.min(parseInt(req.query.limit), 100) : 20,
+            offset: req.query.offset ? parseInt(req.query.offset) :
+                req.query.page ? (parseInt(req.query.page) - 1) * (req.query.limit ? parseInt(req.query.limit) : 20) : 0,
+        };
+        const result = await service.listTenants(filters, user);
+        // Format response to match Go backend structure
+        const response = {
+            success: true,
+            message: 'Tenants retrieved successfully',
+            data: result.tenants,
+            pagination: {
+                page: result.page,
+                per_page: result.per_page,
+                total: result.total,
+                total_pages: result.total_pages,
+            },
+        };
+        res.json(response);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to list tenants';
+        writeError(res, 500, message);
+    }
+};
+export const assignUnit = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        const assignmentData = req.body;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        if (!assignmentData.unit_id || !assignmentData.lease_start_date ||
+            !assignmentData.lease_end_date || !assignmentData.lease_type) {
+            return writeError(res, 400, 'Unit ID, lease start date, lease end date, and lease type are required');
+        }
+        await service.assignUnit(id, assignmentData, user);
+        writeSuccess(res, 200, 'Unit assigned to tenant successfully');
+    }
+    catch (error) {
+        const message = error.message || 'Failed to assign unit to tenant';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 :
+                message.includes('not available') || message.includes('already') ? 409 : 500;
+        writeError(res, status, message);
+    }
+};
+export const releaseUnit = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        await service.releaseUnit(id, user);
+        writeSuccess(res, 200, 'Tenant released from unit successfully');
+    }
+    catch (error) {
+        const message = error.message || 'Failed to release tenant from unit';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 :
+                message.includes('not currently assigned') ? 409 : 500;
+        writeError(res, status, message);
+    }
+};
+export const terminateTenant = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        await service.terminateTenant(id, user);
+        writeSuccess(res, 200, 'Tenant terminated successfully');
+    }
+    catch (error) {
+        const message = error.message || 'Failed to terminate tenant';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+export const sendInvitation = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        await service.sendInvitation(id, user);
+        writeSuccess(res, 200, 'Invitation sent successfully');
+    }
+    catch (error) {
+        const message = error.message || 'Failed to send invitation';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+export const resetPassword = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        await service.resetPassword(id, user);
+        writeSuccess(res, 200, 'Password reset initiated successfully');
+    }
+    catch (error) {
+        const message = error.message || 'Failed to reset password';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+export const getTenantPayments = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id: tenantId } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+        if (!tenantId) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        // Use the payments service directly
+        const { PaymentsService } = await import('../services/payments.service.js');
+        const paymentsService = new PaymentsService();
+        const filters = { tenant_id: tenantId };
+        const result = await paymentsService.listPayments(filters, user, Number(page), Number(limit));
+        writeSuccess(res, 200, 'Tenant payments retrieved successfully', result);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to get tenant payments';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+export const getTenantDocuments = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        // TODO: Implement document retrieval logic
+        // For now, return empty array as placeholder
+        const documents = [];
+        writeSuccess(res, 200, 'Tenant documents retrieved successfully', documents);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to get tenant documents';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+export const migrateTenant = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        const migrationData = req.body;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        if (!migrationData.new_unit_id) {
+            return writeError(res, 400, 'New unit ID is required');
+        }
+        await service.migrateTenant(id, migrationData, user);
+        writeSuccess(res, 200, 'Tenant migrated successfully', null);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to migrate tenant';
+        const status = message.includes('permissions') ? 403 :
+            message.includes('not found') ? 404 :
+                message.includes('not available') ? 409 : 500;
+        writeError(res, status, message);
+    }
+};
