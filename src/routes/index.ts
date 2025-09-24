@@ -23,6 +23,7 @@ import enums from './enums.js';
 import email from './email.js';
 import scheduler from './scheduler.js';
 import setup from './setup.js';
+import testEmail from './test-email.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 
@@ -80,6 +81,7 @@ router.post('/mpesa/c2b/confirmation', async (req, res) => {
 router.use('/enums', enums);
 router.use('/scheduler', scheduler);
 router.use('/setup', setup);
+router.use('/test-email', testEmail);
 
 // Super Admin middleware - only allow super_admin role
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
