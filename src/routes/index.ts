@@ -187,7 +187,7 @@ router.get('/test-user-metrics', (req, res) => {
 });
 
 // Add proper users/metrics endpoint
-router.get('/users/metrics', requireAuth, requireSuperAdmin, (req, res) => {
+router.get('/users/metrics', requireAuth, (req, res) => {
 	try {
 		console.log('Users/metrics endpoint hit by user:', (req as any).user);
 		const role = req.query.role as string;
