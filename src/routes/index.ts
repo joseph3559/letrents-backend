@@ -21,7 +21,7 @@ import billing from './billing.js';
 import superAdmin from './super-admin.js';
 import enums from './enums.js';
 import email from './email.js';
-import scheduler from './scheduler.js';
+// import scheduler from './scheduler.js';
 import setup from './setup.js';
 import testEmail from './test-email.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -79,7 +79,7 @@ router.post('/mpesa/c2b/confirmation', async (req, res) => {
   return c2bConfirmation(req, res);
 });
 router.use('/enums', enums);
-router.use('/scheduler', scheduler);
+// router.use('/scheduler', scheduler);
 router.use('/setup', setup);
 router.use('/test-email', testEmail);
 

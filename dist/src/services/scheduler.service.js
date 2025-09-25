@@ -67,7 +67,6 @@ export class SchedulerService {
      */
     scheduleTask(name, schedule, task) {
         const scheduledTask = cron.schedule(schedule, task, {
-            scheduled: true,
             timezone: 'Africa/Nairobi' // Adjust to your timezone
         });
         this.tasks.set(name, scheduledTask);

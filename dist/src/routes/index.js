@@ -21,6 +21,9 @@ import billing from './billing.js';
 import superAdmin from './super-admin.js';
 import enums from './enums.js';
 import email from './email.js';
+// import scheduler from './scheduler.js';
+import setup from './setup.js';
+import testEmail from './test-email.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
@@ -67,6 +70,9 @@ router.post('/mpesa/c2b/confirmation', async (req, res) => {
     return c2bConfirmation(req, res);
 });
 router.use('/enums', enums);
+// router.use('/scheduler', scheduler);
+router.use('/setup', setup);
+router.use('/test-email', testEmail);
 // Super Admin middleware - only allow super_admin role
 const requireSuperAdmin = (req, res, next) => {
     const user = req.user;
@@ -238,15 +244,45 @@ router.get('/system/settings', requireAuth, requireSuperAdmin, async (req, res) 
 });
 // Full super-admin routes
 router.use('/super-admin', superAdmin);
-// Health check endpoint
-router.get('/health', (_req, res) => {
-    res.json({
+// Health check endpoint with optional database setup
+router.get('/health', async (req, res) => {
+    const setupDB = req.query.setup === 'true';
+    let result = {
         success: true,
         status: 'healthy',
         service: 'letrents-backend-v2',
         version: '2.0.0',
         timestamp: new Date().toISOString()
-    });
+    };
+    if (setupDB) {
+        try {
+            const { setupDatabase } = require('../../manual-setup.js');
+            const setupResult = await setupDatabase();
+            result.database_setup = setupResult;
+        }
+        catch (error) {
+            result.database_setup = {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+    res.json(result);
+});
+// Manual database setup endpoint (temporary)
+router.post('/manual-setup', async (_req, res) => {
+    try {
+        const { setupDatabase } = require('../../manual-setup.js');
+        const result = await setupDatabase();
+        res.json(result);
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Manual setup failed',
+            error: error.message
+        });
+    }
 });
 // Migration test endpoint
 router.get('/migration/test', (_req, res) => {
