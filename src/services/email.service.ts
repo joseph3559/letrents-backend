@@ -16,6 +16,7 @@ export interface EmailOptions {
   html?: string;
   text?: string;
   attachments?: EmailAttachment[];
+  type?: string; // Email type for tracking/categorization
 }
 
 export interface TemplateEmailOptions {

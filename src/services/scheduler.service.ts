@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import * as cron from 'node-cron';
 import { InvoicesService } from './invoices.service.js';
 import { emailService } from './email.service.js';
 import { getPrisma } from '../config/prisma.js';
@@ -107,13 +107,9 @@ export class SchedulerService {
           // TODO: Add reminder tracking fields to avoid duplicate reminders
         },
         include: {
-          tenant: true,
-          lease: {
-            include: {
-              property: true,
-              unit: true
-            }
-          }
+          recipient: true,
+          property: true,
+          unit: true
         }
       });
 
@@ -121,15 +117,20 @@ export class SchedulerService {
 
       for (const invoice of invoicesDue) {
         try {
+          if (!invoice.recipient.email) {
+            console.warn(`⚠️ No email found for invoice recipient ${invoice.recipient.id}`);
+            continue;
+          }
+
           await emailService.sendEmail({
-            to: invoice.tenant.email,
+            to: invoice.recipient.email,
             subject: `Rent Payment Reminder - Due in ${days} days`,
             html: this.generateReminderEmailTemplate(invoice, days),
             type: 'rent_reminder'
           });
 
           // TODO: Update reminder tracking in database
-          console.log(`✅ Sent reminder to ${invoice.tenant.email} for invoice ${invoice.id}`);
+          console.log(`✅ Sent reminder to ${invoice.recipient.email} for invoice ${invoice.id}`);
         } catch (error) {
           console.error(`❌ Failed to send reminder for invoice ${invoice.id}:`, error);
         }
@@ -162,8 +163,11 @@ export class SchedulerService {
         },
         include: {
           tenant: true,
-          landlord: true,
-          property: true,
+          property: {
+            include: {
+              owner: true // This is the landlord
+            }
+          },
           unit: true
         }
       });
@@ -173,20 +177,28 @@ export class SchedulerService {
       for (const lease of expiringLeases) {
         try {
           // Notify landlord
-          await emailService.sendEmail({
-            to: lease.landlord.email,
-            subject: `Lease Expiration Alert - ${days} days remaining`,
-            html: this.generateLeaseExpirationTemplate(lease, days, 'landlord'),
-            type: 'lease_expiration'
-          });
+          if (lease.property.owner.email) {
+            await emailService.sendEmail({
+              to: lease.property.owner.email,
+              subject: `Lease Expiration Alert - ${days} days remaining`,
+              html: this.generateLeaseExpirationTemplate(lease, days, 'landlord'),
+              type: 'lease_expiration'
+            });
+          } else {
+            console.warn(`⚠️ No email found for property owner ${lease.property.owner.id}`);
+          }
 
           // Notify tenant
-          await emailService.sendEmail({
-            to: lease.tenant.email,
-            subject: `Your lease expires in ${days} days`,
-            html: this.generateLeaseExpirationTemplate(lease, days, 'tenant'),
-            type: 'lease_expiration'
-          });
+          if (lease.tenant.email) {
+            await emailService.sendEmail({
+              to: lease.tenant.email,
+              subject: `Your lease expires in ${days} days`,
+              html: this.generateLeaseExpirationTemplate(lease, days, 'tenant'),
+              type: 'lease_expiration'
+            });
+          } else {
+            console.warn(`⚠️ No email found for tenant ${lease.tenant.id}`);
+          }
 
           console.log(`✅ Sent lease expiration alerts for lease ${lease.id}`);
         } catch (error) {
