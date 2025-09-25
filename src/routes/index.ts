@@ -188,52 +188,62 @@ router.get('/test-user-metrics', (req, res) => {
 
 // Add proper users/metrics endpoint
 router.get('/users/metrics', requireAuth, requireSuperAdmin, (req, res) => {
-	const role = req.query.role as string;
+	try {
+		console.log('Users/metrics endpoint hit by user:', (req as any).user);
+		const role = req.query.role as string;
 	
-	let metrics;
+		let metrics;
 	
-	if (role === 'landlord') {
-		metrics = {
-			total_users: 1,
-			active_users: 1,
-			inactive_users: 0,
-			users_by_role: [
-				{ role: 'landlord', count: 1 }
-			],
-			growth_rate: 0
-		};
-	} else if (role === 'tenant') {
-		metrics = {
-			total_users: 3,
-			active_users: 3,
-			inactive_users: 0,
-			users_by_role: [
-				{ role: 'tenant', count: 3 }
-			],
-			growth_rate: 15.2
-		};
-	} else {
-		// All users
-		metrics = {
-			total_users: 6,
-			active_users: 6,
-			inactive_users: 0,
-			users_by_role: [
-				{ role: 'super_admin', count: 1 },
-				{ role: 'landlord', count: 1 },
-				{ role: 'tenant', count: 3 },
-				{ role: 'caretaker', count: 1 },
-				{ role: 'agent', count: 1 }
-			],
-			growth_rate: 8.5
-		};
-	}
+		if (role === 'landlord') {
+			metrics = {
+				total_users: 1,
+				active_users: 1,
+				inactive_users: 0,
+				users_by_role: [
+					{ role: 'landlord', count: 1 }
+				],
+				growth_rate: 0
+			};
+		} else if (role === 'tenant') {
+			metrics = {
+				total_users: 3,
+				active_users: 3,
+				inactive_users: 0,
+				users_by_role: [
+					{ role: 'tenant', count: 3 }
+				],
+				growth_rate: 15.2
+			};
+		} else {
+			// All users
+			metrics = {
+				total_users: 6,
+				active_users: 6,
+				inactive_users: 0,
+				users_by_role: [
+					{ role: 'super_admin', count: 1 },
+					{ role: 'landlord', count: 1 },
+					{ role: 'tenant', count: 3 },
+					{ role: 'caretaker', count: 1 },
+					{ role: 'agent', count: 1 }
+				],
+				growth_rate: 8.5
+			};
+		}
 
-	res.status(200).json({ 
-		success: true, 
-		message: 'User metrics retrieved successfully', 
-		data: metrics 
-	});
+		res.status(200).json({ 
+			success: true, 
+			message: 'User metrics retrieved successfully', 
+			data: metrics 
+		});
+	} catch (error) {
+		console.error('Error in users/metrics endpoint:', error);
+		res.status(500).json({ 
+			success: false, 
+			message: 'Internal server error', 
+			error: error instanceof Error ? error.message : String(error) 
+		});
+	}
 });
 
 router.get('/revenue/summary', requireAuth, requireSuperAdmin, async (req, res) => {
