@@ -7,15 +7,19 @@ const prisma = new PrismaClient();
 export const notificationsService = {
   async getNotifications(user: JWTClaims, limit: number = 10, offset: number = 0, filters: any = {}) {
     // Build role-based where clause for notifications
+    // Include both sent and received notifications
     let whereClause: any = { 
       ...filters,
-      recipient_id: user.user_id,
-      company_id: user.company_id
+      company_id: user.company_id,
+      OR: [
+        { recipient_id: user.user_id },  // Received notifications
+        { sender_id: user.user_id }       // Sent notifications
+      ]
     };
 
     // Super admin can see all notifications
     if (user.role === 'super_admin') {
-      delete whereClause.recipient_id;
+      delete whereClause.OR;
       delete whereClause.company_id;
     }
 
@@ -29,6 +33,14 @@ export const notificationsService = {
         },
         include: {
           sender: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              role: true,
+            }
+          },
+          recipient: {
             select: {
               id: true,
               first_name: true,
@@ -54,7 +66,7 @@ export const notificationsService = {
 
   async createNotification(user: JWTClaims, notificationData: any) {
     // Validate permissions - only certain roles can create notifications
-    if (!['landlord', 'agency_admin', 'super_admin', 'caretaker'].includes(user.role)) {
+    if (!['landlord', 'agency_admin', 'super_admin', 'caretaker', 'tenant'].includes(user.role)) {
       throw new Error('Insufficient permissions to create notification');
     }
 
@@ -62,18 +74,17 @@ export const notificationsService = {
     const createData: any = {
       title: notificationData.title,
       message: notificationData.message || notificationData.content,
-      type: notificationData.type || 'info',
+      notification_type: notificationData.notification_type || notificationData.type || 'info',
       priority: notificationData.priority || 'medium',
       category: notificationData.category || 'general',
       sender_id: user.user_id,
       recipient_id: notificationData.recipientId,
-      recipient_type: notificationData.recipient_type || 'user',
       is_read: false,
       company_id: user.company_id,
       // Optional fields
       ...(notificationData.property_id && { property_id: notificationData.property_id }),
       ...(notificationData.unit_id && { unit_id: notificationData.unit_id }),
-      ...(notificationData.actionUrl && { actionUrl: notificationData.actionUrl }),
+      ...(notificationData.action_url && { action_url: notificationData.action_url }),
       ...(notificationData.metadata && { metadata: notificationData.metadata }),
     };
 

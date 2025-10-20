@@ -803,4 +803,102 @@ export class UnitsService {
 
     return false;
   }
+
+  async cleanupDuplicateTenantAssignments(user: JWTClaims) {
+    const prisma = await getPrisma();
+
+    // Build where clause based on user permissions
+    const whereClause: any = {};
+    
+    if (user.company_id) {
+      whereClause.company_id = user.company_id;
+    }
+    
+    if (user.role === 'landlord') {
+      whereClause.property = { owner_id: user.user_id };
+    }
+    
+    if (user.role === 'agency_admin' && user.agency_id) {
+      whereClause.property = { agency_id: user.agency_id };
+    }
+
+    // Fetch all units with tenants
+    const units = await prisma.unit.findMany({
+      where: {
+        ...whereClause,
+        current_tenant_id: { not: null },
+      },
+      include: {
+        property: true,
+      },
+      orderBy: [
+        { lease_start_date: 'desc' },
+        { updated_at: 'desc' }
+      ],
+    });
+
+    // Group units by tenant ID
+    const tenantUnitsMap = new Map<string, any[]>();
+    units.forEach(unit => {
+      if (unit.current_tenant_id) {
+        if (!tenantUnitsMap.has(unit.current_tenant_id)) {
+          tenantUnitsMap.set(unit.current_tenant_id, []);
+        }
+        tenantUnitsMap.get(unit.current_tenant_id)!.push(unit);
+      }
+    });
+
+    // Find tenants assigned to multiple units
+    const duplicates = Array.from(tenantUnitsMap.entries())
+      .filter(([_, units]) => units.length > 1);
+
+    const cleanupResults = [];
+    let unitsCleared = 0;
+
+    // Process each duplicate
+    for (const [tenantId, tenantUnits] of duplicates) {
+      // Sort by lease start date (most recent first)
+      const sorted = tenantUnits.sort((a, b) => {
+        const dateA = new Date(a.lease_start_date || a.updated_at || 0).getTime();
+        const dateB = new Date(b.lease_start_date || b.updated_at || 0).getTime();
+        return dateB - dateA;
+      });
+
+      const activeUnit = sorted[0];
+      const abandonedUnits = sorted.slice(1);
+
+      // Clear tenant assignment from abandoned units
+      for (const unit of abandonedUnits) {
+        await prisma.unit.update({
+          where: { id: unit.id },
+          data: {
+            current_tenant_id: null,
+            status: 'vacant',
+            updated_at: new Date(),
+          },
+        });
+        unitsCleared++;
+      }
+
+      cleanupResults.push({
+        tenantId,
+        activeUnit: {
+          id: activeUnit.id,
+          unitNumber: activeUnit.unit_number,
+          propertyName: activeUnit.property?.name,
+        },
+        clearedUnits: abandonedUnits.map(u => ({
+          id: u.id,
+          unitNumber: u.unit_number,
+          propertyName: u.property?.name,
+        })),
+      });
+    }
+
+    return {
+      tenantsAffected: duplicates.length,
+      unitsCleared,
+      details: cleanupResults,
+    };
+  }
 }

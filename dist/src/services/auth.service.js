@@ -55,9 +55,13 @@ export class AuthService {
         if (payload.invitation_token && payload.invitation_token.startsWith('invitation-')) {
             const tenantId = payload.invitation_token.replace('invitation-', '');
             const existingTenant = await this.prisma.user.findUnique({
-                where: { id: tenantId, email: payload.email, role: 'tenant' }
+                where: { id: tenantId }
             });
-            if (existingTenant && existingTenant.status === 'pending') {
+            // Verify the tenant exists, has the correct email, role, and is pending
+            if (existingTenant &&
+                existingTenant.email === payload.email &&
+                existingTenant.role === 'tenant' &&
+                existingTenant.status === 'pending') {
                 // Update existing tenant with password and activate account
                 const password_hash = payload.password ? await bcrypt.hash(payload.password, 10) : null;
                 const updatedUser = await this.prisma.user.update({
@@ -74,6 +78,22 @@ export class AuthService {
                 const { token, expiresAt } = this.generateJwt(updatedUser, sessionId);
                 const refresh = await this.createRefreshToken(updatedUser.id, undefined, undefined, undefined, env.security.sessionTimeoutHours);
                 return { token, refresh_token: refresh.token, user: updatedUser, expires_at: expiresAt };
+            }
+            else if (existingTenant) {
+                // Tenant exists but doesn't match criteria
+                if (existingTenant.email !== payload.email) {
+                    throw new Error('invitation token does not match the provided email address');
+                }
+                if (existingTenant.role !== 'tenant') {
+                    throw new Error('invalid invitation token for tenant registration');
+                }
+                if (existingTenant.status !== 'pending') {
+                    throw new Error('this invitation has already been used or the account is already active');
+                }
+            }
+            else {
+                // Tenant not found
+                throw new Error('invalid or expired invitation token');
             }
         }
         // Validate email uniqueness for new users
@@ -125,16 +145,15 @@ export class AuthService {
         if (env.security.requireEmailVerification && payload.email) {
             // create email verification token
             const raw = crypto.randomBytes(32).toString('hex');
-            // TODO: Fix token model schema
-            // await this.prisma.emailVerificationToken.create({
-            // 	data: {
-            // 		user_id: user.id,
-            // 		token_hash: this.hashToken(raw),
-            // 		email: user.email!,
-            // 		expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            // 		is_used: false,
-            // 	},
-            // });
+            await this.prisma.emailVerificationToken.create({
+                data: {
+                    user_id: user.id,
+                    token_hash: this.hashToken(raw),
+                    email: user.email,
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    is_used: false,
+                },
+            });
             // Send email verification using email service
             const verificationUrl = `${env.appUrl}/verify-email?token=${raw}`;
             try {
@@ -169,13 +188,59 @@ export class AuthService {
     }
     async verifyEmail(token) {
         const tokenHash = this.hashToken(token);
-        const rec = await this.prisma.emailVerificationToken.findFirst({ where: { token_hash: tokenHash, is_used: false } });
-        if (!rec)
+        // First check if token exists (used or unused)
+        const tokenRecord = await this.prisma.emailVerificationToken.findFirst({
+            where: { token_hash: tokenHash },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                        role: true,
+                        email_verified: true,
+                        status: true
+                    }
+                }
+            }
+        });
+        if (!tokenRecord) {
             throw new Error('invalid or expired verification token');
-        if (rec.expires_at && rec.expires_at < new Date())
+        }
+        // Check if user is already verified
+        if (tokenRecord.user.email_verified) {
+            return {
+                message: 'Email has already been verified. You can now log in to your account.',
+                already_verified: true,
+                user: {
+                    email: tokenRecord.user.email,
+                    role: tokenRecord.user.role
+                }
+            };
+        }
+        // Check if token is already used
+        if (tokenRecord.is_used) {
+            throw new Error('verification token has already been used');
+        }
+        // Check if token is expired
+        if (tokenRecord.expires_at && tokenRecord.expires_at < new Date()) {
             throw new Error('verification token is expired');
-        await this.prisma.user.update({ where: { id: rec.user_id }, data: { email_verified: true, status: 'active' } });
-        await this.prisma.emailVerificationToken.updateMany({ where: { token_hash: tokenHash }, data: { is_used: true, used_at: new Date() } });
+        }
+        // Verify the email
+        await this.prisma.user.update({
+            where: { id: tokenRecord.user_id },
+            data: { email_verified: true, status: 'active' }
+        });
+        await this.prisma.emailVerificationToken.updateMany({
+            where: { token_hash: tokenHash },
+            data: { is_used: true, used_at: new Date() }
+        });
+        return {
+            message: 'Email verified successfully',
+            user: {
+                email: tokenRecord.user.email,
+                role: tokenRecord.user.role
+            }
+        };
     }
     async login(payload, ip, ua) {
         if (!payload.email || !payload.password)
@@ -314,22 +379,21 @@ export class AuthService {
         const raw = crypto.randomBytes(32).toString('hex');
         const tokenHash = this.hashToken(raw);
         // Invalidate old tokens and create new one
-        // TODO: Fix token model schema
-        // await this.prisma.$transaction([
-        // 	this.prisma.emailVerificationToken.updateMany({
-        // 		where: { user_id: user.id, is_used: false },
-        // 		data: { is_used: true, used_at: new Date() }
-        // 	}),
-        // 	this.prisma.emailVerificationToken.create({
-        // 		data: {
-        // 			user_id: user.id,
-        // 			token_hash: tokenHash,
-        // 			email: user.email!,
-        // 			expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        // 			is_used: false,
-        // 		},
-        // 	})
-        // ]);
+        await this.prisma.$transaction([
+            this.prisma.emailVerificationToken.updateMany({
+                where: { user_id: user.id, is_used: false },
+                data: { is_used: true, used_at: new Date() }
+            }),
+            this.prisma.emailVerificationToken.create({
+                data: {
+                    user_id: user.id,
+                    token_hash: tokenHash,
+                    email: user.email,
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    is_used: false,
+                },
+            })
+        ]);
         // Send verification email
         const verificationUrl = `${env.appUrl}/verify-email?token=${raw}`;
         try {

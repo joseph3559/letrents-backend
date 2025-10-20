@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createUnit, createUnits, getUnit, updateUnit, deleteUnit, listUnits, updateUnitStatus, assignTenant, releaseTenant, searchAvailableUnits } from '../controllers/units.controller.js';
+import { createUnit, createUnits, getUnit, updateUnit, deleteUnit, listUnits, updateUnitStatus, assignTenant, releaseTenant, searchAvailableUnits, cleanupDuplicateTenantAssignments } from '../controllers/units.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
 // Units CRUD
@@ -15,4 +15,6 @@ router.patch('/:id/status', rbacResource('units', 'status'), updateUnitStatus);
 // Tenant management
 router.post('/:id/assign-tenant', rbacResource('units', 'assign'), assignTenant);
 router.post('/:id/release-tenant', rbacResource('units', 'release'), releaseTenant);
+// Maintenance and cleanup
+router.post('/cleanup/duplicate-tenants', rbacResource('units', 'update'), cleanupDuplicateTenantAssignments);
 export default router;

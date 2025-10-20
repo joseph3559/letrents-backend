@@ -226,6 +226,8 @@ model Company {
   billing_invoices      BillingInvoice[]
   paybill_settings      PaybillSettings?
   mpesa_transactions    MpesaTransaction[]
+  checklist_templates   ChecklistTemplate[]
+  inspections           Inspection[]
 
   @@map("companies")
 }
@@ -329,6 +331,12 @@ model User {
   created_subscriptions  Subscription[] @relation("SubscriptionCreator")
   created_paybills       PaybillSettings[] @relation("PaybillCreator")
   mpesa_transactions     MpesaTransaction[] @relation("MpesaTenant")
+  
+  // Checklist & Inspection relations
+  created_checklist_templates  ChecklistTemplate[] @relation("TemplateCreator")
+  conducted_inspections        Inspection[] @relation("InspectionInspector")
+  tenant_inspections           Inspection[] @relation("InspectionTenant")
+  uploaded_inspection_photos   InspectionPhoto[] @relation("PhotoUploader")
 
   @@map("users")
 }
@@ -449,6 +457,8 @@ model Property {
   leases               Lease[]         @relation("LeaseProperty")
   payments             Payment[]       @relation("PaymentProperty")
   mpesa_transactions   MpesaTransaction[] @relation("MpesaProperty")
+  checklist_templates  ChecklistTemplate[] @relation("TemplateProperty")
+  inspections          Inspection[]    @relation("InspectionProperty")
 
   @@map("properties")
 }
@@ -505,6 +515,7 @@ model Unit {
   leases                Lease[]           @relation("LeaseUnit")
   payments              Payment[]         @relation("PaymentUnit")
   mpesa_transactions    MpesaTransaction[] @relation("MpesaUnit")
+  inspections           Inspection[]      @relation("InspectionUnit")
 
   @@unique([property_id, unit_number])
   @@map("units")
@@ -866,6 +877,7 @@ model TenantProfile {
   current_unit_id                 String?   @db.Uuid
   id_number                       String?   @db.VarChar(50)
   nationality                     String?   @default("Kenyan") @db.VarChar(100)
+  profile_picture                 String?   @db.Text
   move_in_date                    DateTime? @db.Date
   lease_type                      String?   @default("fixed_term") @db.VarChar(50)
   lease_start_date                DateTime? @db.Date
@@ -1185,4 +1197,250 @@ model MpesaTransaction {
   property              Property?           @relation("MpesaProperty", fields: [property_id], references: [id], onDelete: SetNull)
 
   @@map("mpesa_transactions")
+}
+
+// ============================================================================
+// CHECKLIST & INSPECTION SYSTEM
+// ============================================================================
+
+enum InspectionType {
+  move_in
+  move_out
+  periodic
+  emergency
+  maintenance
+  routine
+
+  @@map("inspection_type")
+}
+
+enum InspectionStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+  pending_review
+
+  @@map("inspection_status")
+}
+
+enum ItemCondition {
+  excellent
+  good
+  fair
+  poor
+  damaged
+  missing
+  not_applicable
+
+  @@map("item_condition")
+}
+
+enum ChecklistScope {
+  company        // Available to entire company
+  property       // Specific to a property
+  custom         // Custom created by user
+
+  @@map("checklist_scope")
+}
+
+// Checklist Templates - Pre-defined or custom templates
+model ChecklistTemplate {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String              @db.Uuid
+  
+  // Template Information
+  name                  String              @db.VarChar(200)
+  description           String?             @db.Text
+  inspection_type       InspectionType      // move_in, move_out, periodic, etc.
+  scope                 ChecklistScope      @default(company)
+  
+  // Scope Relations (optional - for property-specific templates)
+  property_id           String?             @db.Uuid
+  
+  // Template Status
+  is_active             Boolean             @default(true)
+  is_default            Boolean             @default(false) // System default templates
+  
+  // Audit fields
+  created_by            String              @db.Uuid
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  property              Property?           @relation("TemplateProperty", fields: [property_id], references: [id], onDelete: Cascade)
+  creator               User                @relation("TemplateCreator", fields: [created_by], references: [id])
+  categories            ChecklistCategory[]
+  inspections           Inspection[]
+
+  @@index([company_id])
+  @@index([property_id])
+  @@index([inspection_type])
+  @@map("checklist_templates")
+}
+
+// Categories within a checklist (e.g., Kitchen, Bathroom, Bedroom)
+model ChecklistCategory {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  template_id           String              @db.Uuid
+  
+  // Category Information
+  name                  String              @db.VarChar(200)
+  description           String?             @db.Text
+  display_order         Int                 @default(0)
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  template              ChecklistTemplate   @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  items                 ChecklistItem[]
+
+  @@index([template_id])
+  @@map("checklist_categories")
+}
+
+// Individual items in a checklist
+model ChecklistItem {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  category_id           String              @db.Uuid
+  
+  // Item Information
+  name                  String              @db.VarChar(300)
+  description           String?             @db.Text
+  display_order         Int                 @default(0)
+  
+  // Item Configuration
+  is_required           Boolean             @default(false)
+  requires_photo        Boolean             @default(false)
+  requires_notes        Boolean             @default(false)
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  category              ChecklistCategory   @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  inspection_items      InspectionItem[]
+
+  @@index([category_id])
+  @@map("checklist_items")
+}
+
+// Inspection Records - Actual inspections performed
+model Inspection {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String              @db.Uuid
+  template_id           String              @db.Uuid
+  
+  // Inspection Details
+  inspection_type       InspectionType
+  status                InspectionStatus    @default(scheduled)
+  
+  // Location
+  property_id           String              @db.Uuid
+  unit_id               String              @db.Uuid
+  
+  // Participants
+  tenant_id             String?             @db.Uuid    // Tenant being inspected
+  inspector_id          String              @db.Uuid    // Person conducting inspection
+  
+  // Scheduling
+  scheduled_date        DateTime?           @db.Timestamptz(6)
+  started_at            DateTime?           @db.Timestamptz(6)
+  completed_at          DateTime?           @db.Timestamptz(6)
+  
+  // Results
+  overall_condition     String?             @db.VarChar(100)
+  overall_notes         String?             @db.Text
+  total_issues          Int                 @default(0)
+  critical_issues       Int                 @default(0)
+  
+  // Signatures (base64 or URL)
+  inspector_signature   String?             @db.Text
+  tenant_signature      String?             @db.Text
+  
+  // Documents
+  report_url            String?             @db.VarChar(500)
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  template              ChecklistTemplate   @relation(fields: [template_id], references: [id])
+  property              Property            @relation("InspectionProperty", fields: [property_id], references: [id], onDelete: Cascade)
+  unit                  Unit                @relation("InspectionUnit", fields: [unit_id], references: [id], onDelete: Cascade)
+  tenant                User?               @relation("InspectionTenant", fields: [tenant_id], references: [id], onDelete: SetNull)
+  inspector             User                @relation("InspectionInspector", fields: [inspector_id], references: [id])
+  items                 InspectionItem[]
+  photos                InspectionPhoto[]
+
+  @@index([company_id])
+  @@index([property_id])
+  @@index([unit_id])
+  @@index([tenant_id])
+  @@index([inspector_id])
+  @@index([inspection_type])
+  @@index([status])
+  @@index([scheduled_date])
+  @@map("inspections")
+}
+
+// Individual item responses in an inspection
+model InspectionItem {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  inspection_id         String              @db.Uuid
+  checklist_item_id     String              @db.Uuid
+  
+  // Response
+  condition             ItemCondition?
+  notes                 String?             @db.Text
+  has_issue             Boolean             @default(false)
+  is_critical           Boolean             @default(false)
+  
+  // Photo references (multiple photos can be uploaded)
+  photo_urls            Json?               // Array of photo URLs
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  inspection            Inspection          @relation(fields: [inspection_id], references: [id], onDelete: Cascade)
+  checklist_item        ChecklistItem       @relation(fields: [checklist_item_id], references: [id])
+
+  @@index([inspection_id])
+  @@index([checklist_item_id])
+  @@map("inspection_items")
+}
+
+// Photos attached to inspections
+model InspectionPhoto {
+  id                    String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  inspection_id         String              @db.Uuid
+  
+  // Photo Information
+  photo_url             String              @db.VarChar(500)
+  thumbnail_url         String?             @db.VarChar(500)
+  caption               String?             @db.Text
+  category              String?             @db.VarChar(100) // e.g., "damage", "general", "meter_reading"
+  
+  // Metadata
+  uploaded_by           String              @db.Uuid
+  file_size             Int?                // in bytes
+  mime_type             String?             @db.VarChar(50)
+  
+  // Audit fields
+  created_at            DateTime            @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  inspection            Inspection          @relation(fields: [inspection_id], references: [id], onDelete: Cascade)
+  uploader              User                @relation("PhotoUploader", fields: [uploaded_by], references: [id])
+
+  @@index([inspection_id])
+  @@map("inspection_photos")
 }

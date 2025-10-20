@@ -3,6 +3,7 @@ import auth from './auth.js';
 import properties from './properties.js';
 import units from './units.js';
 import tenants from './tenants.js';
+import tenantPortal from './tenant-portal.js';
 import maintenance from './maintenance.js';
 import invoices from './invoices.js';
 import dashboard from './dashboard.js';
@@ -24,6 +25,7 @@ import email from './email.js';
 // import scheduler from './scheduler.js';
 import setup from './setup.js';
 import testEmail from './test-email.js';
+import checklists from './checklists.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 
@@ -34,6 +36,7 @@ router.use('/auth', auth);
 router.use('/properties', requireAuth, properties);
 router.use('/units', requireAuth, units);
 router.use('/tenants', requireAuth, tenants);
+router.use('/tenant-portal', requireAuth, tenantPortal);
 router.use('/maintenance', requireAuth, maintenance);
 router.use('/invoices', requireAuth, invoices);
 router.use('/dashboard', requireAuth, dashboard);
@@ -82,6 +85,7 @@ router.use('/enums', enums);
 // router.use('/scheduler', scheduler);
 router.use('/setup', setup);
 router.use('/test-email', testEmail);
+router.use('/checklists', requireAuth, checklists);
 
 // Super Admin middleware - only allow super_admin role
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {

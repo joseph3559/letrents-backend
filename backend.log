@@ -1,4 +1,3 @@
-nohup: ignoring input
 npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
 
 > letrents-backend-v2@2.0.0 dev
@@ -9,20 +8,1246 @@ npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm 
 [33m[nodemon] watching path(s): src/**/*[39m
 [33m[nodemon] watching extensions: ts,tsx[39m
 [32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
-node:events:495
-      throw er; // Unhandled 'error' event
-      ^
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+🚀 Backend server is running!
+[2025-10-20 00:58:14.694 +0300] [32mINFO[39m (1006666): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+🚀 Backend server is running!
+[2025-10-20 00:59:05.829 +0300] [32mINFO[39m (1007107): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/controllers/tenant-portal.controller.ts(659,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type '(Without<TenantProfileUpdateInput, TenantProfileUncheckedUpdateInput> & TenantProfileUncheckedUpdateInput) | (Without<...> & TenantProfileUpdateInput)'.
+src/controllers/tenant-portal.controller.ts(663,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type 'Without<TenantProfileCreateInput, TenantProfileUncheckedCreateInput> & TenantProfileUncheckedCreateInput'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/controllers/tenant-portal.controller.ts(659,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type '(Without<TenantProfileUpdateInput, TenantProfileUncheckedUpdateInput> & TenantProfileUncheckedUpdateInput) | (Without<...> & TenantProfileUpdateInput)'.
+src/controllers/tenant-portal.controller.ts(663,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type 'Without<TenantProfileCreateInput, TenantProfileUncheckedCreateInput> & TenantProfileUncheckedCreateInput'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/controllers/tenant-portal.controller.ts(672,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type '(Without<TenantProfileUpdateInput, TenantProfileUncheckedUpdateInput> & TenantProfileUncheckedUpdateInput) | (Without<...> & TenantProfileUpdateInput)'.
+src/controllers/tenant-portal.controller.ts(676,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type 'Without<TenantProfileCreateInput, TenantProfileUncheckedCreateInput> & TenantProfileUncheckedCreateInput'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/controllers/tenant-portal.controller.ts(188,48): error TS2339: Property 'profile_picture' does not exist on type '{ current_property: { name: string; id: string; street: string; city: string; region: string; country: string; postal_code: string | null; status: PropertyStatus; created_by: string; ... 21 more ...; images: JsonValue; } | null; current_unit: ({ ...; } & { ...; }) | null; } & { ...; }'.
+src/controllers/tenant-portal.controller.ts(673,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type '(Without<TenantProfileUpdateInput, TenantProfileUncheckedUpdateInput> & TenantProfileUncheckedUpdateInput) | (Without<...> & TenantProfileUpdateInput)'.
+src/controllers/tenant-portal.controller.ts(677,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type 'Without<TenantProfileCreateInput, TenantProfileUncheckedCreateInput> & TenantProfileUncheckedCreateInput'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/controllers/tenant-portal.controller.ts(188,48): error TS2339: Property 'profile_picture' does not exist on type '{ current_property: { name: string; id: string; street: string; city: string; region: string; country: string; postal_code: string | null; status: PropertyStatus; created_by: string; ... 21 more ...; images: JsonValue; } | null; current_unit: ({ ...; } & { ...; }) | null; } & { ...; }'.
+src/controllers/tenant-portal.controller.ts(673,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type '(Without<TenantProfileUpdateInput, TenantProfileUncheckedUpdateInput> & TenantProfileUncheckedUpdateInput) | (Without<...> & TenantProfileUpdateInput)'.
+src/controllers/tenant-portal.controller.ts(677,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type 'Without<TenantProfileCreateInput, TenantProfileUncheckedCreateInput> & TenantProfileUncheckedCreateInput'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting child process[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/controllers/tenant-portal.controller.ts(188,48): error TS2339: Property 'profile_picture' does not exist on type '{ current_property: { name: string; id: string; street: string; city: string; region: string; country: string; postal_code: string | null; status: PropertyStatus; created_by: string; ... 21 more ...; images: JsonValue; } | null; current_unit: ({ ...; } & { ...; }) | null; } & { ...; }'.
+src/controllers/tenant-portal.controller.ts(673,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type '(Without<TenantProfileUpdateInput, TenantProfileUncheckedUpdateInput> & TenantProfileUncheckedUpdateInput) | (Without<...> & TenantProfileUpdateInput)'.
+src/controllers/tenant-portal.controller.ts(677,9): error TS2353: Object literal may only specify known properties, and 'profile_picture' does not exist in type 'Without<TenantProfileCreateInput, TenantProfileUncheckedCreateInput> & TenantProfileUncheckedCreateInput'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+🚀 Backend server is running!
+[2025-10-20 03:28:40.392 +0300] [32mINFO[39m (1072599): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 228.523 ms - 762[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 24.837 ms - -[0m
+[0mPUT /api/v1/tenant-portal/profile [32m200[0m 37.840 ms - 1317[0m
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 8.111 ms - 765[0m
+[0mPUT /api/v1/tenant-portal/profile [32m200[0m 9.425 ms - 1317[0m
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 9.492 ms - 765[0m
+[0mPUT /api/v1/tenant-portal/profile [32m200[0m 9.554 ms - 1317[0m
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 7.075 ms - 765[0m
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 68.359 ms - 3772[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 71.922 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 89.374 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 92.027 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 32.110 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 17.092 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 95.819 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 27.203 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 23.867 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 147.876 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 13.925 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 47.432 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [32m200[0m 33.945 ms - 132[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 28.228 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [32m200[0m 22.543 ms - 3962[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [32m200[0m 18.905 ms - 146[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [32m200[0m 10.356 ms - 139[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 20.922 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.118 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 16.629 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 18.915 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 19.504 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [32m200[0m 89.487 ms - 402[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 19.860 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [32m200[0m 8.605 ms - 146[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 6.007 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [32m200[0m 6.108 ms - 139[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 5.743 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 47.465 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 27.053 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 20.207 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 13.411 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 11.283 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.038 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 16.601 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 12.083 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 18.328 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 13.244 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 72.832 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 20.124 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 76.407 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.380 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 76.453 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 16.944 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 86.672 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 108.856 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 103.853 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 11.373 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 125.000 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 27.845 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 37.995 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 24.238 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 23.142 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 9.568 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.966 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 5.596 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 13.077 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 21.051 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 21.720 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 21.206 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 16.879 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.484 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 14.138 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 6.823 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 5.150 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 13.220 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 85.019 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 17.827 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 83.323 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 85.622 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.371 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 86.303 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 66.848 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 114.833 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 82.028 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 23.225 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 17.450 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 12.445 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 14.368 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 30.532 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 32.693 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 30.685 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 26.790 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 17.297 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 15.305 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 53.127 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 27.033 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.746 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 22.569 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 30.569 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 27.481 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 29.734 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 19.160 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 94.025 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 20.521 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 14.872 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 35.257 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 26.868 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [32m200[0m 226.374 ms - 73[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 8.479 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 83.767 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 80.672 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 14.428 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 34.348 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 45.693 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [32m200[0m 42.700 ms - 1353[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 31.250 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 28.633 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 54.002 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 53.919 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 19.948 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 26.093 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 67.058 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 102.285 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.464 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 23.421 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 15.616 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 8.250 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 16.654 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 44.273 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 36.989 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 33.425 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 31.022 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 10.962 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 8.360 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 8.626 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 113.145 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 19.753 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 9.774 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 6.307 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 9.876 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.027 ms - -[0m
+[0mPOST /api/v1/tenant/maintenance [33m404[0m 16.517 ms - 165[0m
+[0mPOST /api/v1/tenant/maintenance [33m404[0m 7.248 ms - 165[0m
+[0mPOST /api/v1/tenant-portal/maintenance [33m400[0m 7.894 ms - 53[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 15.309 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 16.538 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 11.251 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 8.894 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 17.669 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 19.583 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 11.413 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 56.180 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 14.680 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 7.011 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 95.798 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 10.624 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 9.526 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 29.970 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 5.798 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 6.073 ms - -[0m
+[0mPOST /api/v1/tenant-portal/maintenance [33m400[0m 42.730 ms - 53[0m
+[0mPOST /api/v1/tenant-portal/maintenance [33m400[0m 5.694 ms - 53[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 72.931 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.514 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 11.270 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 7.422 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 28.618 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 25.562 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 21.760 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 25.772 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 25.755 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 34.156 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 74.057 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 9.689 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 70.607 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 108.686 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 87.254 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 7.564 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 7.828 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.402 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 12.437 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.707 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 6.127 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 87.945 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.462 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 113.724 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 83.130 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 91.318 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 106.667 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 21.920 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 17.059 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 50.237 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 10.063 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 18.784 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 157.768 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 13.708 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 26.020 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.332 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 12.926 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.943 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 5.561 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.445 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 30.655 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 30.046 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 44.944 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 6.710 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.961 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 8.764 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 15.284 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 25.484 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 20.770 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 111.714 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 13.531 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 14.036 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 30.149 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.940 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 11.117 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.015 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 6.016 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.730 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 16.001 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 8.523 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 17.153 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 4.720 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 32.911 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.859 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 8.919 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 23.238 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 20.976 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 20.166 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 19.259 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 57.769 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 12.200 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.759 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 8.282 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 6.602 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 5.191 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.398 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 23.117 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 9.758 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 28.263 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 26.078 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 24.881 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 21.737 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 15.643 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 8.680 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 25.403 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 20.540 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 18.930 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 18.982 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 71.088 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.648 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 9.002 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.748 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 6.149 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 106.020 ms - 3636[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 96.374 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 75.321 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 90.070 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 21.961 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 21.587 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 120.784 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 15.342 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 10.100 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [32m200[0m 172.952 ms - 502[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 16.574 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 71.107 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 8.176 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 62.514 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.800 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.425 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.645 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 6.232 ms - -[0m
+Error creating maintenance request: PrismaClientValidationError: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
 
-Error: EBADF: bad file descriptor, read
-Emitted 'error' event on ReadStream instance at:
-    at emitErrorNT (node:internal/streams/destroy:151:8)
-    at errorOrDestroy (node:internal/streams/destroy:214:7)
-    at node:internal/fs/streams:260:9
-    at FSReqCallback.wrapper [as oncomplete] (node:fs:677:5) {
-  errno: -9,
-  code: 'EBADF',
-  syscall: 'read'
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:15:50.185Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
 }
 
-Node.js v18.19.1
+Invalid value for argument `priority`. Expected PriorityLevel.
+    at Nn (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at ei.handleRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6911)
+    at ei.handleAndLogRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6593)
+    at ei.request (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6300)
+    at async a (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:130:9551)
+    at async createMaintenanceRequest (file:///home/scott/Desktop/Office/letrents/backend%20v2/dist/src/controllers/tenant-portal.controller.js:476:36) {
+  clientVersion: '6.16.2'
+}
+[0mPOST /api/v1/tenant-portal/maintenance [31m500[0m 24.262 ms - 66[0m
+Error creating maintenance request: PrismaClientValidationError: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:16:22.130Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+    at Nn (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at ei.handleRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6911)
+    at ei.handleAndLogRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6593)
+    at ei.request (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6300)
+    at async a (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:130:9551)
+    at async createMaintenanceRequest (file:///home/scott/Desktop/Office/letrents/backend%20v2/dist/src/controllers/tenant-portal.controller.js:476:36) {
+  clientVersion: '6.16.2'
+}
+[0mPOST /api/v1/tenant-portal/maintenance [31m500[0m 9.081 ms - 66[0m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
 npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+🚀 Backend server is running!
+[2025-10-20 04:17:39.143 +0300] [32mINFO[39m (1095793): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+❌ Error creating maintenance request: PrismaClientValidationError: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:18:01.960Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+    at Nn (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at ei.handleRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6911)
+    at ei.handleAndLogRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6593)
+    at ei.request (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6300)
+    at async a (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:130:9551)
+    at async createMaintenanceRequest (file:///home/scott/Desktop/Office/letrents/backend%20v2/dist/src/controllers/tenant-portal.controller.js:476:36) {
+  clientVersion: '6.16.2'
+}
+❌ Error message: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:18:01.960Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+❌ Error stack: PrismaClientValidationError: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:18:01.960Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+    at Nn (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at ei.handleRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6911)
+    at ei.handleAndLogRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6593)
+    at ei.request (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6300)
+    at async a (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:130:9551)
+    at async createMaintenanceRequest (file:///home/scott/Desktop/Office/letrents/backend%20v2/dist/src/controllers/tenant-portal.controller.js:476:36)
+[0mPOST /api/v1/tenant-portal/maintenance [31m500[0m 203.490 ms - 785[0m
+❌ Error creating maintenance request: PrismaClientValidationError: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:18:17.571Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+    at Nn (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at ei.handleRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6911)
+    at ei.handleAndLogRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6593)
+    at ei.request (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6300)
+    at async a (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:130:9551)
+    at async createMaintenanceRequest (file:///home/scott/Desktop/Office/letrents/backend%20v2/dist/src/controllers/tenant-portal.controller.js:476:36) {
+  clientVersion: '6.16.2'
+}
+❌ Error message: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:18:17.571Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+❌ Error stack: PrismaClientValidationError: 
+Invalid `prisma.maintenanceRequest.create()` invocation:
+
+{
+  data: {
+    company_id: "ff3fbe7a-bbea-459b-9b24-0530a6906757",
+    property_id: "dea0bd62-3ff6-4299-8748-bb59369a12bf",
+    unit_id: "f03eb33d-eb9a-40e9-914a-4f4e50735ccd",
+    title: "Leo nataka Parking",
+    description: "Today I have two new cars. I need parking.",
+    category: "Parking",
+    priority: "Urgent",
+              ~~~~~~~~
+    status: "pending",
+    requested_by: "469eee10-2bf5-48c4-b7b8-dac2144ace63",
+    requested_date: new Date("2025-10-20T01:18:17.571Z")
+  },
+  include: {
+    property: true,
+    unit: true
+  }
+}
+
+Invalid value for argument `priority`. Expected PriorityLevel.
+    at Nn (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at ei.handleRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6911)
+    at ei.handleAndLogRequestError (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6593)
+    at ei.request (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:121:6300)
+    at async a (/home/scott/Desktop/Office/letrents/backend v2/node_modules/@prisma/client/runtime/library.js:130:9551)
+    at async createMaintenanceRequest (file:///home/scott/Desktop/Office/letrents/backend%20v2/dist/src/controllers/tenant-portal.controller.js:476:36)
+[0mPOST /api/v1/tenant-portal/maintenance [31m500[0m 23.575 ms - 785[0m
+[0mPOST /api/v1/tenant-portal/maintenance [32m201[0m 27.509 ms - 2775[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 27.061 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 35.519 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 65.581 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 92.986 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [32m200[0m 86.634 ms - 2860[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 79.930 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 13.287 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [32m200[0m 179.368 ms - 502[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 41.630 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 34.527 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 33.170 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 35.073 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 196.887 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 15.573 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.110 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [32m200[0m 14.269 ms - 2860[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 19.705 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 12.759 ms - -[0m
+[0mGET /api/v1/checklists/templates? [32m200[0m 14.849 ms - 1482[0m
+[0mGET /api/v1/checklists/templates? [36m304[0m 25.683 ms - -[0m
+[0mGET /api/v1/units [32m200[0m 23.348 ms - 12848[0m
+[0mGET /api/v1/properties [32m200[0m 35.935 ms - 2599[0m
+[0mGET /api/v1/units [36m304[0m 13.636 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 25.860 ms - -[0m
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/maintenance/requests [32m200[0m 4.139 ms - 536[0m
+[0mGET /api/v1/maintenance/requests [32m200[0m 2.699 ms - 536[0m
+[0mGET /api/v1/landlord/properties?_t=1760923279168 [32m200[0m 41.498 ms - 1355[0m
+[0mGET /api/v1/landlord/properties?_t=1760923279176 [32m200[0m 39.182 ms - 1355[0m
+[0mGET /api/v1/properties [36m304[0m 36.953 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 57.616 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 26.507 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 29.241 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 17.065 ms - -[0m
+[0mGET /api/v1/maintenance/overview [36m304[0m 4.697 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 21.578 ms - -[0m
+[0mGET /api/v1/maintenance/overview [36m304[0m 1.739 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 176.361 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 6.470 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 5.806 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 6.235 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 14.366 ms - -[0m
+[0mGET /api/v1/dashboard/stats [36m304[0m 15.985 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 15.574 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 18.218 ms - -[0m
+[0mGET /api/v1/tenants [36m304[0m 18.759 ms - -[0m
+[0mGET /api/v1/tenants [36m304[0m 8.329 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 6.341 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 7.690 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [32m200[0m 8.411 ms - 89[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 16.402 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 26.016 ms - -[0m
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/maintenance/requests [32m200[0m 2.981 ms - 536[0m
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/notifications/unread-count [36m304[0m 27.717 ms - -[0m
+[0mGET /api/v1/maintenance/requests [32m200[0m 2.175 ms - 536[0m
+[0mGET /api/v1/properties [36m304[0m 66.648 ms - -[0m
+[0mGET /api/v1/landlord/properties?_t=1760923285965 [32m200[0m 65.523 ms - 2599[0m
+[0mGET /api/v1/landlord/properties?_t=1760923285971 [32m200[0m 58.623 ms - 2599[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 10.470 ms - -[0m
+[0mGET /api/v1/tenants [32m200[0m 11.631 ms - 2476[0m
+[0mGET /api/v1/tenants [36m304[0m 12.221 ms - -[0m
+[0mGET /api/v1/tenants [36m304[0m 12.477 ms - -[0m
+[0mGET /api/v1/tenants [36m304[0m 11.142 ms - -[0m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+🚀 Backend server is running!
+[2025-10-20 04:24:35.014 +0300] [32mINFO[39m (1099016): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+🚀 Backend server is running!
+[2025-10-20 04:24:53.967 +0300] [32mINFO[39m (1099358): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+🚀 Backend server is running!
+[2025-10-20 04:31:40.116 +0300] [32mINFO[39m (1102688): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/services/maintenance.service.ts(262,13): error TS2339: Property 'notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(262,57): error TS2339: Property 'notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(263,13): error TS2339: Property 'internal_notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(263,75): error TS2339: Property 'internal_notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(264,13): error TS2339: Property 'assigned_to' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(264,69): error TS2339: Property 'assigned_to' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(265,13): error TS2339: Property 'scheduled_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(265,75): error TS2339: Property 'scheduled_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(266,13): error TS2339: Property 'completed_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(266,75): error TS2339: Property 'completed_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(267,13): error TS2339: Property 'estimated_cost' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(267,75): error TS2339: Property 'estimated_cost' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(268,13): error TS2339: Property 'actual_cost' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(268,69): error TS2339: Property 'actual_cost' does not exist on type 'UpdateMaintenanceRequest'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+src/services/maintenance.service.ts(262,13): error TS2339: Property 'notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(262,57): error TS2339: Property 'notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(263,13): error TS2339: Property 'internal_notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(263,75): error TS2339: Property 'internal_notes' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(264,13): error TS2339: Property 'assigned_to' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(264,69): error TS2339: Property 'assigned_to' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(265,13): error TS2339: Property 'scheduled_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(265,75): error TS2339: Property 'scheduled_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(266,13): error TS2339: Property 'completed_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(266,75): error TS2339: Property 'completed_date' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(267,13): error TS2339: Property 'estimated_cost' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(267,75): error TS2339: Property 'estimated_cost' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(268,13): error TS2339: Property 'actual_cost' does not exist on type 'UpdateMaintenanceRequest'.
+src/services/maintenance.service.ts(268,69): error TS2339: Property 'actual_cost' does not exist on type 'UpdateMaintenanceRequest'.
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+🚀 Backend server is running!
+[2025-10-20 04:34:01.632 +0300] [32mINFO[39m (1104126): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+🚀 Backend server is running!
+[2025-10-20 04:34:21.450 +0300] [32mINFO[39m (1104434): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/notifications/unread-count [36m304[0m 163.517 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 9.172 ms - -[0m
+[0mGET /api/v1/notifications?limit=100 [32m200[0m 262.373 ms - 9481[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 6.279 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 75.721 ms - -[0m
+[0mGET /api/v1/notifications?limit=100 [36m304[0m 13.548 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 11.149 ms - -[0m
+[0mGET /api/v1/maintenance/requests [36m304[0m 289.337 ms - -[0m
+[0mGET /api/v1/landlord/properties?_t=1760924068785 [32m200[0m 300.657 ms - 2599[0m
+[0mGET /api/v1/units [36m304[0m 14.826 ms - -[0m
+[0mGET /api/v1/landlord/properties?_t=1760924068777 [32m200[0m 340.899 ms - 2599[0m
+[0mGET /api/v1/properties [36m304[0m 371.414 ms - -[0m
+[0mGET /api/v1/maintenance/requests [36m304[0m 22.584 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 18.336 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 23.273 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 19.637 ms - -[0m
+[0mGET /api/v1/notifications?limit=100 [36m304[0m 10.828 ms - -[0m
+[0mGET /api/v1/notifications?limit=100 [36m304[0m 10.258 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 13.593 ms - 3126[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 16.553 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 8.605 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 7.509 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 22.490 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 30.448 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 13.112 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 15.564 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 28.965 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 37.876 ms - -[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 7.620 ms - -[0m
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/landlord/properties?_t=1760924130801 [32m200[0m 17.152 ms - 2599[0m
+🔄 Route alias: /landlord/properties → /properties (Landlord properties → unified properties)
+[0mGET /api/v1/notifications/unread-count [36m304[0m 13.109 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 26.177 ms - -[0m
+[0mGET /api/v1/maintenance/requests [36m304[0m 23.693 ms - -[0m
+[0mGET /api/v1/landlord/properties?_t=1760924130806 [32m200[0m 56.372 ms - 2599[0m
+[0mGET /api/v1/notifications/unread-count [36m304[0m 36.004 ms - -[0m
+[0mGET /api/v1/maintenance/requests [36m304[0m 27.825 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 12.190 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 24.636 ms - -[0m
+[0mPUT /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 35.514 ms - 3128[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 12.847 ms - 3130[0m
+[0mPUT /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 66.308 ms - 3126[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 10.504 ms - 3128[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 60.710 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 11.145 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 10.467 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 9.954 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 11.202 ms - -[0m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+🚀 Backend server is running!
+[2025-10-20 04:42:52.584 +0300] [32mINFO[39m (1108569): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+🚀 Backend server is running!
+[2025-10-20 04:43:21.433 +0300] [32mINFO[39m (1109024): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[0mGET /api/v1/units [36m304[0m 209.475 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 34.547 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 326.382 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 275.494 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 15.586 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 55.146 ms - -[0m
+[0mPUT /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 14.070 ms - 3148[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 8.598 ms - 3150[0m
+[0mPUT /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 39.451 ms - 3150[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [32m200[0m 22.914 ms - 3152[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 8.734 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 10.449 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 14.971 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 18.779 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 68.886 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 13.815 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 36.356 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 27.064 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [32m200[0m 27.403 ms - 2886[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 25.090 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 22.502 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 23.311 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 23.192 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 21.209 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 17.590 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [32m200[0m 90.003 ms - 502[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 8.710 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 29.486 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 189.887 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 10.715 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 19.012 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [32m200[0m 14.541 ms - 2886[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.571 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 9.948 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 15.569 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 9.828 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 21.096 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 19.385 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 52.233 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 30.568 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 25.899 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 23.543 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 19.180 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 15.783 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 17.022 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 12.122 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 41.772 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 15.921 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 17.876 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 10.482 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 10.702 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 16.159 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 9.732 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 8.676 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 36.228 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 12.130 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 19.178 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 37.392 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 62.724 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 66.224 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 16.943 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.137 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 19.142 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 70.836 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 68.532 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 21.317 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 78.608 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 13.412 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 23.703 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 11.276 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 121.848 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 19.422 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 108.161 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 22.209 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.001 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 14.555 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.643 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 9.895 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 13.467 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.130 ms - -[0m
+[0mPOST /api/v1/tenant-portal/profile/photo [32m200[0m 13306.735 ms - 220[0m
+[0mGET /api/v1/tenant-portal/profile [32m200[0m 9.392 ms - 3758[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.184 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.701 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.876 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.589 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.287 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 15.013 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 12.629 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 15.659 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 12.890 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 21.759 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.374 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 9.293 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 77.998 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 32.164 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 26.981 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 24.975 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 12.160 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 21.469 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.109 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 9.880 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.882 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 8.621 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 13.426 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 7.707 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.831 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.640 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 30.146 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 23.842 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 22.851 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 20.342 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 16.883 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 11.973 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.305 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 7.062 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 31.937 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 28.610 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 14.191 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 13.662 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 114.183 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 17.149 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 8.794 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 11.672 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.270 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 8.363 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 35.415 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 32.126 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 26.104 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 20.795 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 13.917 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 12.937 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.450 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 13.828 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 20.437 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 21.387 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 22.493 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 18.348 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 96.107 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 19.977 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.998 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.635 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 8.763 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.479 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 5.439 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 4.998 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 5.115 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 4.590 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.379 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.525 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.260 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.666 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.764 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 44.280 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 26.096 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 12.200 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 9.490 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 26.825 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 22.021 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 17.539 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 15.328 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 15.506 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 12.975 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 90.015 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 9.231 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 24.189 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.605 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 18.221 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.577 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 12.897 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.112 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.494 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 78.699 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 87.594 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 87.200 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 103.477 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 105.522 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 14.837 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 125.049 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 57.981 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 44.144 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 20.113 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 14.571 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 10.001 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 12.519 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 31.923 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 28.541 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 25.886 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 27.354 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 27.483 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 27.156 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 23.169 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 23.615 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 26.329 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 23.519 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 17.557 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 95.178 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 16.720 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 14.540 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 21.382 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.965 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 9.057 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 10.225 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 13.037 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 9.330 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 6.057 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.705 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 7.928 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.421 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 11.924 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 87.187 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 80.357 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 93.261 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 60.238 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 64.201 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 64.151 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 15.542 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 159.631 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 42.685 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 32.932 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 27.462 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 12.374 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 10.221 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 41.876 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.128 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 15.001 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 32.410 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 21.796 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 14.306 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 12.385 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 9.516 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 29.501 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 24.759 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 15.341 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 11.898 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 61.819 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 14.414 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 11.320 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 19.180 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 36.950 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.053 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.087 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 76.667 ms - -[0m
+[0mGET /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [36m304[0m 17.308 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 89.985 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 16.833 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 45.790 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 34.853 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 22.861 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 146.029 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 55.264 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 32.021 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 28.184 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 35.685 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 61.652 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 91.894 ms - -[0m
+[0mGET /api/v1/units [36m304[0m 24.502 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 115.491 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 112.162 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 54.425 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 97.932 ms - -[0m
+[0mGET /api/v1/properties [36m304[0m 137.307 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.150 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 24.957 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 24.207 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 15.990 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 13.350 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.237 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 20.858 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 19.081 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 18.104 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 14.179 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 11.952 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 63.432 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 11.384 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 21.412 ms - -[0m
+[0mDELETE /api/v1/maintenance/requests/f7799845-133d-4d7d-a3e3-4df5cffc5548 [33m403[0m 3.996 ms - 103[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 15.950 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 41.540 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 34.980 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 33.070 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 29.805 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 26.751 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 34.607 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 22.365 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 19.281 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 17.106 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 11.701 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 99.178 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 17.008 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 36.095 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.223 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 19.470 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.365 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 26.037 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 5.063 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 6.367 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 9.597 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 16.203 ms - -[0m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+🚀 Backend server is running!
+[2025-10-20 05:13:17.028 +0300] [32mINFO[39m (1123344): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[32m[nodemon] clean exit - waiting for changes before restart[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
+npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+🚀 Backend server is running!
+[2025-10-20 05:14:09.080 +0300] [32mINFO[39m (1124150): [36mServer started[39m
+    [35mport[39m: 8080
+    [35mhost[39m: "0.0.0.0"
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 264.488 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 163.949 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 185.633 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 229.339 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 227.778 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 28.329 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 14.463 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 26.775 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 19.092 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 12.634 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 311.766 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 24.668 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 201.187 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 19.937 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 19.445 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 72.052 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 62.876 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 42.944 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 24.327 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 20.665 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 110.299 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.575 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 19.425 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 14.026 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 41.329 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 87.109 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 29.787 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 111.928 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 12.666 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 49.005 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 68.596 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 28.883 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 19.945 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 19.302 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 104.999 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.908 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 12.597 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 44.141 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 28.711 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 25.953 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 26.659 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 25.255 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 23.660 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 28.762 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 25.397 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 21.931 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 20.279 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 19.635 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 56.821 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.086 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 15.406 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 62.933 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 75.213 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 102.394 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 96.157 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 110.068 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 134.403 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 23.335 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 12.031 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 9.923 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 90.916 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 176.701 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 15.784 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 10.358 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 26.334 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 18.946 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 35.724 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 31.065 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 16.434 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 16.128 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 9.324 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 21.809 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 16.797 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 22.795 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 14.056 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 24.681 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 12.601 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 120.123 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 36.422 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.709 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 12.026 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 19.393 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 14.989 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 11.563 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 23.112 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 16.912 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 13.472 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 94.110 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 19.910 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 13.709 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 17.829 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 41.458 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 50.498 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 20.163 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 23.126 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 15.036 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 11.398 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 67.291 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 43.556 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 88.985 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 101.864 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 106.068 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 6.258 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 23.840 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 18.978 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 82.622 ms - -[0m
+[0mGET /api/v1/tenant-portal/leases [36m304[0m 86.631 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 85.185 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=10 [36m304[0m 80.642 ms - -[0m
+[0mGET /api/v1/tenant-portal/payments?page=1&limit=10 [36m304[0m 18.237 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=10 [36m304[0m 60.364 ms - -[0m
+[0mGET /api/v1/checklists/inspections? [36m304[0m 20.588 ms - -[0m
+[0mGET /api/v1/tenant-portal/dashboard [36m304[0m 199.163 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 10.085 ms - -[0m
+[0mGET /api/v1/tenant-portal/notifications?page=1&limit=50 [36m304[0m 10.183 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 14.727 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 12.552 ms - -[0m
+[0mGET /api/v1/tenant-portal/profile [36m304[0m 16.839 ms - -[0m
+[0mGET /api/v1/tenant-portal/maintenance?page=1&limit=50 [36m304[0m 22.119 ms - -[0m

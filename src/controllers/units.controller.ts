@@ -234,6 +234,24 @@ export const releaseTenant = async (req: Request, res: Response) => {
   }
 };
 
+export const cleanupDuplicateTenantAssignments = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    
+    const result = await service.cleanupDuplicateTenantAssignments(user);
+    
+    writeSuccess(res, 200, 'Duplicate tenant assignments cleaned up successfully', {
+      tenantsAffected: result.tenantsAffected,
+      unitsCleared: result.unitsCleared,
+      details: result.details
+    });
+  } catch (error: any) {
+    const message = error.message || 'Failed to cleanup duplicate tenant assignments';
+    const status = message.includes('permissions') ? 403 : 500;
+    writeError(res, status, message);
+  }
+};
+
 export const searchAvailableUnits = async (req: Request, res: Response) => {
   try {
     // Parse query parameters (similar to listUnits but for available units only)

@@ -202,6 +202,22 @@ export const releaseTenant = async (req, res) => {
         writeError(res, status, message);
     }
 };
+export const cleanupDuplicateTenantAssignments = async (req, res) => {
+    try {
+        const user = req.user;
+        const result = await service.cleanupDuplicateTenantAssignments(user);
+        writeSuccess(res, 200, 'Duplicate tenant assignments cleaned up successfully', {
+            tenantsAffected: result.tenantsAffected,
+            unitsCleared: result.unitsCleared,
+            details: result.details
+        });
+    }
+    catch (error) {
+        const message = error.message || 'Failed to cleanup duplicate tenant assignments';
+        const status = message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
 export const searchAvailableUnits = async (req, res) => {
     try {
         // Parse query parameters (similar to listUnits but for available units only)

@@ -34,21 +34,6 @@ export interface UpdateTenantRequest {
   phone_number?: string;
   email?: string;
   status?: string;
-  // Frontend compatibility fields
-  name?: string;
-  phone?: string;
-  idNumber?: string;
-  emergencyContact?: {
-    name?: string;
-    phone?: string;
-    relationship?: string;
-    email?: string;
-  };
-  // Direct tenant profile fields
-  id_number?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
-  emergency_contact_relationship?: string;
 }
 
 export interface AssignUnitRequest {
@@ -153,50 +138,6 @@ export class TenantsService {
 
     // If unit is provided, assign tenant to unit
     if (req.unit_id && unit) {
-      // Auto-generate lease agreement BEFORE assigning tenant to unit
-      let leaseId = null;
-      try {
-        const { LeasesService } = await import('./leases.service.js');
-        const leasesService = new LeasesService();
-        
-        const rentAmount = Number(unit.rent_amount) || 0;
-        const securityDeposit = rentAmount * 2; // 2 months security deposit
-        
-        const leaseData = {
-          tenant_id: tenant.id,
-          property_id: unit.property.id,
-          unit_id: req.unit_id,
-          lease_type: req.lease_type || 'fixed_term',
-          start_date: req.lease_start_date || new Date().toISOString().split('T')[0],
-          end_date: req.lease_end_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year from now
-          rent_amount: rentAmount,
-          deposit_amount: securityDeposit,
-          payment_day: 5, // 5th of each month
-          special_terms: `
-This lease agreement is automatically generated for the property unit ${unit.unit_number} at ${unit.property.name}.
-
-TERMS AND CONDITIONS:
-1. Rent is due on the 5th of each month
-2. Late fee of KES 500 applies after 5 days grace period
-3. Security deposit of KES ${securityDeposit} is required
-4. Tenant is responsible for utilities unless otherwise specified
-5. Property must be maintained in good condition
-6. No subletting without written permission
-7. 30 days notice required for termination
-
-This agreement is subject to the laws of Kenya and any disputes shall be resolved through arbitration.
-          `.trim(),
-        };
-
-        const lease = await leasesService.createLease(leaseData, user);
-        leaseId = lease.id;
-        console.log(`✅ Auto-generated lease agreement for tenant ${tenant.first_name} ${tenant.last_name} - Lease ID: ${lease.id}`);
-      } catch (leaseError) {
-        console.error('❌ Failed to auto-generate lease:', leaseError);
-        // Don't fail tenant creation if lease creation fails
-      }
-
-      // Now assign tenant to unit
       await this.prisma.unit.update({
         where: { id: req.unit_id },
         data: {
@@ -208,50 +149,10 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
           updated_at: new Date(),
         },
       });
-
-      // Create pending payment record for the first month's rent
-      try {
-        const currentDate = new Date();
-        const paymentPeriod = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        
-        await this.prisma.payment.create({
-          data: {
-            company_id: user.company_id || unit.property.company_id,
-            tenant_id: tenant.id,
-            unit_id: req.unit_id,
-            property_id: unit.property.id,
-            lease_id: leaseId, // Link to the auto-generated lease
-            amount: Number(unit.rent_amount) || 0,
-            currency: 'KES',
-            payment_method: 'cash', // Default method, will be updated when actual payment is made
-            payment_type: 'rent',
-            status: 'pending',
-            payment_date: new Date(),
-            payment_period: paymentPeriod,
-            receipt_number: `PENDING-${Date.now()}`,
-            received_from: `${tenant.first_name} ${tenant.last_name}`,
-            notes: 'Initial rent payment - pending after tenant onboarding',
-            created_by: user.user_id,
-          },
-        });
-
-        console.log(`✅ Created pending payment record for tenant ${tenant.first_name} ${tenant.last_name} - Amount: ${unit.rent_amount} KES`);
-      } catch (paymentError) {
-        console.error('❌ Failed to create pending payment record:', paymentError);
-        // Don't fail tenant creation if payment creation fails
-      }
     }
 
-    // Send invitation email if requested (default is true)
-    if (req.send_invitation !== false) {
-      try {
-        await this.sendInvitation(tenant.id, user);
-        console.log(`✅ Invitation email sent to tenant ${tenant.first_name} ${tenant.last_name} at ${tenant.email}`);
-      } catch (invitationError) {
-        console.error('❌ Failed to send invitation email:', invitationError);
-        // Don't fail tenant creation if invitation fails
-      }
-    }
+    // TODO: Send invitation email if req.send_invitation is true
+    // This would integrate with the email service
 
     // Return tenant with unit info if assigned
     const tenantWithUnit = await this.prisma.user.findUnique({
@@ -310,32 +211,6 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
             },
           },
         },
-        tenant_profile: {
-          include: {
-            current_unit: {
-              include: {
-                property: {
-                  select: {
-                    id: true,
-                    name: true,
-                    street: true,
-                    city: true,
-                    region: true,
-                  },
-                },
-              },
-            },
-            current_property: {
-              select: {
-                id: true,
-                name: true,
-                street: true,
-                city: true,
-                region: true,
-              },
-            },
-          },
-        },
         creator: {
           select: {
             id: true,
@@ -356,40 +231,9 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       throw new Error('insufficient permissions to view this tenant');
     }
 
-    // Create unified property and unit information
-    // Priority: tenant_profile data over assigned_units data
-    const currentUnit = tenant.tenant_profile?.current_unit || tenant.assigned_units?.[0];
-    const currentProperty = tenant.tenant_profile?.current_property || 
-                           tenant.tenant_profile?.current_unit?.property || 
-                           tenant.assigned_units?.[0]?.property;
-
     return {
       ...tenant,
       password_hash: undefined, // Don't return password hash
-      
-      // Unified property and unit information for all admin interfaces
-      property_name: currentProperty?.name || 'No Property Assigned',
-      unit_number: currentUnit?.unit_number || 'No Unit Assigned',
-      unit_id: currentUnit?.id,
-      property_id: currentProperty?.id,
-      
-      // Lease information from tenant_profile or assigned_units
-      rent_amount: tenant.tenant_profile?.rent_amount || currentUnit?.rent_amount || 0,
-      lease_start: tenant.tenant_profile?.lease_start_date || currentUnit?.lease_start_date,
-      lease_end: tenant.tenant_profile?.lease_end_date || currentUnit?.lease_end_date,
-      move_in_date: tenant.tenant_profile?.move_in_date,
-      
-      // Additional tenant profile information
-      emergency_contact: tenant.tenant_profile ? {
-        name: tenant.tenant_profile.emergency_contact_name || '',
-        phone: tenant.tenant_profile.emergency_contact_phone || '',
-        relationship: tenant.tenant_profile.emergency_contact_relationship || '',
-        email: '', // Not stored in current schema
-      } : null,
-      
-      // Keep original assigned_units for backward compatibility
-      assigned_units: tenant.assigned_units,
-      tenant_profile: tenant.tenant_profile,
     };
   }
 
@@ -402,18 +246,6 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       throw new Error('insufficient permissions to update tenants');
     }
 
-    // Parse name field if provided (frontend sends "name" instead of first_name/last_name)
-    let firstName = req.first_name;
-    let lastName = req.last_name;
-    if (req.name && !firstName && !lastName) {
-      const nameParts = req.name.trim().split(' ');
-      firstName = nameParts[0];
-      lastName = nameParts.slice(1).join(' ');
-    }
-
-    // Parse phone field if provided (frontend sends "phone" instead of phone_number)
-    const phoneNumber = req.phone_number || req.phone;
-
     // If email is being changed, check for duplicates
     if (req.email && req.email !== existingTenant.email) {
       const duplicateUser = await this.prisma.user.findUnique({
@@ -425,13 +257,12 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       }
     }
 
-    // Update user basic info
     const tenant = await this.prisma.user.update({
       where: { id },
       data: {
-        ...(firstName && { first_name: firstName }),
-        ...(lastName && { last_name: lastName }),
-        ...(phoneNumber !== undefined && { phone_number: phoneNumber }),
+        ...(req.first_name && { first_name: req.first_name }),
+        ...(req.last_name && { last_name: req.last_name }),
+        ...(req.phone_number !== undefined && { phone_number: req.phone_number }),
         ...(req.email && { email: req.email }),
         ...(req.status && { status: req.status as any }),
         updated_at: new Date(),
@@ -453,58 +284,13 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
             },
           },
         },
-        tenant_profile: true,
       },
     });
 
-    // Handle tenant profile updates
-    const profileUpdates: any = {};
-    
-    // Handle ID number from different possible field names
-    if (req.id_number !== undefined) {
-      profileUpdates.id_number = req.id_number;
-    } else if (req.idNumber !== undefined) {
-      profileUpdates.id_number = req.idNumber;
-    }
-
-    // Handle emergency contact from different possible formats
-    if (req.emergencyContact) {
-      if (req.emergencyContact.name !== undefined) {
-        profileUpdates.emergency_contact_name = req.emergencyContact.name;
-      }
-      if (req.emergencyContact.phone !== undefined) {
-        profileUpdates.emergency_contact_phone = req.emergencyContact.phone;
-      }
-      if (req.emergencyContact.relationship !== undefined) {
-        profileUpdates.emergency_contact_relationship = req.emergencyContact.relationship;
-      }
-    }
-
-    // Handle direct emergency contact fields
-    if (req.emergency_contact_name !== undefined) {
-      profileUpdates.emergency_contact_name = req.emergency_contact_name;
-    }
-    if (req.emergency_contact_phone !== undefined) {
-      profileUpdates.emergency_contact_phone = req.emergency_contact_phone;
-    }
-    if (req.emergency_contact_relationship !== undefined) {
-      profileUpdates.emergency_contact_relationship = req.emergency_contact_relationship;
-    }
-
-    // Update tenant profile if there are profile updates
-    if (Object.keys(profileUpdates).length > 0) {
-      await this.prisma.tenantProfile.upsert({
-        where: { user_id: id },
-        update: profileUpdates,
-        create: {
-          user_id: id,
-          ...profileUpdates,
-        },
-      });
-    }
-
-    // Return updated tenant with profile data
-    return this.getTenant(id, user);
+    return {
+      ...tenant,
+      password_hash: undefined, // Don't return password hash
+    };
   }
 
   async deleteTenant(id: string, user: JWTClaims): Promise<void> {
@@ -578,7 +364,7 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       orderBy.created_at = 'desc';
     }
 
-    // Execute queries - include both assigned_units AND tenant_profile for consistency
+    // Execute queries
     const [tenants, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
@@ -604,32 +390,6 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
               },
             },
           },
-          tenant_profile: {
-            include: {
-              current_unit: {
-                include: {
-                  property: {
-                    select: {
-                      id: true,
-                      name: true,
-                      street: true,
-                      city: true,
-                      region: true,
-                    },
-                  },
-                },
-              },
-              current_property: {
-                select: {
-                  id: true,
-                  name: true,
-                  street: true,
-                  city: true,
-                  region: true,
-                },
-              },
-            },
-          },
         },
         orderBy,
         take: limit,
@@ -638,59 +398,36 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       this.prisma.user.count({ where }),
     ]);
 
-    // Format tenants using unified logic (same as getTenant method)
+    // Format tenants to match Go backend response
     const formattedTenants = tenants.map(tenant => {
-      // Create unified property and unit information
-      // Priority: tenant_profile data over assigned_units data
-      const currentUnit = tenant.tenant_profile?.current_unit || tenant.assigned_units?.[0];
-      const currentProperty = tenant.tenant_profile?.current_property || 
-                             tenant.tenant_profile?.current_unit?.property || 
-                             tenant.assigned_units?.[0]?.property;
-
+      const unitInfo = tenant.assigned_units[0] || null;
       return {
         ...tenant,
         password_hash: undefined, // Don't return password hash
-        
-        // Unified property and unit information for consistency with getTenant
-        property_name: currentProperty?.name || 'No Property Assigned',
-        unit_number: currentUnit?.unit_number || 'No Unit Assigned',
-        unit_id: currentUnit?.id,
-        property_id: currentProperty?.id,
-        
-        // Lease information from tenant_profile or assigned_units
-        rent_amount: tenant.tenant_profile?.rent_amount || currentUnit?.rent_amount || 0,
-        lease_start: tenant.tenant_profile?.lease_start_date || currentUnit?.lease_start_date,
-        lease_end: tenant.tenant_profile?.lease_end_date || currentUnit?.lease_end_date,
-        
-        // Legacy unit_info structure for backward compatibility
-        unit_info: currentUnit ? {
-          unit_id: currentUnit.id,
-          unit_number: currentUnit.unit_number,
-          property_id: currentProperty?.id,
-          property_name: currentProperty?.name || 'No Property',
-          rent_amount: Number(tenant.tenant_profile?.rent_amount || currentUnit.rent_amount || 0),
-          lease_start_date: tenant.tenant_profile?.lease_start_date || currentUnit.lease_start_date,
-          lease_end_date: tenant.tenant_profile?.lease_end_date || currentUnit.lease_end_date,
-          lease_type: currentUnit.lease_type,
-          status: currentUnit.status,
+        unit_info: unitInfo ? {
+          unit_id: unitInfo.id,
+          unit_number: unitInfo.unit_number,
+          property_id: unitInfo.property_id,
+          property_name: unitInfo.property?.name || 'No Property',
+          rent_amount: Number(unitInfo.rent_amount),
+          lease_start_date: unitInfo.lease_start_date,
+          lease_end_date: unitInfo.lease_end_date,
+          lease_type: unitInfo.lease_type,
+          status: unitInfo.status,
         } : {
           unit_id: null,
-          unit_number: 'No Unit Assigned',
+          unit_number: 'No Unit',
           property_id: null,
-          property_name: 'No Property Assigned',
+          property_name: 'No Property',
           rent_amount: 0,
         },
-        
-        // Frontend compatibility fields (using unified data)
-        propertyName: currentProperty?.name || 'No Property Assigned',
-        unitNumber: currentUnit?.unit_number || 'No Unit Assigned',
-        
-        // Data source indicator
-        source: currentUnit ? (tenant.tenant_profile?.current_unit ? 'tenant_profile' : 'unit_assignment') : 'user_account',
-        
-        // Keep original data for debugging but remove from response
-        assigned_units: undefined,
-        tenant_profile: undefined,
+        // Frontend compatibility fields
+        propertyName: unitInfo?.property?.name || 'No Property',
+        unitNumber: unitInfo?.unit_number || 'No Unit',
+        property_name: unitInfo?.property?.name || 'No Property',
+        unit_number: unitInfo?.unit_number || 'No Unit',
+        source: unitInfo ? 'unit_assignment' : 'user_account',
+        assigned_units: undefined, // Remove the include field
       };
     });
 
@@ -815,49 +552,13 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       special_terms: tenant.role === 'caretaker' ? 'Staff accommodation lease agreement' : undefined,
     };
 
-    let leaseId: string | null = null;
     try {
-      const lease = await this.leasesService.createLease(leaseData, user);
-      leaseId = lease.id;
+      await this.leasesService.createLease(leaseData, user);
       console.log(`✅ Auto-created lease for ${tenant.role} ${tenant.first_name} ${tenant.last_name} (${tenant.email}) in unit ${unit.unit_number}`);
     } catch (leaseError: any) {
       console.error(`⚠️ Failed to auto-create lease for tenant assignment:`, leaseError.message);
       // Don't fail the assignment if lease creation fails - log and continue
       // The lease can be created manually later if needed
-    }
-
-    // Create pending payment record for the first month's rent (only for tenants, not caretakers)
-    if (tenant.role === 'tenant') {
-      try {
-        const currentDate = new Date();
-        const paymentPeriod = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        
-        await this.prisma.payment.create({
-          data: {
-            company_id: user.company_id || unit.property.company_id,
-            tenant_id: tenantId,
-            unit_id: req.unit_id,
-            property_id: unit.property.id,
-            lease_id: leaseId, // Link to the auto-generated lease
-            amount: Number(unit.rent_amount) || 0,
-            currency: 'KES',
-            payment_method: 'cash', // Default method, will be updated when actual payment is made
-            payment_type: 'rent',
-            status: 'pending',
-            payment_date: new Date(),
-            payment_period: paymentPeriod,
-            receipt_number: `PENDING-${Date.now()}`,
-            received_from: `${tenant.first_name} ${tenant.last_name}`,
-            notes: 'Initial rent payment - pending after unit assignment',
-            created_by: user.user_id,
-          },
-        });
-
-        console.log(`✅ Created pending payment record for tenant ${tenant.first_name} ${tenant.last_name} - Amount: ${unit.rent_amount} KES`);
-      } catch (paymentError) {
-        console.error('❌ Failed to create pending payment record:', paymentError);
-        // Don't fail unit assignment if payment creation fails
-      }
     }
   }
 

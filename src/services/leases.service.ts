@@ -169,8 +169,12 @@ export class LeasesService {
       throw new Error('unit is not available for lease');
     }
 
-    // Generate lease number
-    const leaseNumber = await this.generateLeaseNumber(user.company_id!);
+    // Generate lease number using property's company_id if user doesn't have one
+    const companyId = user.company_id || unit.property.company_id;
+    if (!companyId) {
+      throw new Error('unable to determine company for lease creation');
+    }
+    const leaseNumber = await this.generateLeaseNumber(companyId);
 
     // Create lease
     const lease = await this.prisma.lease.create({
@@ -179,7 +183,7 @@ export class LeasesService {
         tenant_id: req.tenant_id,
         unit_id: req.unit_id,
         property_id: req.property_id,
-        company_id: user.company_id!,
+        company_id: companyId,
         lease_type: req.lease_type as any,
         start_date: new Date(req.start_date),
         end_date: req.end_date ? new Date(req.end_date) : new Date(new Date(req.start_date).getTime() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year from start

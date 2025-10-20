@@ -2,11 +2,11 @@ import { AuthService } from '../services/auth.service.js';
 const service = new AuthService();
 export const register = async (req, res) => {
     try {
-        const { email, password, first_name, last_name, role, phone_number, company_name, business_type } = req.body || {};
+        const { email, password, first_name, last_name, role, phone_number, company_name, business_type, invitation_token } = req.body || {};
         if (!email || !password || !first_name || !last_name) {
             return res.status(400).json({ success: false, message: 'Email, password, first name, and last name are required' });
         }
-        const result = await service.register({ email, password, first_name, last_name, role, phone_number, company_name, business_type });
+        const result = await service.register({ email, password, first_name, last_name, role, phone_number, company_name, business_type, invitation_token });
         if ('requires_mfa' in result) {
             return res.status(201).json({ success: true, message: 'Registration successful. Please check your email for verification.', data: result });
         }
@@ -59,11 +59,21 @@ export const verifyEmail = async (req, res) => {
         const token = req.method === 'GET' ? req.query.token : req.body?.token;
         if (!token)
             return res.status(400).json({ success: false, message: 'Verification token is required' });
-        await service.verifyEmail(token);
+        const result = await service.verifyEmail(token);
         if (req.method === 'GET') {
+            // For GET requests, redirect to success page
             return res.redirect((process.env.APP_URL || 'http://localhost:3000') + '/verification-success');
         }
-        return res.status(200).json({ success: true, message: 'Email verified successfully', data: { email_verified: true } });
+        // For POST requests, return JSON response
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {
+                email_verified: true,
+                already_verified: result.already_verified || false,
+                user: result.user || null
+            }
+        });
     }
     catch (err) {
         const msg = err?.message || 'Invalid or expired verification token';
