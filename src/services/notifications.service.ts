@@ -109,52 +109,17 @@ export const notificationsService = {
     // Build access control for single notification
     let whereClause: any = { id: notificationId };
 
-    switch (user.role) {
-      case 'super_admin':
-        // No additional filters
-        break;
-        
-      case 'agency_admin':
-        whereClause = {
-          id: notificationId,
-          OR: [
-            { recipient_id: user.user_id },
-            { 
-              AND: [
-                { recipient_type: 'agency' },
-                { company_id: user.company_id }
-              ]
-            },
-            {
-              AND: [
-                { recipient_type: 'company' },
-                { company_id: user.company_id }
-              ]
-            }
-          ]
-        };
-        break;
-        
-      case 'landlord':
-        whereClause = {
-          id: notificationId,
-          OR: [
-            { recipient_id: user.user_id },
-            {
-              AND: [
-                { recipient_type: 'company' },
-                { company_id: user.company_id }
-              ]
-            }
-          ]
-        };
-        break;
-        
-      default:
-        whereClause = {
-          id: notificationId,
-          recipient_id: user.user_id
-        };
+    // Super admin: unrestricted
+    if (user.role !== 'super_admin') {
+      // For non-super-admin users, restrict to same company and either recipient or sender
+      whereClause = {
+        id: notificationId,
+        company_id: user.company_id,
+        OR: [
+          { recipient_id: user.user_id },
+          { sender_id: user.user_id }
+        ]
+      };
     }
 
     const notification = await prisma.notification.findFirst({
@@ -198,8 +163,9 @@ export const notificationsService = {
       updateFields.priority = updateData.priority;
     }
     if (updateData.is_read !== undefined) {
-      updateFields.is_read = updateData.isRead;
-      if (updateData.isRead) {
+      updateFields.is_read = updateData.is_read;
+      updateFields.status = updateData.is_read ? 'read' : 'unread';
+      if (updateData.is_read) {
         updateFields.read_at = new Date();
       }
     }
@@ -253,6 +219,7 @@ export const notificationsService = {
       where: { id: notificationId },
       data: {
         is_read: true,
+        status: 'read',
         read_at: new Date(),
       },
       include: {
@@ -301,48 +268,18 @@ export const notificationsService = {
     // Build where clause for user's notifications
     let whereClause: any = { is_read: false };
 
-    switch (user.role) {
-      case 'agency_admin':
-        whereClause = {
-          is_read: false,
-          OR: [
-            { recipient_id: user.user_id },
-            { 
-              AND: [
-                { recipient_type: 'agency' },
-                { company_id: user.company_id }
-              ]
-            },
-            {
-              AND: [
-                { recipient_type: 'company' },
-                { company_id: user.company_id }
-              ]
-            }
-          ]
-        };
-        break;
-        
-      case 'landlord':
-        whereClause = {
-          is_read: false,
-          OR: [
-            { recipient_id: user.user_id },
-            {
-              AND: [
-                { recipient_type: 'company' },
-                { company_id: user.company_id }
-              ]
-            }
-          ]
-        };
-        break;
-        
-      default:
-        whereClause = {
-          is_read: false,
-          recipient_id: user.user_id
-        };
+    if (user.role === 'super_admin') {
+      // super_admin sees all unread
+      whereClause = { is_read: false };
+    } else {
+      whereClause = {
+        is_read: false,
+        company_id: user.company_id,
+        OR: [
+          { recipient_id: user.user_id },
+          { sender_id: user.user_id }
+        ]
+      };
     }
 
     const result = await prisma.notification.updateMany({
@@ -356,6 +293,98 @@ export const notificationsService = {
     return {
       updatedCount: result.count,
       message: `${result.count} notifications marked as read`
+    };
+  },
+
+  async archiveNotification(user: JWTClaims, notificationId: string) {
+    // Check if notification exists and user has access
+    const existingNotification = await this.getNotification(user, notificationId);
+    if (!existingNotification) {
+      throw new Error('Notification not found or access denied');
+    }
+
+    const updatedNotification = await prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        status: 'archived',
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            role: true,
+          }
+        }
+      }
+    });
+
+    return updatedNotification;
+  },
+
+  async bulkUpdateNotifications(user: JWTClaims, action: string, notificationIds: string[]) {
+    // Verify user has access to all notifications
+    const userNotifications = await prisma.notification.findMany({
+      where: {
+        id: { in: notificationIds },
+        recipient_id: user.user_id,
+        company_id: user.company_id
+      }
+    });
+
+    // Only update notifications the user has access to
+    const accessibleIds = userNotifications.map(n => n.id);
+
+    if (accessibleIds.length === 0) {
+      throw new Error('No accessible notifications found');
+    }
+
+    let updateData: any = {};
+    
+    switch (action) {
+      case 'mark_read':
+        updateData = {
+          is_read: true,
+          status: 'read',
+          read_at: new Date(),
+        };
+        break;
+        
+      case 'archive':
+        updateData = {
+          status: 'archived',
+        };
+        break;
+        
+      case 'delete':
+        // For delete, we actually delete the records
+        const deleteResult = await prisma.notification.deleteMany({
+          where: {
+            id: { in: accessibleIds }
+          }
+        });
+        return {
+          updatedCount: deleteResult.count,
+          message: `${deleteResult.count} notifications deleted`,
+          action: 'delete'
+        };
+        
+      default:
+        throw new Error(`Invalid action: ${action}`);
+    }
+
+    const result = await prisma.notification.updateMany({
+      where: {
+        id: { in: accessibleIds }
+      },
+      data: updateData
+    });
+
+    return {
+      updatedCount: result.count,
+      message: `${result.count} notifications ${action === 'mark_read' ? 'marked as read' : action === 'archive' ? 'archived' : 'updated'}`,
+      action
     };
   },
 };

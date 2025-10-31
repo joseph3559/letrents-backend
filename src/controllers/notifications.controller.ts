@@ -49,7 +49,7 @@ export const notificationsController = {
         return writeError(res, 404, 'Notification not found');
       }
       
-      writeSuccess(res, notification, 'Notification retrieved successfully');
+      writeSuccess(res, 200, 'Notification retrieved successfully', notification);
     } catch (error: any) {
       writeError(res, 500, error.message);
     }
@@ -104,6 +104,33 @@ export const notificationsController = {
       const user = (req as any).user as JWTClaims;
       const result = await notificationsService.markAllAsRead(user);
       writeSuccess(res, 200, 'All notifications marked as read', result);
+    } catch (error: any) {
+      writeError(res, 500, error.message);
+    }
+  },
+
+  archiveNotification: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as JWTClaims;
+      const { id } = req.params;
+      const notification = await notificationsService.archiveNotification(user, id);
+      writeSuccess(res, 200, 'Notification archived successfully', notification);
+    } catch (error: any) {
+      writeError(res, 500, error.message);
+    }
+  },
+
+  bulkUpdateNotifications: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as JWTClaims;
+      const { action, notificationIds } = req.body;
+      
+      if (!action || !notificationIds || !Array.isArray(notificationIds)) {
+        return writeError(res, 400, 'Invalid request: action and notificationIds array are required');
+      }
+
+      const result = await notificationsService.bulkUpdateNotifications(user, action, notificationIds);
+      writeSuccess(res, 200, 'Bulk action completed successfully', result);
     } catch (error: any) {
       writeError(res, 500, error.message);
     }
