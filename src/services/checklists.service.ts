@@ -307,6 +307,23 @@ export class ChecklistsService {
       throw new Error('Insufficient permissions to create inspections');
     }
 
+    // Validate required fields
+    if (!req.template_id) {
+      throw new Error('Template ID is required');
+    }
+    if (!req.property_id) {
+      throw new Error('Property ID is required');
+    }
+    if (!req.unit_id) {
+      throw new Error('Unit ID is required');
+    }
+    if (!req.inspection_type) {
+      throw new Error('Inspection type is required');
+    }
+
+    console.log('🔍 Creating inspection with data:', JSON.stringify(req, null, 2));
+    console.log('👤 User:', { user_id: user.user_id, company_id: user.company_id, role: user.role });
+
     // Verify template exists and belongs to company
     const template = await prisma.checklistTemplate.findFirst({
       where: {
@@ -323,8 +340,10 @@ export class ChecklistsService {
     });
 
     if (!template) {
-      throw new Error('Template not found');
+      throw new Error('Template not found or does not belong to your company');
     }
+
+    console.log('✅ Template found:', template.name);
 
     // Verify unit exists and belongs to company
     const unit = await prisma.unit.findFirst({
@@ -335,8 +354,10 @@ export class ChecklistsService {
     });
 
     if (!unit) {
-      throw new Error('Unit not found');
+      throw new Error('Unit not found or does not belong to your company');
     }
+
+    console.log('✅ Unit found:', unit.unit_number);
 
     // Create inspection
     const inspection = await prisma.inspection.create({

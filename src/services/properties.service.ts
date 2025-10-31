@@ -238,6 +238,16 @@ export class PropertiesService {
       throw new Error('cannot delete properties from other companies');
     }
 
+    // STRICT CHECK: Property must be inactive before deletion (unless force delete)
+    if (!force && existingProperty.status !== 'inactive') {
+      throw new Error(`cannot delete property with status '${existingProperty.status}'. Property must be set to inactive before deletion.`);
+    }
+
+    // Check if property has any units at all
+    const totalUnits = await this.prisma.unit.count({
+      where: { property_id: id },
+    });
+
     // Check if property has occupied units (unless force delete)
     if (!force) {
       const occupiedUnits = await this.prisma.unit.count({
@@ -248,7 +258,45 @@ export class PropertiesService {
       });
 
       if (occupiedUnits > 0) {
-        throw new Error('cannot delete property with occupied units. Use force delete to override.');
+        throw new Error('cannot delete property with occupied units. Please release all tenants first.');
+      }
+
+      // Check for active leases
+      const activeLeases = await this.prisma.lease.count({
+        where: {
+          property_id: id,
+          status: 'active',
+        },
+      });
+
+      if (activeLeases > 0) {
+        throw new Error('cannot delete property with active leases. Please terminate all leases first.');
+      }
+
+      // Check for any active tenants associated with this property
+      const propertyUnits = await this.prisma.unit.findMany({
+        where: { property_id: id },
+        select: { id: true },
+      });
+
+      const unitIds = propertyUnits.map(u => u.id);
+      
+      if (unitIds.length > 0) {
+        const activeTenants = await this.prisma.user.count({
+          where: {
+            role: 'tenant' as any,
+            status: 'active',
+            assigned_units: {
+              some: {
+                id: { in: unitIds },
+              },
+            },
+          },
+        });
+
+        if (activeTenants > 0) {
+          throw new Error('cannot delete property with active tenants. Please terminate all tenants first.');
+        }
       }
     }
 

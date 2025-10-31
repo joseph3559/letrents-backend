@@ -75,9 +75,16 @@ export function buildWhereClause(user, additionalFilters = {}, modelType = 'prop
     // Apply landlord scoping (field name depends on model type)
     if (roleFilters.landlordId) {
         if (modelType === 'user') {
-            // For user queries, landlords should see tenants where landlord_id = current user's ID
+            // For user queries, check the role being queried
+            // Landlords should see tenants where landlord_id = current user's ID
+            // But for caretakers/agents/staff, only filter by company_id (already applied above)
             if (user.role === 'landlord') {
-                whereClause.landlord_id = user.user_id;
+                // Only apply landlord_id filter if querying tenants
+                // Don't apply it for caretakers, agents, or other staff
+                if (additionalFilters.role === 'tenant') {
+                    whereClause.landlord_id = user.user_id;
+                }
+                // For non-tenant users (caretakers, agents), company_id filter is sufficient
             }
             else {
                 whereClause.landlord_id = roleFilters.landlordId;

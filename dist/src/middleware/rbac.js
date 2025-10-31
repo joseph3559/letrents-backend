@@ -82,7 +82,9 @@ const permissions = {
         properties: ['read'],
         units: ['read', 'update', 'assign', 'release'],
         tenants: ['create', 'read', 'update'],
+        staff: ['read'],
         dashboard: ['read'],
+        invoices: ['create', 'read', 'update', 'send', 'mark-paid', 'export', 'bulk', 'stats'],
         communications: ['create', 'read'],
         notifications: ['read', 'update'],
         payments: ['create', 'read', 'approve'],
@@ -111,6 +113,7 @@ const permissions = {
         units: ['read'],
         maintenance: ['create', 'read'],
         invoices: ['read'],
+        payments: ['read', 'create'], // Allow tenants to read and create (cancel) their own payments
         notifications: ['create', 'read', 'update'],
         communications: ['create', 'read'],
         checklists: ['read', 'update'],

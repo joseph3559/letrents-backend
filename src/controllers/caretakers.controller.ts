@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { careteakersService } from '../services/caretakers.service.js';
+import { careteakersService, staffService } from '../services/staff.service.js';
 import { writeSuccess, writeError } from '../utils/response.js';
 import { JWTClaims } from '../types/index.js';
 
@@ -7,10 +7,14 @@ export const careteakersController = {
   getCaretakers: async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as JWTClaims;
+      console.log('🎯 GET /caretakers controller hit');
+      console.log('  JWT User:', user);
       const filters = req.query;
       const caretakers = await careteakersService.getCaretakers(user, filters);
+      console.log('  Returning:', caretakers.length, 'caretakers');
       writeSuccess(res, 200, 'Caretakers retrieved successfully', caretakers);
     } catch (error: any) {
+      console.error('❌ Error in getCaretakers controller:', error);
       writeError(res, 500, error.message);
     }
   },
@@ -18,9 +22,14 @@ export const careteakersController = {
   createCaretaker: async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as JWTClaims;
-      const caretakerData = req.body;
-      const caretaker = await careteakersService.createCaretaker(user, caretakerData);
-      writeSuccess(res, 201, 'Caretaker created successfully', caretaker);
+       const staffData = req.body;
+      
+      // Use staffService directly with role from request body
+      const role = staffData.role || 'caretaker'; // Fallback to caretaker if no role specified
+      console.log(`📝 Creating staff member with role: ${role}`);
+      
+      const staff = await staffService.createStaffMember(user, role, staffData);
+      writeSuccess(res, 201, 'Staff member created successfully', staff);
     } catch (error: any) {
       writeError(res, 500, error.message);
     }

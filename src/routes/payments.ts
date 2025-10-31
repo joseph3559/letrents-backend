@@ -5,7 +5,11 @@ import {
   createPayment,
   updatePayment,
   approvePayment,
-  deletePayment
+  deletePayment,
+  sendPaymentReceipt,
+  verifyRentPayment,
+  updatePendingPayment,
+  verifyAdvancePayment
 } from '../controllers/payments.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 
@@ -20,5 +24,17 @@ router.delete('/:id', rbacResource('payments', 'delete'), deletePayment);
 
 // Payment approval
 router.post('/:id/approve', rbacResource('payments', 'approve'), approvePayment);
+
+// Send payment receipt
+router.post('/:id/send-receipt', rbacResource('payments', 'read'), sendPaymentReceipt);
+
+// Verify rent payment (Paystack)
+router.post('/verify-rent', verifyRentPayment);
+
+// Verify advance payment (Paystack)
+router.post('/verify-advance', verifyAdvancePayment);
+
+// Update/cleanup pending payment
+router.post('/:id/update-pending', rbacResource('payments', 'update'), updatePendingPayment);
 
 export default router;

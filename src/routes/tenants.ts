@@ -4,6 +4,7 @@ import {
   getTenant, 
   updateTenant, 
   deleteTenant, 
+  checkTenantDeletable,
   listTenants,
   assignUnit,
   releaseUnit,
@@ -12,7 +13,13 @@ import {
   resetPassword,
   getTenantPayments,
   getTenantDocuments,
-  migrateTenant
+  migrateTenant,
+  getTenantActivity,
+  updateRentDetails,
+  getTenantMaintenance,
+  getTenantPerformance,
+  getTenantNotes,
+  updateTenantNotes
 } from '../controllers/tenants.controller.js';
 import { 
   createTenantPayment
@@ -25,12 +32,13 @@ const router = Router();
 router.post('/', rbacResource('tenants', 'create'), createTenant);
 router.get('/', rbacResource('tenants', 'read'), listTenants);
 router.get('/:id', rbacResource('tenants', 'read'), getTenant);
+router.get('/:id/check-deletable', rbacResource('tenants', 'read'), checkTenantDeletable);
 router.put('/:id', rbacResource('tenants', 'update'), updateTenant);
 router.delete('/:id', rbacResource('tenants', 'delete'), deleteTenant);
 
 // Tenant unit management
-router.post('/:id/assign-unit', rbacResource('tenants', 'assign'), assignUnit);
-router.post('/:id/release-unit', rbacResource('tenants', 'release'), releaseUnit);
+router.post('/:id/assign-unit', rbacResource('tenants', 'update'), assignUnit);
+router.post('/:id/release-unit', rbacResource('tenants', 'update'), releaseUnit);
 router.post('/:id/migrate', rbacResource('tenants', 'update'), migrateTenant);
 
 // Tenant lifecycle management
@@ -43,5 +51,13 @@ router.post('/:id/reset-password', rbacResource('tenants', 'update'), resetPassw
 router.get('/:id/payments', rbacResource('tenants', 'read'), getTenantPayments);
 router.post('/:id/payments', rbacResource('payments', 'create'), createTenantPayment);
 router.get('/:id/documents', rbacResource('tenants', 'read'), getTenantDocuments);
+router.get('/:id/activity', rbacResource('tenants', 'read'), getTenantActivity);
+router.get('/:id/maintenance', rbacResource('tenants', 'read'), getTenantMaintenance);
+router.get('/:id/performance', rbacResource('tenants', 'read'), getTenantPerformance);
+router.get('/:id/notes', rbacResource('tenants', 'read'), getTenantNotes);
+router.put('/:id/notes', rbacResource('tenants', 'update'), updateTenantNotes);
+
+// Rent details management
+router.put('/:id/rent-details', rbacResource('tenants', 'update'), updateRentDetails);
 
 export default router;

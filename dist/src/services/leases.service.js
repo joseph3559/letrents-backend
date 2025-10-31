@@ -384,8 +384,11 @@ export class LeasesService {
         return newLease;
     }
     async generateLeaseNumber(companyId) {
-        const year = new Date().getFullYear();
-        const prefix = `LSE-${year}`;
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 01-12
+        const prefix = `LSE-${year}-${month}`;
+        // Find the latest lease for the current month to avoid duplicates
         const lastLease = await this.prisma.lease.findFirst({
             where: {
                 company_id: companyId,
@@ -399,9 +402,11 @@ export class LeasesService {
         });
         let nextNumber = 1;
         if (lastLease) {
-            const lastNumber = parseInt(lastLease.lease_number.split('-').pop() || '0');
+            const parts = lastLease.lease_number.split('-');
+            const lastNumber = parseInt(parts[parts.length - 1] || '0');
             nextNumber = lastNumber + 1;
         }
+        // Format: LSE-2025-10-0001
         return `${prefix}-${nextNumber.toString().padStart(4, '0')}`;
     }
     hasLeaseAccess(lease, user) {

@@ -211,6 +211,423 @@ export class EmailService {
       text: `Reset your LetRents password by visiting: ${resetUrl}`,
     });
   }
+
+  async sendPaymentReceipt(options: {
+    to: string;
+    tenant_name: string;
+    payment_amount: number;
+    payment_date: string;
+    payment_method: string;
+    receipt_number: string;
+    reference_number?: string;
+    transaction_id?: string;
+    property_name: string;
+    unit_number: string;
+    invoice_numbers?: string[];
+    payment_period?: string;
+  }): Promise<EmailResult> {
+    const { 
+      to, 
+      tenant_name, 
+      payment_amount, 
+      payment_date, 
+      payment_method, 
+      receipt_number, 
+      reference_number,
+      transaction_id,
+      property_name, 
+      unit_number,
+      invoice_numbers,
+      payment_period
+    } = options;
+    
+    const formattedDate = new Date(payment_date).toLocaleDateString('en-US', { 
+      weekday: 'long',
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Receipt - LetRents</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background-color: #f3f4f6;
+          }
+          .email-wrapper { background-color: #f3f4f6; padding: 40px 20px; }
+          .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+          }
+          .header { 
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; 
+            padding: 40px 30px; 
+            text-align: center; 
+          }
+          .header-icon { 
+            width: 80px; 
+            height: 80px; 
+            background: rgba(255, 255, 255, 0.2); 
+            border-radius: 50%; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 40px;
+            margin-bottom: 16px;
+          }
+          .header h1 { 
+            font-size: 28px; 
+            font-weight: 700; 
+            margin-bottom: 8px; 
+          }
+          .header p { 
+            font-size: 16px; 
+            opacity: 0.95; 
+          }
+          .success-badge {
+            background: #10b981;
+            color: white;
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 20px 0;
+          }
+          .content { padding: 40px 30px; }
+          .greeting { 
+            font-size: 18px; 
+            font-weight: 600; 
+            color: #1f2937;
+            margin-bottom: 16px;
+          }
+          .intro-text { 
+            font-size: 15px; 
+            color: #6b7280;
+            margin-bottom: 30px;
+            line-height: 1.7;
+          }
+          .amount-card {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+          }
+          .amount-label {
+            font-size: 14px;
+            color: #047857;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+          }
+          .amount-value {
+            font-size: 42px;
+            font-weight: 800;
+            color: #059669;
+            letter-spacing: -1px;
+          }
+          .amount-currency {
+            font-size: 24px;
+            font-weight: 600;
+            color: #059669;
+            margin-right: 4px;
+          }
+          .details-section {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+          }
+          .details-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+          }
+          .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #e5e7eb;
+            min-height: 52px;
+          }
+          .detail-row:last-child { border-bottom: none; }
+          .detail-label {
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+          }
+          .detail-value {
+            font-size: 14px;
+            color: #1f2937;
+            font-weight: 600;
+            text-align: right;
+          }
+          .reference-highlight {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            letter-spacing: 1px;
+          }
+          .invoice-list {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+          }
+          .invoice-list-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 8px;
+          }
+          .invoice-item {
+            font-size: 13px;
+            color: #78350f;
+            margin: 4px 0;
+            font-family: 'Courier New', monospace;
+          }
+          .cta-section {
+            text-align: center;
+            margin: 32px 0;
+          }
+          .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+          }
+          .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+          }
+          .info-box-text {
+            font-size: 14px;
+            color: #1e40af;
+            line-height: 1.6;
+          }
+          .footer {
+            background: #1f2937;
+            color: #9ca3af;
+            padding: 30px;
+            text-align: center;
+          }
+          .footer-logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 12px;
+          }
+          .footer-text {
+            font-size: 13px;
+            line-height: 1.7;
+            margin: 8px 0;
+          }
+          .footer-links {
+            margin: 16px 0;
+          }
+          .footer-link {
+            color: #10b981;
+            text-decoration: none;
+            margin: 0 12px;
+            font-size: 13px;
+          }
+          .social-icons {
+            margin: 20px 0;
+          }
+          .divider {
+            border-top: 1px solid #e5e7eb;
+            margin: 24px 0;
+          }
+          @media only screen and (max-width: 600px) {
+            .email-wrapper { padding: 20px 10px; }
+            .content { padding: 24px 20px; }
+            .amount-value { font-size: 36px; }
+            .detail-row { flex-direction: column; align-items: flex-start; }
+            .detail-value { margin-top: 4px; text-align: left; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="email-wrapper">
+          <div class="container">
+            <!-- Header -->
+            <div class="header">
+              <div class="header-icon">✓</div>
+              <h1>Payment Successful!</h1>
+              <p>Your payment has been processed and confirmed</p>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+              <div class="greeting">Hello ${tenant_name},</div>
+              
+              <p class="intro-text">
+                Great news! We've successfully received your rent payment. This email serves as your official receipt and confirmation of the transaction.
+              </p>
+
+              <div style="text-align: center;">
+                <span class="success-badge">✓ PAYMENT CONFIRMED</span>
+              </div>
+
+              <!-- Amount Card -->
+              <div class="amount-card">
+                <div class="amount-label">Total Amount Paid</div>
+                <div class="amount-value">
+                  <span class="amount-currency">KSh</span>${payment_amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              ${invoice_numbers && invoice_numbers.length > 0 ? `
+              <!-- Invoice List -->
+              <div class="invoice-list">
+                <div class="invoice-list-title">📋 Invoices Paid</div>
+                ${invoice_numbers.map(inv => `<div class="invoice-item">• ${inv}</div>`).join('')}
+              </div>
+              ` : ''}
+
+              <!-- Payment Details -->
+              <div class="details-section">
+                <div class="details-title">📄 Payment Details</div>
+                
+                <div class="detail-row">
+                  <span class="detail-label">Receipt Number</span>
+                  <span class="detail-value">${receipt_number}</span>
+                </div>
+
+                ${reference_number ? `
+                <div class="detail-row">
+                  <span class="detail-label">Payment Reference</span>
+                  <span class="detail-value reference-highlight">${reference_number}</span>
+                </div>
+                ` : ''}
+
+                ${transaction_id ? `
+                <div class="detail-row">
+                  <span class="detail-label">Transaction ID</span>
+                  <span class="detail-value">${transaction_id}</span>
+                </div>
+                ` : ''}
+                
+                <div class="detail-row">
+                  <span class="detail-label">Payment Date & Time</span>
+                  <span class="detail-value">${formattedDate}</span>
+                </div>
+
+                ${payment_period ? `
+                <div class="detail-row">
+                  <span class="detail-label">Payment Period</span>
+                  <span class="detail-value">${payment_period}</span>
+                </div>
+                ` : ''}
+                
+                <div class="detail-row">
+                  <span class="detail-label">Payment Method</span>
+                  <span class="detail-value">${payment_method.toUpperCase()}</span>
+                </div>
+              </div>
+
+              <!-- Property Details -->
+              <div class="details-section">
+                <div class="details-title">🏢 Property Details</div>
+                
+                <div class="detail-row">
+                  <span class="detail-label">Property</span>
+                  <span class="detail-value">${property_name}</span>
+                </div>
+                
+                <div class="detail-row">
+                  <span class="detail-label">Unit Number</span>
+                  <span class="detail-value">${unit_number}</span>
+                </div>
+              </div>
+
+              <!-- Info Box -->
+              <div class="info-box">
+                <div class="info-box-text">
+                  <strong>💡 Keep This Receipt:</strong> This email serves as your official payment receipt. Please save it for your records. You can also view and download this receipt anytime from your tenant dashboard.
+                </div>
+              </div>
+
+              <!-- CTA -->
+              <div class="cta-section">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/tenant/payments" class="cta-button">
+                  View Payment History →
+                </a>
+              </div>
+
+              <div class="divider"></div>
+
+              <p class="intro-text" style="text-align: center;">
+                Thank you for being a valued tenant! If you have any questions about this payment, please don't hesitate to reach out to us.
+              </p>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              <div class="footer-logo">LetRents</div>
+              <p class="footer-text">Modern Property Management Made Simple</p>
+              
+              <div class="footer-links">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" class="footer-link">Dashboard</a>
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/tenant/support" class="footer-link">Support</a>
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/tenant/profile" class="footer-link">Profile</a>
+              </div>
+
+              <div class="divider" style="border-color: #374151;"></div>
+
+              <p class="footer-text" style="font-size: 12px;">
+                © ${new Date().getFullYear()} LetRents. All rights reserved.<br>
+                This is an automated receipt. Please do not reply to this email.
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to,
+      subject: `✓ Payment Receipt ${receipt_number} - LetRents`,
+      html,
+      text: `Payment Receipt\n\nReceipt Number: ${receipt_number}\n${reference_number ? `Reference: ${reference_number}\n` : ''}Amount: KSh ${payment_amount.toLocaleString()}\nDate: ${formattedDate}\nProperty: ${property_name}\nUnit: ${unit_number}\n\nThank you for your payment!`,
+    });
+  }
 }
 
 // SendGrid Provider Implementation

@@ -184,3 +184,26 @@ export const deactivateUser = async (req, res) => {
         writeError(res, status, message);
     }
 };
+export const getCurrentUserPreferences = async (req, res) => {
+    try {
+        const user = req.user;
+        const preferences = await service.getCurrentUserPreferences(user);
+        writeSuccess(res, 200, 'Preferences retrieved successfully', preferences);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to get preferences';
+        writeError(res, 500, message);
+    }
+};
+export const updateCurrentUserPreferences = async (req, res) => {
+    try {
+        const user = req.user;
+        const preferencesData = req.body;
+        const updatedPreferences = await service.updateCurrentUserPreferences(preferencesData, user);
+        writeSuccess(res, 200, 'Preferences updated successfully', updatedPreferences);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to update preferences';
+        writeError(res, 500, message);
+    }
+};

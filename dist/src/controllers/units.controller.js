@@ -56,6 +56,23 @@ export const getUnit = async (req, res) => {
         writeError(res, status, message);
     }
 };
+export const getUnitFinancials = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        if (!id) {
+            return writeError(res, 400, 'Unit ID is required');
+        }
+        const financials = await service.getUnitFinancials(id, user);
+        writeSuccess(res, 200, 'Unit financials retrieved successfully', financials);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to get unit financials';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
 export const updateUnit = async (req, res) => {
     try {
         const user = req.user;

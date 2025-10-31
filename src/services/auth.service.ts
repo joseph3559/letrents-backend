@@ -271,17 +271,41 @@ export class AuthService {
 		if (!payload.email || !payload.password) throw new Error('invalid credentials');
 		const user = await this.prisma.user.findUnique({ where: { email: payload.email } });
 		if (!user) throw new Error('user not found');
-		if (user.status !== 'active') throw new Error('user account is inactive');
+		
+		// Allow 'active' and 'pending_setup' users to log in
+		// 'pending_setup' users can log in to complete their account setup (change password, etc.)
+		const allowedStatuses = ['active', 'pending_setup'];
+		if (!allowedStatuses.includes(user.status)) {
+			throw new Error('user account is inactive');
+		}
+		
 		if (!user.password_hash) throw new Error('invalid credentials');
 		const ok = await bcrypt.compare(payload.password, user.password_hash);
 		if (!ok) throw new Error('invalid credentials');
 		if (env.security.requireEmailVerification && !user.email_verified) throw new Error('user account is not verified');
 
+		// Update last_login_at timestamp
+		await this.prisma.user.update({
+			where: { id: user.id },
+			data: { last_login_at: new Date() }
+		});
+
 		const sessionId = crypto.randomUUID();
 		const { token, expiresAt } = this.generateJwt(user, sessionId);
 		const refreshHours = payload.remember_me ? env.jwt.refreshExpHours : env.security.sessionTimeoutHours;
 		const refresh = await this.createRefreshToken(user.id, payload.device_info, ip, ua, refreshHours);
-		return { token, refresh_token: refresh.token, user, expires_at: expiresAt };
+		
+		// Return user status so frontend can handle pending_setup users appropriately
+		return { 
+			token, 
+			refresh_token: refresh.token, 
+			user: {
+				...user,
+				last_login_at: new Date() // Include updated timestamp in response
+			}, 
+			expires_at: expiresAt,
+			requires_password_change: user.status === 'pending_setup'
+		};
 	}
 
 	async refresh(refreshToken: string, ip?: string, ua?: string) {

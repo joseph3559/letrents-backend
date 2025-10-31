@@ -73,6 +73,25 @@ export const getUnit = async (req: Request, res: Response) => {
   }
 };
 
+export const getUnitFinancials = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { id } = req.params;
+
+    if (!id) {
+      return writeError(res, 400, 'Unit ID is required');
+    }
+
+    const financials = await service.getUnitFinancials(id, user);
+    writeSuccess(res, 200, 'Unit financials retrieved successfully', financials);
+  } catch (error: any) {
+    const message = error.message || 'Failed to get unit financials';
+    const status = message.includes('not found') ? 404 :
+                  message.includes('permissions') ? 403 : 500;
+    writeError(res, status, message);
+  }
+};
+
 export const updateUnit = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;

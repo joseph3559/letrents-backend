@@ -1,6 +1,8 @@
 import { PaymentsService } from '../services/payments.service.js';
+import { PaystackService } from '../services/paystack.service.js';
 import { writeSuccess, writeError } from '../utils/response.js';
 const service = new PaymentsService();
+const paystackService = new PaystackService();
 export const listPayments = async (req, res) => {
     try {
         const user = req.user;
@@ -142,6 +144,147 @@ export const createTenantPayment = async (req, res) => {
         const message = error.message || 'Failed to create tenant payment';
         const status = message.includes('permissions') ? 403 :
             message.includes('not found') ? 404 : 500;
+        writeError(res, status, message);
+    }
+};
+export const sendPaymentReceipt = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id: paymentId } = req.params;
+        const { tenant_id, tenant_email, tenant_name, send_email = true, send_in_app = true } = req.body;
+        if (!paymentId) {
+            return writeError(res, 400, 'Payment ID is required');
+        }
+        // Get the payment details
+        const payment = await service.getPayment(paymentId, user);
+        if (!payment) {
+            return writeError(res, 404, 'Payment not found');
+        }
+        // Send email receipt if requested
+        if (send_email && tenant_email) {
+            const { emailService } = await import('../services/email.service.js');
+            await emailService.sendPaymentReceipt({
+                to: tenant_email,
+                tenant_name: tenant_name || 'Valued Tenant',
+                payment_amount: Number(payment.amount),
+                payment_date: payment.payment_date.toISOString().split('T')[0],
+                payment_method: payment.payment_method,
+                receipt_number: payment.receipt_number || `RCP-${payment.id.substring(0, 8)}`,
+                property_name: payment.property?.name || 'Your Property',
+                unit_number: payment.unit?.unit_number || 'Your Unit',
+            });
+        }
+        // Send in-app notification if requested
+        if (send_in_app && tenant_id) {
+            const { notificationsService } = await import('../services/notifications.service.js');
+            await notificationsService.createNotification(user, {
+                user_id: tenant_id,
+                type: 'payment_receipt',
+                title: 'Payment Receipt',
+                message: `Receipt for your payment of KSh ${Number(payment.amount).toLocaleString()} has been generated.`,
+                data: {
+                    payment_id: payment.id,
+                    amount: payment.amount,
+                    receipt_number: payment.receipt_number,
+                    payment_date: payment.payment_date,
+                },
+            });
+        }
+        writeSuccess(res, 200, 'Receipt sent successfully', { sent: true });
+    }
+    catch (error) {
+        console.error('Error sending payment receipt:', error);
+        const message = error.message || 'Failed to send payment receipt';
+        writeError(res, 500, message);
+    }
+};
+/**
+ * Verify rent payment with Paystack
+ */
+export const verifyRentPayment = async (req, res) => {
+    try {
+        const user = req.user;
+        const { reference } = req.body;
+        if (!reference) {
+            return writeError(res, 400, 'Payment reference is required');
+        }
+        const result = await paystackService.verifyRentPayment(reference, user);
+        writeSuccess(res, 200, 'Payment verified successfully', result);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to verify rent payment';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+/**
+ * Cleanup or manually update a pending payment
+ */
+export const updatePendingPayment = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        const { action } = req.body; // 'complete', 'cancel', or 'delete'
+        if (!id) {
+            return writeError(res, 400, 'Payment ID is required');
+        }
+        if (!action || !['complete', 'cancel', 'delete'].includes(action)) {
+            return writeError(res, 400, 'Valid action is required: complete, cancel, or delete');
+        }
+        const payment = await service.getPayment(id, user);
+        if (!payment) {
+            return writeError(res, 404, 'Payment not found');
+        }
+        if (payment.status !== 'pending') {
+            return writeError(res, 400, 'Only pending payments can be updated');
+        }
+        let updatedPayment;
+        if (action === 'delete') {
+            await service.deletePayment(id, user);
+            return writeSuccess(res, 200, 'Pending payment deleted successfully', { id });
+        }
+        else if (action === 'complete') {
+            updatedPayment = await service.updatePayment(id, {
+                status: 'completed',
+                payment_date: new Date().toISOString(),
+                processed_by: user.user_id,
+                processed_at: new Date().toISOString(),
+                notes: payment.notes ? `${payment.notes} - Manually marked as completed` : 'Manually marked as completed',
+            }, user);
+        }
+        else if (action === 'cancel') {
+            updatedPayment = await service.updatePayment(id, {
+                status: 'cancelled',
+                notes: payment.notes ? `${payment.notes} - Cancelled` : 'Cancelled',
+            }, user);
+        }
+        writeSuccess(res, 200, `Payment ${action}d successfully`, updatedPayment);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to update payment';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
+/**
+ * Verify advance payment with Paystack
+ */
+export const verifyAdvancePayment = async (req, res) => {
+    try {
+        const user = req.user;
+        const { reference } = req.body;
+        if (!reference) {
+            return writeError(res, 400, 'Payment reference is required');
+        }
+        const result = await paystackService.processAdvancePayment(reference, user);
+        writeSuccess(res, 200, 'Advance payment verified and processed successfully', result);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to verify advance payment';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
         writeError(res, status, message);
     }
 };

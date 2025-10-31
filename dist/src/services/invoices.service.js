@@ -1,4 +1,5 @@
 import { getPrisma } from '../config/prisma.js';
+import { getNextInvoiceNumber, generatePropertyCode } from '../utils/invoice-number-generator.js';
 export class InvoicesService {
     prisma = getPrisma();
     async createInvoice(req, user) {
@@ -57,13 +58,18 @@ export class InvoicesService {
         const description = req.description || 'Monthly Rent and Charges';
         const title = req.title || `Invoice for ${tenant.first_name} ${tenant.last_name}`;
         const invoiceType = req.invoice_type || 'monthly_rent';
-        // Generate invoice number
-        const invoiceCount = await this.prisma.invoice.count({
-            where: {
-                company_id: user.company_id,
-            },
-        });
-        const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(6, '0')}`;
+        // Generate professional invoice number (INV-YYYY-MM-NNNN or INV-PROP-YYYY-MM-NNN)
+        let propertyCode;
+        if (propertyId) {
+            const propertyData = await this.prisma.property.findUnique({
+                where: { id: propertyId },
+                select: { name: true },
+            });
+            if (propertyData) {
+                propertyCode = generatePropertyCode(propertyData.name);
+            }
+        }
+        const invoiceNumber = await getNextInvoiceNumber(this.prisma, user.company_id, propertyCode);
         // Create invoice in database
         const invoice = await this.prisma.invoice.create({
             data: {
@@ -205,6 +211,36 @@ export class InvoicesService {
                 line_items: true,
             },
         });
+        // ✅ AUTOMATICALLY CREATE A PENDING PAYMENT RECORD FOR THIS INVOICE
+        try {
+            const currentDate = new Date();
+            const paymentPeriod = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            await this.prisma.payment.create({
+                data: {
+                    company_id: user.company_id,
+                    tenant_id: req.tenant_id,
+                    unit_id: unitId,
+                    property_id: propertyId,
+                    invoice_id: invoice.id,
+                    amount: totalAmount,
+                    currency: 'KES',
+                    payment_method: 'cash', // Default method, will be updated when actual payment is made
+                    payment_type: invoiceType === 'monthly_rent' ? 'rent' : 'other',
+                    status: 'pending',
+                    payment_date: dueDate, // Use invoice due date as payment date
+                    payment_period: paymentPeriod,
+                    receipt_number: `PENDING-${invoiceNumber}`,
+                    received_from: `${tenant.first_name} ${tenant.last_name}`,
+                    notes: `Payment for invoice ${invoiceNumber}`,
+                    created_by: user.user_id,
+                },
+            });
+            console.log(`✅ Auto-created pending payment record for invoice ${invoiceNumber} - Amount: ${totalAmount} KES`);
+        }
+        catch (paymentError) {
+            console.error('❌ Failed to create pending payment record for invoice:', paymentError);
+            // Don't fail invoice creation if payment creation fails
+        }
         return completeInvoice;
     }
     async getInvoice(id, user) {
@@ -237,12 +273,32 @@ export class InvoicesService {
     async listInvoices(filters, user) {
         const limit = Math.min(filters.limit || 20, 100);
         const offset = filters.offset || 0;
+        console.log('📋 listInvoices - User:', { role: user.role, company_id: user.company_id, agency_id: user.agency_id });
         // Build where clause for database query
         const whereClause = {};
-        // Company-based filtering for non-super-admin users
-        if (user.role !== 'super_admin' && user.company_id) {
-            whereClause.company_id = user.company_id;
+        // Role-based filtering
+        if (user.role === 'super_admin') {
+            // Super admin sees all invoices - no filtering
         }
+        else if (user.role === 'agency_admin') {
+            // Agency admin sees all invoices for properties in their agency
+            if (user.agency_id) {
+                whereClause.property = {
+                    agency_id: user.agency_id,
+                };
+                console.log('🔍 Agency admin filter applied - agency_id:', user.agency_id);
+            }
+            else {
+                console.warn('⚠️ Agency admin has no agency_id!');
+            }
+        }
+        else if (user.role === 'landlord' || user.role === 'agent') {
+            // Landlord and agent see invoices for their company
+            if (user.company_id) {
+                whereClause.company_id = user.company_id;
+            }
+        }
+        console.log('📊 Final whereClause:', JSON.stringify(whereClause, null, 2));
         // Apply filters
         if (filters.tenant_id) {
             whereClause.issued_to = filters.tenant_id;

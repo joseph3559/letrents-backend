@@ -783,41 +783,73 @@ export const getBillingPlans = async (req: Request, res: Response) => {
       {
         id: '1',
         name: 'Starter',
-        price: 29,
-        monthly_price: 29,
-        yearly_price: 290, // 10 months price (2 months free)
-        currency: 'USD',
+        price: 2500,
+        monthly_price: 2500,
+        yearly_price: 25000, // 10 months price (2 months free)
+        currency: 'KES',
         interval: 'month',
-        features: ['Up to 10 properties', 'Basic reporting', 'Email support'],
+        features: [
+          'Up to 5 properties',
+          'Up to 50 units',
+          'Basic tenant management',
+          'M-Pesa integration',
+          'Mobile app access',
+          'Email support',
+          'Monthly reports',
+        ],
         active: true,
-        subscribers: 45,
-        max_properties: 10
+        subscribers: 25,
+        max_properties: 5,
+        max_units: 50
       },
       {
         id: '2',
         name: 'Professional',
-        price: 79,
-        monthly_price: 79,
-        yearly_price: 790, // 10 months price (2 months free)
-        currency: 'USD',
+        price: 5000,
+        monthly_price: 5000,
+        yearly_price: 50000, // 10 months price (2 months free)
+        currency: 'KES',
         interval: 'month',
-        features: ['Up to 50 properties', 'Advanced reporting', 'Priority support', 'API access'],
+        features: [
+          'Up to 200 units',
+          'Advanced tenant screening',
+          'All payment methods',
+          'Maintenance management',
+          'Priority support',
+          'Mobile app access',
+          'Custom reports',
+          'Team collaboration',
+          'Document storage (5GB)',
+        ],
         active: true,
-        subscribers: 23,
-        max_properties: 50
+        subscribers: 18,
+        max_properties: 20,
+        max_units: 200
       },
       {
         id: '3',
         name: 'Enterprise',
-        price: 199,
-        monthly_price: 199,
-        yearly_price: 1990, // 10 months price (2 months free)
-        currency: 'USD',
+        price: 12000,
+        monthly_price: 12000,
+        yearly_price: 120000, // 10 months price (2 months free)
+        currency: 'KES',
         interval: 'month',
-        features: ['Unlimited properties', 'Custom reporting', '24/7 support', 'White-label'],
+        features: [
+          'Unlimited properties',
+          'Unlimited units',
+          'White-label options',
+          'API access',
+          'Advanced analytics',
+          '24/7 phone support',
+          'Dedicated account manager',
+          'Custom integrations',
+          'Unlimited storage',
+          'Training & onboarding',
+        ],
         active: true,
-        subscribers: 8,
-        max_properties: null // Unlimited
+        subscribers: 12,
+        max_properties: null, // Unlimited
+        max_units: null // Unlimited
       }
     ];
 

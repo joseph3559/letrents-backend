@@ -3,6 +3,7 @@ import {
   createUnit, 
   createUnits,
   getUnit, 
+  getUnitFinancials,
   updateUnit, 
   deleteUnit, 
   listUnits, 
@@ -21,6 +22,7 @@ router.post('/', rbacResource('units', 'create'), createUnit);
 router.post('/batch', rbacResource('units', 'create'), createUnits);
 router.get('/', rbacResource('units', 'read'), listUnits);
 router.get('/available', searchAvailableUnits); // Public endpoint for searching available units
+router.get('/:id/financials', rbacResource('units', 'read'), getUnitFinancials); // Must come before /:id route
 router.get('/:id', rbacResource('units', 'read'), getUnit);
 router.put('/:id', rbacResource('units', 'update'), updateUnit);
 router.delete('/:id', rbacResource('units', 'delete'), deleteUnit);

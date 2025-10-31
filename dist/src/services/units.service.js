@@ -238,6 +238,87 @@ export class UnitsService {
         }
         return unit;
     }
+    async getUnitFinancials(id, user) {
+        // First get the unit to verify access
+        const unit = await this.getUnit(id, user);
+        // Get unpaid invoices for this unit (exclude 'paid' and 'cancelled' statuses)
+        const unpaidInvoices = await this.prisma.invoice.findMany({
+            where: {
+                unit_id: id,
+                status: {
+                    notIn: ['paid', 'cancelled'] // Exclude fully paid and cancelled invoices
+                }
+            },
+            select: {
+                id: true,
+                invoice_number: true,
+                total_amount: true,
+                status: true,
+                due_date: true,
+                invoice_type: true,
+                issued_to: true,
+            },
+            orderBy: {
+                due_date: 'asc'
+            }
+        });
+        // Calculate outstanding balance (sum of unpaid invoices)
+        const outstandingBalance = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+        // Get recent payments for this unit
+        const recentPayments = await this.prisma.payment.findMany({
+            where: {
+                unit_id: id,
+            },
+            select: {
+                id: true,
+                amount: true,
+                payment_date: true,
+                payment_method: true,
+                status: true,
+                payment_type: true,
+                tenant: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                    }
+                }
+            },
+            orderBy: {
+                payment_date: 'desc'
+            },
+            take: 10
+        });
+        // Determine payment status
+        const now = new Date();
+        const hasOverdueInvoice = unpaidInvoices.some(inv => inv.status === 'overdue' || new Date(inv.due_date) < now);
+        const paymentStatus = hasOverdueInvoice ? 'overdue' :
+            (outstandingBalance > 0 ? 'pending' : 'paid');
+        return {
+            unit_id: unit.id,
+            unit_number: unit.unit_number,
+            property_id: unit.property_id,
+            property_name: unit.property?.name,
+            current_tenant_id: unit.current_tenant_id,
+            current_tenant_name: unit.current_tenant ?
+                `${unit.current_tenant.first_name} ${unit.current_tenant.last_name}` : null,
+            outstanding_balance: outstandingBalance,
+            payment_status: paymentStatus,
+            unpaid_invoices_count: unpaidInvoices.length,
+            unpaid_invoices: unpaidInvoices.map(inv => ({
+                ...inv,
+                total_amount: Number(inv.total_amount)
+            })),
+            recent_payments: recentPayments.map(payment => ({
+                ...payment,
+                amount: Number(payment.amount),
+                tenant_name: payment.tenant ?
+                    `${payment.tenant.first_name} ${payment.tenant.last_name}` : null
+            })),
+            monthly_rent: Number(unit.rent_amount || 0),
+            annual_revenue: Number(unit.rent_amount || 0) * 12,
+        };
+    }
     async updateUnit(id, req, user) {
         // First check if unit exists and user has access
         const existingUnit = await this.getUnit(id, user);
@@ -315,9 +396,23 @@ export class UnitsService {
         if (!['super_admin', 'agency_admin', 'landlord'].includes(user.role)) {
             throw new Error('insufficient permissions to delete units');
         }
-        // Check if unit is occupied or reserved
-        if (existingUnit.status === 'occupied' || existingUnit.status === 'reserved') {
-            throw new Error('cannot delete occupied or reserved unit');
+        // STRICT CHECK: Unit must be vacant before deletion
+        if (existingUnit.status !== 'vacant') {
+            throw new Error(`cannot delete unit with status '${existingUnit.status}'. Unit must be vacant before deletion.`);
+        }
+        // Check if unit has any assigned tenant (extra safety check)
+        if (existingUnit.current_tenant_id) {
+            throw new Error('cannot delete unit with assigned tenant. Please release the tenant first.');
+        }
+        // Check for active leases
+        const activeLeases = await this.prisma.lease.count({
+            where: {
+                unit_id: id,
+                status: 'active',
+            },
+        });
+        if (activeLeases > 0) {
+            throw new Error('cannot delete unit with active leases. Please terminate all leases first.');
         }
         // Delete unit
         await this.prisma.unit.delete({
@@ -652,6 +747,11 @@ export class UnitsService {
             return true;
         // Tenant can access their own unit
         if (user.role === 'tenant' && unit.current_tenant_id === user.user_id)
+            return true;
+        // Caretaker can access units from their assigned properties
+        // Note: This assumes they're in the same company as the property (company_id check above)
+        // Additional check can be added for specific property assignment if needed
+        if (user.role === 'caretaker' && user.company_id && unit.property && unit.property.company_id === user.company_id)
             return true;
         return false;
     }

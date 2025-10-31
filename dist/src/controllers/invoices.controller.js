@@ -25,12 +25,27 @@ export const createInvoice = async (req, res) => {
             return writeError(res, 400, 'Invoice amount must be greater than 0');
         }
         const invoice = await service.createInvoice(invoiceData, user);
-        console.log('✅ Invoice created successfully:', {
-            id: invoice.id,
-            invoice_number: invoice.invoice_number,
-            total_amount: invoice.total_amount,
-        });
-        writeSuccess(res, 201, 'Invoice created successfully', invoice);
+        // Check if invoice should be sent immediately
+        const submitType = req.body.submitType;
+        let finalInvoice = invoice;
+        if (submitType === 'send') {
+            // Send the invoice immediately
+            finalInvoice = await service.sendInvoice(invoice.id, user);
+            console.log('✅ Invoice created and sent:', {
+                id: finalInvoice.id,
+                invoice_number: finalInvoice.invoice_number,
+                status: finalInvoice.status,
+                total_amount: finalInvoice.total_amount,
+            });
+        }
+        else {
+            console.log('✅ Invoice created as draft:', {
+                id: invoice.id,
+                invoice_number: invoice.invoice_number,
+                total_amount: invoice.total_amount,
+            });
+        }
+        writeSuccess(res, 201, 'Invoice created successfully', finalInvoice);
     }
     catch (error) {
         console.error('❌ Error creating invoice:', error);

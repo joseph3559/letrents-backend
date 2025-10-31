@@ -7,11 +7,32 @@ export const requireAuth = (req, res, next) => {
     const token = header.substring(7);
     try {
         const claims = jwt.verify(token, env.jwt.secret);
+        // ✅ SECURITY: Check if token is expired (extra validation)
+        const now = Math.floor(Date.now() / 1000);
+        if (claims.exp && claims.exp < now) {
+            return res.status(401).json({
+                success: false,
+                message: 'Token expired',
+                code: 'TOKEN_EXPIRED'
+            });
+        }
         req.user = claims;
         return next();
     }
     catch (e) {
-        return res.status(401).json({ success: false, message: 'Invalid token' });
+        // ✅ SECURITY: Provide specific error for expired tokens
+        if (e.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                message: 'Token expired',
+                code: 'TOKEN_EXPIRED'
+            });
+        }
+        return res.status(401).json({
+            success: false,
+            message: 'Invalid token',
+            code: 'INVALID_TOKEN'
+        });
     }
 };
 export const requireRole = (roles) => (req, res, next) => {

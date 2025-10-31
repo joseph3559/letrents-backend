@@ -169,7 +169,29 @@ export class PaymentsService {
         if (!this.hasPaymentAccess(payment, user)) {
             throw new Error('insufficient permissions to view this payment');
         }
-        return payment;
+        // Manually fetch invoice if payment has invoice_id (since there's no relation in schema)
+        let invoice = null;
+        if (payment.invoice_id) {
+            try {
+                invoice = await this.prisma.invoice.findUnique({
+                    where: { id: payment.invoice_id },
+                    select: {
+                        id: true,
+                        invoice_number: true,
+                        total_amount: true,
+                        due_date: true,
+                        line_items: true,
+                    },
+                });
+            }
+            catch (error) {
+                console.error('Error fetching invoice for payment:', error);
+            }
+        }
+        return {
+            ...payment,
+            invoice,
+        };
     }
     async createPayment(data, user) {
         // Check permissions
@@ -190,8 +212,10 @@ export class PaymentsService {
         if (!this.hasTenantAccess(tenant, user)) {
             throw new Error('insufficient permissions to create payment for this tenant');
         }
-        // Generate receipt number if not provided
-        const receiptNumber = data.receipt_number || `RCP-${Date.now()}`;
+        // Generate professional receipt number and payment reference if not provided
+        const { getNextReceiptNumber, generatePaymentReference } = await import('../utils/invoice-number-generator.js');
+        const receiptNumber = data.receipt_number || await getNextReceiptNumber(this.prisma, user.company_id);
+        const paymentReference = data.reference_number || generatePaymentReference();
         // Create payment
         const payment = await this.prisma.payment.create({
             data: {
@@ -210,7 +234,7 @@ export class PaymentsService {
                 payment_period: data.payment_period,
                 receipt_number: receiptNumber,
                 transaction_id: data.transaction_id,
-                reference_number: data.reference_number,
+                reference_number: paymentReference,
                 received_by: data.received_by,
                 received_from: data.received_from,
                 notes: data.notes,
@@ -370,6 +394,112 @@ export class PaymentsService {
                 },
             },
         });
+        // ✅ CRITICAL: If payment is linked to an invoice, mark the invoice as PAID
+        if (payment.invoice_id) {
+            try {
+                // Fetch the invoice details
+                const invoice = await this.prisma.invoice.findUnique({
+                    where: { id: payment.invoice_id },
+                    select: {
+                        id: true,
+                        invoice_number: true,
+                        total_amount: true,
+                        status: true,
+                    },
+                });
+                if (!invoice) {
+                    console.warn(`⚠️ Invoice ${payment.invoice_id} not found`);
+                    return payment;
+                }
+                // Calculate total approved payments for this invoice
+                const totalPayments = await this.prisma.payment.aggregate({
+                    where: {
+                        invoice_id: payment.invoice_id,
+                        status: { in: ['approved', 'completed'] },
+                    },
+                    _sum: {
+                        amount: true,
+                    },
+                });
+                const totalPaid = Number(totalPayments._sum.amount || 0);
+                const invoiceAmount = Number(invoice.total_amount || 0);
+                console.log(`💰 Payment approved - Invoice reconciliation:`, {
+                    invoiceId: payment.invoice_id,
+                    invoiceNumber: invoice.invoice_number,
+                    invoiceAmount,
+                    totalPaid,
+                    isFullyPaid: totalPaid >= invoiceAmount,
+                });
+                // If invoice is fully paid, mark it as paid
+                if (totalPaid >= invoiceAmount) {
+                    await this.prisma.invoice.update({
+                        where: { id: payment.invoice_id },
+                        data: {
+                            status: 'paid',
+                            paid_date: new Date(),
+                            payment_method: payment.payment_method,
+                            payment_reference: payment.receipt_number,
+                            updated_at: new Date(),
+                        },
+                    });
+                    console.log(`✅ Invoice ${invoice.invoice_number} automatically marked as PAID (Amount: ${invoiceAmount}, Paid: ${totalPaid})`);
+                }
+            }
+            catch (error) {
+                console.error('❌ Error updating invoice status:', error);
+                // Don't fail payment approval if invoice update fails
+            }
+        }
+        // 📧 SEND EMAIL RECEIPT TO TENANT
+        try {
+            if (payment.tenant && payment.tenant.email) {
+                const { emailService } = await import('./email.service.js');
+                await emailService.sendPaymentReceipt({
+                    to: payment.tenant.email,
+                    tenant_name: `${payment.tenant.first_name} ${payment.tenant.last_name}`,
+                    payment_amount: Number(payment.amount),
+                    payment_date: payment.payment_date.toISOString().split('T')[0],
+                    payment_method: payment.payment_method,
+                    receipt_number: payment.receipt_number || `RCP-${payment.id.substring(0, 8)}`,
+                    property_name: payment.property?.name || 'Your Property',
+                    unit_number: payment.unit?.unit_number || 'Your Unit',
+                });
+                // Mark receipt as sent
+                await this.prisma.payment.update({
+                    where: { id: payment.id },
+                    data: { receipt_sent: true },
+                });
+                console.log(`📧 Payment receipt emailed to tenant: ${payment.tenant.email}`);
+            }
+        }
+        catch (emailError) {
+            console.error('❌ Failed to send email receipt to tenant:', emailError);
+            // Don't fail the approval if email fails
+        }
+        // 🔔 SEND IN-APP NOTIFICATION TO TENANT
+        try {
+            if (payment.tenant && payment.tenant.id) {
+                const { notificationsService } = await import('./notifications.service.js');
+                await notificationsService.createNotification(user, {
+                    user_id: payment.tenant.id,
+                    type: 'payment_receipt',
+                    title: 'Payment Approved - Receipt Generated',
+                    message: `Your cash payment of KSh ${Number(payment.amount).toLocaleString()} has been approved. Receipt: ${payment.receipt_number}`,
+                    data: {
+                        payment_id: payment.id,
+                        amount: payment.amount,
+                        receipt_number: payment.receipt_number,
+                        payment_date: payment.payment_date,
+                        payment_method: payment.payment_method,
+                    },
+                });
+                console.log(`🔔 In-app notification sent to tenant: ${payment.tenant.id}`);
+            }
+        }
+        catch (notificationError) {
+            console.error('❌ Failed to send in-app notification to tenant:', notificationError);
+            // Don't fail the approval if notification fails
+        }
         return payment;
     }
     async deletePayment(id, user) {
@@ -391,7 +521,10 @@ export class PaymentsService {
         // Super admin has access to all payments
         if (user.role === 'super_admin')
             return true;
-        // Company scoping
+        // Tenants can access their own payments
+        if (user.role === 'tenant' && payment.tenant_id === user.user_id)
+            return true;
+        // Company scoping (for landlords, agents, agency_admins, caretakers)
         if (user.company_id && payment.company_id === user.company_id)
             return true;
         return false;

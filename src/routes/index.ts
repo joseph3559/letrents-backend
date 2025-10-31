@@ -9,6 +9,7 @@ import invoices from './invoices.js';
 import dashboard from './dashboard.js';
 import users from './users.js';
 import rbac from './rbac.js';
+import staff from './staff.js';
 import caretakers from './caretakers.js';
 import propertyCaretakers from './property-caretakers.js';
 import propertyFinancials from './property-financials.js';
@@ -26,10 +27,16 @@ import email from './email.js';
 import setup from './setup.js';
 import testEmail from './test-email.js';
 import checklists from './checklists.js';
+import cleanup from './cleanup.js';
+import tasks from './task.routes.js';
+import webhooks from './webhooks.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 
 const router = Router();
+
+// Webhook endpoints (NO AUTH - verified via signature)
+router.use('/webhooks', webhooks);
 
 router.use('/auth', auth);
 
@@ -42,7 +49,8 @@ router.use('/invoices', requireAuth, invoices);
 router.use('/dashboard', requireAuth, dashboard);
 router.use('/users', requireAuth, users);
 router.use('/rbac', requireAuth, rbac);
-router.use('/caretakers', requireAuth, caretakers);
+router.use('/staff', requireAuth, staff); // Primary staff endpoint (all roles)
+router.use('/caretakers', requireAuth, caretakers); // Legacy alias for backward compatibility
   router.use('/property-caretakers', requireAuth, propertyCaretakers);
   router.use('/properties', requireAuth, propertyFinancials);
   router.use('/properties', requireAuth, propertyStaff);
@@ -70,6 +78,7 @@ router.get('/billing/subscription/status/:companyId', async (req, res) => {
 
 router.use('/billing', requireAuth, billing); // Billing management needs auth
 router.use('/email', email); // Email endpoints (auth handled within routes)
+router.use('/tasks', requireAuth, tasks); // Task management (auth required)
 
 // M-Pesa C2B callbacks (no authentication required)
 router.post('/mpesa/c2b/validation', async (req, res) => {
@@ -86,6 +95,7 @@ router.use('/enums', enums);
 router.use('/setup', setup);
 router.use('/test-email', testEmail);
 router.use('/checklists', requireAuth, checklists);
+router.use('/cleanup', requireAuth, cleanup);
 
 // Super Admin middleware - only allow super_admin role
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {

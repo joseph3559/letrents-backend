@@ -260,7 +260,7 @@ export class UsersService {
         // Get current user
         const currentUser = await this.prisma.user.findUnique({
             where: { id: user.user_id },
-            select: { password_hash: true },
+            select: { password_hash: true, status: true },
         });
         if (!currentUser || !currentUser.password_hash) {
             throw new Error('user not found or no password set');
@@ -272,13 +272,20 @@ export class UsersService {
         }
         // Hash new password
         const newPasswordHash = await bcrypt.hash(req.new_password, 10);
-        // Update password
+        // Prepare update data
+        const updateData = {
+            password_hash: newPasswordHash,
+            updated_at: new Date(),
+        };
+        // If user is pending_setup, activate them after password change
+        if (currentUser.status === 'pending_setup') {
+            updateData.status = 'active';
+            console.log(`✅ Auto-activating user ${user.user_id} after password change (was pending_setup)`);
+        }
+        // Update password (and status if needed)
         await this.prisma.user.update({
             where: { id: user.user_id },
-            data: {
-                password_hash: newPasswordHash,
-                updated_at: new Date(),
-            },
+            data: updateData,
         });
     }
     async activateUser(id, user) {
@@ -349,5 +356,67 @@ export class UsersService {
         if (user.role === 'agency_admin' && user.agency_id && targetUser.agency_id === user.agency_id)
             return true;
         return false;
+    }
+    async getCurrentUserPreferences(user) {
+        const prisma = getPrisma();
+        // Try to get existing preferences
+        let preferences = await prisma.userPreferences.findUnique({
+            where: { user_id: user.user_id },
+        });
+        // If no preferences exist, create default ones
+        if (!preferences) {
+            preferences = await prisma.userPreferences.create({
+                data: {
+                    user_id: user.user_id,
+                    default_rent_due_date: 5,
+                    auto_rent_invoices: true,
+                    auto_lease_renewal_reminders: true,
+                    grace_period: 5,
+                    default_currency: 'KES',
+                    units_view_style: 'card',
+                    attach_signature: false,
+                    late_rent_reminder_enabled: true,
+                    late_rent_reminder_date: 15,
+                    theme: 'light',
+                },
+            });
+        }
+        return preferences;
+    }
+    async updateCurrentUserPreferences(data, user) {
+        const prisma = getPrisma();
+        // Upsert preferences (create if not exists, update if exists)
+        const preferences = await prisma.userPreferences.upsert({
+            where: { user_id: user.user_id },
+            update: {
+                default_rent_due_date: data.default_rent_due_date,
+                auto_rent_invoices: data.auto_rent_invoices,
+                auto_lease_renewal_reminders: data.auto_lease_renewal_reminders,
+                grace_period: data.grace_period,
+                default_currency: data.default_currency,
+                units_view_style: data.units_view_style,
+                attach_signature: data.attach_signature,
+                late_rent_reminder_enabled: data.late_rent_reminder_enabled,
+                late_rent_reminder_date: data.late_rent_reminder_date,
+                theme: data.theme,
+                signature: data.signature,
+                updated_at: new Date(),
+            },
+            create: {
+                user_id: user.user_id,
+                default_rent_due_date: data.default_rent_due_date || 5,
+                auto_rent_invoices: data.auto_rent_invoices !== false,
+                auto_lease_renewal_reminders: data.auto_lease_renewal_reminders !== false,
+                grace_period: data.grace_period || 5,
+                default_currency: data.default_currency || 'KES',
+                units_view_style: data.units_view_style || 'card',
+                attach_signature: data.attach_signature || false,
+                late_rent_reminder_enabled: data.late_rent_reminder_enabled !== false,
+                late_rent_reminder_date: data.late_rent_reminder_date || 15,
+                theme: data.theme || 'light',
+                signature: data.signature,
+            },
+        });
+        return preferences;
     }
 }

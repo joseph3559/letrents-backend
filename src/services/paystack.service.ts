@@ -43,6 +43,7 @@ export class PaystackService {
   private prisma = getPrisma();
   private baseURL = 'https://api.paystack.co';
   private config: PaystackConfig;
+  private rentConfig: PaystackConfig;
 
   // Plan configurations from Paystack
   private plans = {
@@ -64,22 +65,31 @@ export class PaystackService {
   };
 
   constructor() {
+    // SaaS subscription credentials
     this.config = {
       secretKey: process.env.PAYSTACK_SECRET_KEY || 'sk_test_d3829a1a9e2b62e6314b12f5f38ec1afd22599f7',
       publicKey: process.env.PAYSTACK_PUBLIC_KEY || 'pk_test_021559fc9f5195aaac5352a6ed1cc3d8c09e1252',
+    };
+
+    // Rent collection credentials
+    this.rentConfig = {
+      secretKey: process.env.RENT_PAYSTACK_SECRET_KEY || 'sk_test_612601ba9ec40de3806d6f37b810c8bd87605bf3',
+      publicKey: process.env.RENT_PAYSTACK_PUBLIC_KEY || 'pk_test_4cedd79cc84483ab217f8d7edb18d4b01af474a2',
     };
   }
 
   /**
    * Make authenticated request to Paystack API
    */
-  private async makeRequest(method: 'GET' | 'POST' | 'PUT', endpoint: string, data?: any) {
+  private async makeRequest(method: 'GET' | 'POST' | 'PUT', endpoint: string, data?: any, useRentCredentials = false) {
     try {
+      const secretKey = useRentCredentials ? this.rentConfig.secretKey : this.config.secretKey;
+
       const response = await axios({
         method,
         url: `${this.baseURL}${endpoint}`,
         headers: {
-          'Authorization': `Bearer ${this.config.secretKey}`,
+          'Authorization': `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
         },
         data,
@@ -560,5 +570,315 @@ export class PaystackService {
     };
 
     return features[plan] || [];
+  }
+
+  /**
+   * Verify rent payment transaction
+   */
+  async verifyRentPayment(reference: string, user: JWTClaims) {
+    try {
+      // Verify transaction with Paystack using rent credentials
+      const verificationResponse = await this.makeRequest('GET', `/transaction/verify/${reference}`, undefined, true);
+
+      if (!verificationResponse.status || !verificationResponse.data) {
+        throw new Error('Payment verification failed');
+      }
+
+      const transaction = verificationResponse.data;
+
+      // Check if payment was successful
+      if (transaction.status !== 'success') {
+        throw new Error(`Payment status: ${transaction.status}`);
+      }
+
+      // Extract metadata
+      const metadata = transaction.metadata || {};
+      const tenantId = metadata.tenant_id;
+      const propertyId = metadata.property_id;
+      const unitNumber = metadata.unit_number;
+      const paymentPeriod = metadata.payment_period;
+
+      if (!tenantId) {
+        throw new Error('Invalid payment: tenant ID not found in transaction metadata');
+      }
+
+      // Get tenant and unit information
+      const tenantProfile = await this.prisma.tenantProfile.findUnique({
+        where: { user_id: tenantId },
+        include: {
+          current_unit: {
+            include: {
+              property: true,
+            },
+          },
+          user: true,
+        },
+      });
+
+      if (!tenantProfile) {
+        throw new Error('Tenant not found');
+      }
+
+      // Check permissions
+      if (!user.company_id) {
+        throw new Error('User must belong to a company');
+      }
+
+      // Calculate amount in KES (Paystack returns amount in kobo)
+      const amountKES = transaction.amount / 100;
+
+      // Check if payment already exists for this transaction reference
+      const existingPaymentByRef = await this.prisma.payment.findFirst({
+        where: {
+          OR: [
+            { transaction_id: reference },
+            { reference_number: transaction.reference },
+          ],
+        },
+      });
+
+      if (existingPaymentByRef) {
+        console.log(`⚠️  Payment already exists for this transaction: ${existingPaymentByRef.receipt_number}`);
+        return {
+          payment: existingPaymentByRef,
+          transaction: {
+            reference: transaction.reference,
+            amount: amountKES,
+            status: transaction.status,
+            paid_at: transaction.paid_at,
+            channel: transaction.channel,
+            subaccount: transaction.subaccount,
+          },
+        };
+      }
+
+      // Check if there's an existing pending payment for this tenant and period
+      const existingPendingPayment = await this.prisma.payment.findFirst({
+        where: {
+          tenant_id: tenantId,
+          payment_period: paymentPeriod,
+          status: 'pending',
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      let payment;
+      if (existingPendingPayment) {
+        // Update existing pending payment
+        payment = await this.prisma.payment.update({
+          where: { id: existingPendingPayment.id },
+          data: {
+            status: 'completed',
+            payment_method: 'online',
+            payment_date: new Date(),
+            transaction_id: transaction.id.toString(), // Convert to string
+            reference_number: transaction.reference,
+            notes: `Online rent payment via Paystack - ${paymentPeriod}. Service fee included in total.`,
+            processed_by: user.user_id,
+            processed_at: new Date(),
+            received_from: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
+          },
+        });
+        console.log(`✅ Updated existing pending payment: ${payment.receipt_number}`);
+      } else {
+        // Create new payment record if no pending payment exists
+        payment = await this.prisma.payment.create({
+          data: {
+            company_id: user.company_id,
+            tenant_id: tenantId,
+            unit_id: tenantProfile.current_unit_id,
+            property_id: propertyId || tenantProfile.current_property_id,
+            amount: amountKES,
+            currency: transaction.currency || 'KES',
+            payment_method: 'online',
+            payment_type: 'rent',
+            status: 'completed',
+            payment_date: new Date(),
+            payment_period: paymentPeriod,
+            receipt_number: `RNT-${Date.now()}-${reference.substring(0, 6).toUpperCase()}`,
+            transaction_id: transaction.id.toString(), // Convert to string
+            reference_number: transaction.reference,
+            notes: `Online rent payment via Paystack - ${paymentPeriod}. Service fee included in total.`,
+            processed_by: user.user_id,
+            processed_at: new Date(),
+            received_from: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
+            created_by: user.user_id,
+          },
+        });
+        console.log(`✅ Created new payment record: ${payment.receipt_number}`);
+      }
+
+      console.log(`✅ Rent payment verified and recorded: ${payment.receipt_number} - Amount: KES ${amountKES}`);
+
+      return {
+        payment,
+        transaction: {
+          reference: transaction.reference,
+          amount: amountKES,
+          status: transaction.status,
+          paid_at: transaction.paid_at,
+          channel: transaction.channel,
+          subaccount: transaction.subaccount,
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ Rent payment verification error:', error.message);
+      throw new Error(error.message || 'Failed to verify rent payment');
+    }
+  }
+
+  /**
+   * Get landlord's Paystack subaccount code
+   */
+  async getLandlordSubaccount(companyId: string): Promise<string | null> {
+    try {
+      // TODO: Implement subaccount retrieval from database
+      // For now, return null (payments will go directly to platform account)
+      return null;
+    } catch (error: any) {
+      console.error('Error getting landlord subaccount:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Process advance payment for multiple months
+   * Creates a payment record and updates tenant's account balance
+   */
+  async processAdvancePayment(
+    reference: string,
+    user: JWTClaims
+  ): Promise<any> {
+    try {
+      console.log(`🔍 Verifying advance payment: ${reference}`);
+
+      // Verify transaction with Paystack
+      console.log(`📡 Calling Paystack API: GET /transaction/verify/${reference}`);
+      console.log(`🔑 Using rent credentials: ${this.rentConfig.publicKey.substring(0, 20)}...`);
+      
+      const response = await this.makeRequest(
+        'GET',
+        `/transaction/verify/${reference}`,
+        undefined,
+        true // Use rent credentials
+      );
+
+      console.log('📦 Paystack response structure:', {
+        hasData: !!response.data,
+        hasStatus: !!response.status,
+        status: response.status,
+        dataKeys: response.data ? Object.keys(response.data) : 'NO DATA',
+        fullResponse: JSON.stringify(response, null, 2)
+      });
+
+      if (!response || !response.status) {
+        console.error('❌ Invalid Paystack response structure:', response);
+        throw new Error('Invalid response from Paystack');
+      }
+
+      if (!response.status) {
+        console.error('❌ Transaction not successful. Status:', response.status);
+        throw new Error('Transaction not successful');
+      }
+
+      const transaction = response.data;  // Axios already unwraps the outer 'data'
+      
+      if (!transaction) {
+        console.error('❌ No transaction data in response. Response:', response);
+        throw new Error('Transaction data not found in Paystack response');
+      }
+
+      console.log('✅ Transaction data found:', {
+        id: transaction.id,
+        hasAmount: !!transaction.amount,
+        amount: transaction.amount,
+        hasMetadata: !!transaction.metadata,
+        metadataKeys: transaction.metadata ? Object.keys(transaction.metadata) : 'NO METADATA'
+      });
+
+      const amountKobo = transaction.amount;
+      
+      if (!amountKobo || amountKobo === 0) {
+        console.error('❌ Invalid transaction amount:', amountKobo);
+        throw new Error('Invalid transaction amount');
+      }
+
+      const amountKES = amountKobo / 100;
+
+      // Get metadata from transaction
+      const metadata = transaction.metadata || {};
+      const months = metadata.months || 1;
+      const rentPerMonth = metadata.rent_per_month || 0;
+      const monthsList = metadata.months_list || '';
+      const paymentPeriod = metadata.payment_period || `Advance Payment - ${months} months`;
+
+      console.log(`💰 Advance payment: ${months} months × KES ${rentPerMonth} = KES ${amountKES}`);
+      console.log(`📅 Payment period: ${paymentPeriod}`);
+      console.log(`📋 Months covered: ${monthsList}`);
+
+      // Get tenant profile with relations
+      const tenantProfile = await this.prisma.tenantProfile.findUnique({
+        where: { user_id: user.user_id },
+        include: {
+          user: true,
+          current_property: true,
+          current_unit: true,
+        },
+      });
+
+      if (!tenantProfile) {
+        throw new Error('Tenant profile not found');
+      }
+
+      // Create a payment record for the advance payment
+      const payment = await this.prisma.payment.create({
+        data: {
+          company_id: tenantProfile.current_property?.company_id || user.company_id!,
+          property_id: tenantProfile.current_property?.id,
+          unit_id: tenantProfile.current_unit?.id,
+          tenant_id: user.user_id,
+          amount: amountKES,
+          payment_method: 'online',
+          payment_type: 'rent',
+          payment_date: new Date().toISOString(),
+          payment_period: paymentPeriod, // Use the period from metadata
+          transaction_id: transaction.id.toString(), // Convert to string
+          reference_number: transaction.reference,
+          receipt_number: `ADV-${Date.now()}-${transaction.reference.substring(0, 6).toUpperCase()}`,
+          received_from: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
+          status: 'completed',
+          notes: `Advance payment for ${months} months${monthsList ? ` (${monthsList})` : ''}. Total amount credited to account balance.`,
+          created_by: user.user_id,
+        },
+      });
+
+      // Update tenant's account balance
+      await this.prisma.tenantProfile.update({
+        where: { user_id: user.user_id },
+        data: {
+          account_balance: {
+            increment: amountKES,
+          },
+        },
+      });
+
+      console.log(`✅ Advance payment processed: ${payment.receipt_number} - Balance updated with KES ${amountKES}`);
+
+      return {
+        payment,
+        balance_added: amountKES,
+        months_covered: months,
+        transaction: {
+          reference: transaction.reference,
+          amount: amountKES,
+          status: transaction.status,
+          paid_at: transaction.paid_at,
+          channel: transaction.channel,
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ Advance payment error:', error.message);
+      throw new Error(error.message || 'Failed to process advance payment');
+    }
   }
 }

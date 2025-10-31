@@ -6,6 +6,47 @@ import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
+/**
+ * Generate a unique staff number in format: STF-YYYY-XXXX
+ * Example: STF-2025-0001
+ */
+async function generateStaffNumber(companyId?: string): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `STF-${year}-`;
+  
+  // Get the count of existing staff in this company for this year
+  const whereClause: any = {
+    role: 'caretaker',
+    created_at: {
+      gte: new Date(`${year}-01-01`),
+      lt: new Date(`${year + 1}-01-01`),
+    }
+  };
+  
+  if (companyId) {
+    whereClause.company_id = companyId;
+  }
+  
+  const count = await prisma.user.count({ where: whereClause });
+  
+  // Increment and format as 4-digit number
+  const nextNumber = (count + 1).toString().padStart(4, '0');
+  const staffNumber = `${prefix}${nextNumber}`;
+  
+  // Check if this number already exists (rare edge case)
+  const existing = await prisma.user.findFirst({
+    where: { staff_number: staffNumber }
+  });
+  
+  if (existing) {
+    // If collision, try next number
+    const nextNum = (count + 2).toString().padStart(4, '0');
+    return `${prefix}${nextNum}`;
+  }
+  
+  return staffNumber;
+}
+
 export const careteakersService = {
   async getCaretakers(user: JWTClaims, filters: any = {}) {
     // Build role-based where clause
@@ -28,6 +69,21 @@ export const careteakersService = {
         updated_at: true,
         company_id: true,
         agency_id: true,
+        // Include extended caretaker fields
+        staff_number: true,
+        id_number: true,
+        address: true,
+        nationality: true,
+        monthly_salary: true,
+        position: true,
+        employment_date: true,
+        emergency_contact_name: true,
+        emergency_contact_phone: true,
+        emergency_relationship: true,
+        working_hours: true,
+        off_days: true,
+        skills: true,
+        languages: true,
         // Include related data based on role
         ...(user.role === 'super_admin' || user.role === 'agency_admin' ? {
           company: {
@@ -59,8 +115,28 @@ export const careteakersService = {
       throw new Error('Insufficient permissions to create caretaker');
     }
 
+    // Check if email already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: caretakerData.email }
+    });
+
+    if (existingUser) {
+      throw new Error('A user with this email already exists');
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(caretakerData.password || 'TempPassword123!', 10);
+
+    // Determine company_id for staff number generation
+    let companyIdForStaffNumber = user.company_id;
+    if (user.role === 'agency_admin' && user.agency_id) {
+      companyIdForStaffNumber = user.company_id;
+    } else if (user.role === 'landlord' && user.company_id) {
+      companyIdForStaffNumber = user.company_id;
+    }
+
+    // Generate unique staff number
+    const staffNumber = await generateStaffNumber(companyIdForStaffNumber);
 
     // Prepare caretaker data with proper scoping
     const createData: any = {
@@ -73,6 +149,22 @@ export const careteakersService = {
       status: 'active' as any,
       email_verified: false,
       created_by: user.user_id,
+      // Add auto-generated staff number
+      staff_number: staffNumber,
+      // Add extended caretaker fields
+      id_number: caretakerData.id_number,
+      address: caretakerData.residential_address || caretakerData.address,
+      nationality: caretakerData.nationality,
+      monthly_salary: caretakerData.monthly_salary,
+      position: caretakerData.position,
+      employment_date: caretakerData.employment_date ? new Date(caretakerData.employment_date) : null,
+      emergency_contact_name: caretakerData.emergency_contact_name,
+      emergency_contact_phone: caretakerData.emergency_contact_phone,
+      emergency_relationship: caretakerData.emergency_relationship,
+      working_hours: caretakerData.working_hours,
+      off_days: Array.isArray(caretakerData.off_days) ? caretakerData.off_days.join(',') : caretakerData.off_days,
+      skills: caretakerData.skills,
+      languages: caretakerData.languages,
     };
 
     // Apply company/agency scoping based on creator's role
@@ -96,6 +188,21 @@ export const careteakersService = {
         created_at: true,
         company_id: true,
         agency_id: true,
+        // Include extended fields in response
+        staff_number: true,
+        id_number: true,
+        address: true,
+        nationality: true,
+        monthly_salary: true,
+        position: true,
+        employment_date: true,
+        emergency_contact_name: true,
+        emergency_contact_phone: true,
+        emergency_relationship: true,
+        working_hours: true,
+        off_days: true,
+        skills: true,
+        languages: true,
       }
     });
 
@@ -124,6 +231,21 @@ export const careteakersService = {
         agency_id: true,
         email_verified: true,
         last_login_at: true,
+        // Include extended caretaker fields
+        staff_number: true,
+        id_number: true,
+        address: true,
+        nationality: true,
+        monthly_salary: true,
+        position: true,
+        employment_date: true,
+        emergency_contact_name: true,
+        emergency_contact_phone: true,
+        emergency_relationship: true,
+        working_hours: true,
+        off_days: true,
+        skills: true,
+        languages: true,
         // Include related data for authorized roles
         ...(user.role === 'super_admin' || user.role === 'agency_admin' ? {
           company: {
@@ -207,13 +329,9 @@ export const careteakersService = {
       throw new Error('Caretaker not found or access denied');
     }
 
-    // Soft delete by updating status
-    await prisma.user.update({
-      where: { id: caretakerId },
-      data: {
-        status: 'inactive',
-        updated_at: new Date(),
-      }
+    // Permanent delete - remove from database
+    await prisma.user.delete({
+      where: { id: caretakerId }
     });
 
     return { success: true };
@@ -266,12 +384,14 @@ export const careteakersService = {
     const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    // Update caretaker with temporary password
+    // Update caretaker with temporary password and verify email
+    // Email is auto-verified for invited users since the invitation was sent to their email
     await prisma.user.update({
       where: { id: caretakerId },
       data: {
         password_hash: hashedPassword,
         status: 'pending_setup',
+        email_verified: true, // Auto-verify email for invited users
         updated_at: new Date(),
       }
     });
