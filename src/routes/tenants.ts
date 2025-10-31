@@ -17,6 +17,7 @@ import {
   getTenantActivity,
   updateRentDetails,
   getTenantMaintenance,
+  createTenantMaintenance,
   getTenantPerformance,
   getTenantNotes,
   updateTenantNotes
@@ -53,6 +54,7 @@ router.post('/:id/payments', rbacResource('payments', 'create'), createTenantPay
 router.get('/:id/documents', rbacResource('tenants', 'read'), getTenantDocuments);
 router.get('/:id/activity', rbacResource('tenants', 'read'), getTenantActivity);
 router.get('/:id/maintenance', rbacResource('tenants', 'read'), getTenantMaintenance);
+router.post('/:id/maintenance', rbacResource('maintenance', 'create'), createTenantMaintenance);
 router.get('/:id/performance', rbacResource('tenants', 'read'), getTenantPerformance);
 router.get('/:id/notes', rbacResource('tenants', 'read'), getTenantNotes);
 router.put('/:id/notes', rbacResource('tenants', 'update'), updateTenantNotes);

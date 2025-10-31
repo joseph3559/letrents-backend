@@ -351,6 +351,27 @@ export const getTenantMaintenance = async (req, res) => {
         writeError(res, status, message);
     }
 };
+export const createTenantMaintenance = async (req, res) => {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        const maintenanceData = req.body;
+        if (!id) {
+            return writeError(res, 400, 'Tenant ID is required');
+        }
+        if (!maintenanceData.title || !maintenanceData.description) {
+            return writeError(res, 400, 'Title and description are required');
+        }
+        const maintenance = await service.createTenantMaintenance(id, maintenanceData, user);
+        writeSuccess(res, 201, 'Maintenance request created successfully', maintenance);
+    }
+    catch (error) {
+        const message = error.message || 'Failed to create maintenance request';
+        const status = message.includes('not found') ? 404 :
+            message.includes('permissions') ? 403 : 500;
+        writeError(res, status, message);
+    }
+};
 export const getTenantPerformance = async (req, res) => {
     try {
         const user = req.user;

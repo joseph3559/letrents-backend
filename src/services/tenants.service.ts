@@ -2275,6 +2275,72 @@ If you have any questions, please contact your property management team.
     }));
   }
 
+  async createTenantMaintenance(tenantId: string, maintenanceData: any, user: JWTClaims): Promise<any> {
+    // Validate tenant access
+    const tenant = await this.getTenant(tenantId, user);
+    
+    if (!tenant.tenant_profile) {
+      throw new Error('Tenant profile not found');
+    }
+
+    // Get tenant's active lease to find their current unit and property
+    const activeLease = await this.prisma.lease.findFirst({
+      where: {
+        tenant_id: tenantId,
+        company_id: user.company_id!,
+        status: 'active'
+      },
+      orderBy: {
+        start_date: 'desc'
+      }
+    });
+
+    if (!activeLease) {
+      throw new Error('No active lease found for tenant');
+    }
+
+    // Create maintenance request
+    const maintenanceRequest = await this.prisma.maintenanceRequest.create({
+      data: {
+        title: maintenanceData.title,
+        description: maintenanceData.description,
+        category: maintenanceData.category || 'General',
+        priority: maintenanceData.priority?.toLowerCase() || 'medium',
+        status: 'pending',
+        requested_by: tenantId,
+        unit_id: activeLease.unit_id,
+        property_id: activeLease.property_id,
+        company_id: user.company_id!,
+      }
+    });
+
+    // Fetch unit and property details for response
+    const unit = await this.prisma.unit.findUnique({
+      where: { id: activeLease.unit_id },
+      select: {
+        unit_number: true,
+        property: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
+
+    return {
+      id: maintenanceRequest.id,
+      title: maintenanceRequest.title,
+      description: maintenanceRequest.description,
+      status: maintenanceRequest.status,
+      priority: maintenanceRequest.priority,
+      category: maintenanceRequest.category,
+      created_at: maintenanceRequest.created_at,
+      updated_at: maintenanceRequest.updated_at,
+      unit_number: unit?.unit_number,
+      property_name: unit?.property?.name,
+    };
+  }
+
   async getTenantPerformance(tenantId: string, user: JWTClaims): Promise<any> {
     // Validate tenant access
     const tenant = await this.getTenant(tenantId, user);

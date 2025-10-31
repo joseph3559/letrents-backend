@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createTenant, getTenant, updateTenant, deleteTenant, checkTenantDeletable, listTenants, assignUnit, releaseUnit, terminateTenant, sendInvitation, resetPassword, getTenantPayments, getTenantDocuments, migrateTenant, getTenantActivity, updateRentDetails, getTenantMaintenance, getTenantPerformance, getTenantNotes, updateTenantNotes } from '../controllers/tenants.controller.js';
+import { createTenant, getTenant, updateTenant, deleteTenant, checkTenantDeletable, listTenants, assignUnit, releaseUnit, terminateTenant, sendInvitation, resetPassword, getTenantPayments, getTenantDocuments, migrateTenant, getTenantActivity, updateRentDetails, getTenantMaintenance, createTenantMaintenance, getTenantPerformance, getTenantNotes, updateTenantNotes } from '../controllers/tenants.controller.js';
 import { createTenantPayment } from '../controllers/payments.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
@@ -25,6 +25,7 @@ router.post('/:id/payments', rbacResource('payments', 'create'), createTenantPay
 router.get('/:id/documents', rbacResource('tenants', 'read'), getTenantDocuments);
 router.get('/:id/activity', rbacResource('tenants', 'read'), getTenantActivity);
 router.get('/:id/maintenance', rbacResource('tenants', 'read'), getTenantMaintenance);
+router.post('/:id/maintenance', rbacResource('maintenance', 'create'), createTenantMaintenance);
 router.get('/:id/performance', rbacResource('tenants', 'read'), getTenantPerformance);
 router.get('/:id/notes', rbacResource('tenants', 'read'), getTenantNotes);
 router.put('/:id/notes', rbacResource('tenants', 'update'), updateTenantNotes);
