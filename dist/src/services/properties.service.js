@@ -260,16 +260,54 @@ export class PropertiesService {
     async listProperties(filters, user) {
         const limit = Math.min(filters.limit || 20, 100);
         const offset = filters.offset || 0;
-        // Build where clause with company scoping
+        console.log('🔍 listProperties - User:', { role: user.role, company_id: user.company_id, agency_id: user.agency_id, user_id: user.user_id });
+        // Build where clause with STRICT role-based scoping
         const where = {};
-        // Company scoping for non-super-admin users
-        if (user.role !== 'super_admin' && user.company_id) {
-            where.company_id = user.company_id;
+        // 🔒 CRITICAL: Role-based data isolation
+        if (user.role === 'super_admin') {
+            // Super admin sees all properties - no filtering
+            console.log('✅ Super admin - no filtering');
         }
-        // Apply filters
-        if (filters.owner_id)
+        else if (user.role === 'agency_admin') {
+            // ⚠️ FIXED: Agency admin must ONLY see properties in THEIR AGENCY
+            if (!user.agency_id) {
+                console.error('❌ Agency admin has no agency_id! Cannot list properties.');
+                return { properties: [], total: 0, stats: {} };
+            }
+            where.agency_id = user.agency_id;
+            console.log('✅ Agency admin filter applied - agency_id:', user.agency_id);
+        }
+        else if (user.role === 'landlord') {
+            // ⚠️ FIXED: Landlord must ONLY see THEIR OWN properties
+            where.owner_id = user.user_id;
+            console.log('✅ Landlord filter applied - owner_id:', user.user_id);
+        }
+        else if (user.role === 'agent') {
+            // ⚠️ FIXED: Agent must ONLY see properties they are ASSIGNED to
+            const agentAssignments = await this.prisma.staffPropertyAssignment.findMany({
+                where: {
+                    staff_id: user.user_id,
+                    status: 'active',
+                },
+                select: { property_id: true },
+            });
+            const propertyIds = agentAssignments.map(a => a.property_id);
+            if (propertyIds.length === 0) {
+                console.log('⚠️ Agent has no assigned properties - returning empty result');
+                return { properties: [], total: 0, stats: {} };
+            }
+            where.id = { in: propertyIds };
+            console.log('✅ Agent filter applied - property_ids:', propertyIds.length);
+        }
+        else {
+            // ⚠️ Other roles should not access property list
+            console.error('❌ Unauthorized role accessing property list:', user.role);
+            throw new Error('insufficient permissions to list properties');
+        }
+        // Apply additional filters (user can further filter their accessible properties)
+        if (filters.owner_id && user.role === 'super_admin')
             where.owner_id = filters.owner_id;
-        if (filters.agency_id)
+        if (filters.agency_id && user.role === 'super_admin')
             where.agency_id = filters.agency_id;
         if (filters.company_id && user.role === 'super_admin')
             where.company_id = filters.company_id;

@@ -850,7 +850,86 @@ export class PaystackService {
           notes: `Advance payment for ${months} months${monthsList ? ` (${monthsList})` : ''}. Total amount credited to account balance.`,
           created_by: user.user_id,
         },
+        include: {
+          tenant: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              email: true,
+            },
+          },
+          property: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          unit: {
+            select: {
+              id: true,
+              unit_number: true,
+            },
+          },
+        },
       });
+
+      // 📧 SEND EMAIL RECEIPT TO TENANT FOR ADVANCE PAYMENT
+      try {
+        if (tenantProfile.user.email) {
+          const { emailService } = await import('./email.service.js');
+          
+          // Format payment date
+          const paymentDate = new Date().toISOString().split('T')[0];
+          
+          await emailService.sendPaymentReceipt({
+            to: tenantProfile.user.email,
+            tenant_name: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
+            payment_amount: amountKES,
+            payment_date: paymentDate,
+            payment_method: 'online',
+            receipt_number: payment.receipt_number,
+            reference_number: transaction.reference,
+            transaction_id: transaction.id.toString(),
+            property_name: tenantProfile.current_property?.name || 'Your Property',
+            unit_number: tenantProfile.current_unit?.unit_number || 'Your Unit',
+            payment_period: `Advance Payment - ${months} Month${months > 1 ? 's' : ''}${monthsList ? ` (${monthsList})` : ''}`,
+          });
+
+          // Mark receipt as sent
+          await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { receipt_sent: true },
+          });
+
+          console.log(`📧 Advance payment receipt emailed to tenant: ${tenantProfile.user.email}`);
+        }
+      } catch (emailError) {
+        console.error('❌ Failed to send advance payment receipt email:', emailError);
+        // Don't fail the payment if email fails
+      }
+
+      // 🔔 SEND IN-APP NOTIFICATION TO TENANT
+      try {
+        const { notificationsService } = await import('./notifications.service.js');
+        await notificationsService.createNotification(user, {
+          user_id: user.user_id,
+          type: 'payment_receipt',
+          category: 'payment',
+          priority: 'high',
+          title: '✅ Advance Payment Received',
+          message: `Your advance payment of KES ${amountKES.toLocaleString()} for ${months} month${months > 1 ? 's' : ''} has been processed successfully. Amount credited to your account balance.`,
+          action_required: false,
+          action_url: `/tenant/payments/${payment.id}`,
+          related_entity_type: 'payment',
+          related_entity_id: payment.id,
+        });
+
+        console.log(`🔔 Advance payment notification sent to tenant: ${user.user_id}`);
+      } catch (notificationError) {
+        console.error('❌ Failed to send advance payment notification:', notificationError);
+        // Don't fail the payment if notification fails
+      }
 
       // Update tenant's account balance
       await this.prisma.tenantProfile.update({

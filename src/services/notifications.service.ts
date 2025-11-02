@@ -23,6 +23,31 @@ export const notificationsService = {
       delete whereClause.company_id;
     }
 
+    // For agents, also include notifications related to their assigned properties
+    if (user.role === 'agent') {
+      // Get agent's assigned properties
+      const agentProperties = await prisma.staffPropertyAssignment.findMany({
+        where: {
+          staff_id: user.user_id,
+          status: 'active'
+        },
+        select: {
+          property_id: true
+        }
+      });
+
+      const propertyIds = agentProperties.map(ap => ap.property_id);
+
+      // Update OR clause to also include notifications for assigned properties
+      if (propertyIds.length > 0) {
+        whereClause.OR = [
+          { recipient_id: user.user_id },  // Received notifications
+          { sender_id: user.user_id },     // Sent notifications
+          { property_id: { in: propertyIds } }  // Notifications for assigned properties
+        ];
+      }
+    }
+
     const [notifications, total] = await Promise.all([
       prisma.notification.findMany({
         where: whereClause,
@@ -47,6 +72,18 @@ export const notificationsService = {
               last_name: true,
               role: true,
             }
+          },
+          property: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
+          unit: {
+            select: {
+              id: true,
+              unit_number: true,
+            }
           }
         }
       }),
@@ -66,7 +103,7 @@ export const notificationsService = {
 
   async createNotification(user: JWTClaims, notificationData: any) {
     // Validate permissions - only certain roles can create notifications
-    if (!['landlord', 'agency_admin', 'super_admin', 'caretaker', 'tenant'].includes(user.role)) {
+    if (!['landlord', 'agency_admin', 'super_admin', 'agent', 'caretaker', 'tenant'].includes(user.role)) {
       throw new Error('Insufficient permissions to create notification');
     }
 
@@ -78,13 +115,14 @@ export const notificationsService = {
       priority: notificationData.priority || 'medium',
       category: notificationData.category || 'general',
       sender_id: user.user_id,
-      recipient_id: notificationData.recipientId,
+      recipient_id: notificationData.recipientId || notificationData.recipient_id, // ✅ Support both formats
       is_read: false,
       company_id: user.company_id,
       // Optional fields
       ...(notificationData.property_id && { property_id: notificationData.property_id }),
       ...(notificationData.unit_id && { unit_id: notificationData.unit_id }),
       ...(notificationData.action_url && { action_url: notificationData.action_url }),
+      ...(notificationData.action_required !== undefined && { action_required: notificationData.action_required }), // ✅ Add action_required support
       ...(notificationData.metadata && { metadata: notificationData.metadata }),
     };
 
@@ -131,6 +169,26 @@ export const notificationsService = {
             first_name: true,
             last_name: true,
             role: true,
+          }
+        },
+        recipient: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            role: true,
+          }
+        },
+        property: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        unit: {
+          select: {
+            id: true,
+            unit_number: true,
           }
         }
       }

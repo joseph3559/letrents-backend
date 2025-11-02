@@ -74,7 +74,7 @@ export interface InvoiceRecord {
 export class InvoicesService {
   private prisma = getPrisma();
 
-  async createInvoice(req: CreateInvoiceRequest, user: JWTClaims): Promise<any> {
+  async createInvoice(req: CreateInvoiceRequest, user: JWTClaims, retryCount: number = 0): Promise<any> {
     // Calculate total amount from rent and utility bills
     let totalAmount = req.total_amount || 0;
     
@@ -153,15 +153,20 @@ export class InvoicesService {
       }
     }
     
+    // ✅ Generate invoice number with retry support
     const invoiceNumber = await getNextInvoiceNumber(
       this.prisma,
       user.company_id,
-      propertyCode
+      propertyCode,
+      retryCount // Pass retry count to handle collisions
     );
 
-    // Create invoice in database
-    const invoice = await this.prisma.invoice.create({
-      data: {
+    // ✅ Wrap invoice creation in try-catch for collision handling
+    let invoice: any;
+    try {
+      // Create invoice in database
+      invoice = await this.prisma.invoice.create({
+        data: {
         company_id: user.company_id,
         invoice_number: invoiceNumber,
         title,
@@ -177,7 +182,7 @@ export class InvoicesService {
         total_amount: totalAmount.toString(),
         currency: 'KES',
         due_date: dueDate,
-        status: 'draft' as const,
+        status: 'sent' as const, // Changed from 'draft' to 'sent' - invoices are immediately active
         metadata: JSON.parse(JSON.stringify({
           rent_amount: (req.rent_amount || 0).toString(),
           utility_bills: (req.utility_bills || []).map(bill => ({
@@ -221,6 +226,20 @@ export class InvoicesService {
         },
       },
     });
+    } catch (error: any) {
+      // ✅ Handle invoice number collision with retry logic
+      if (error.code === 'P2002' && error.meta?.target?.includes('invoice_number')) {
+        if (retryCount < 5) {
+          console.log(`⚠️ Invoice number collision detected, retrying (attempt ${retryCount + 1}/5)...`);
+          // Small delay before retry to reduce collision probability
+          await new Promise(resolve => setTimeout(resolve, 50 * (retryCount + 1)));
+          return this.createInvoice(req, user, retryCount + 1);
+        }
+        throw new Error('Failed to generate unique invoice number after 5 attempts. Please try again.');
+      }
+      // Re-throw other errors
+      throw error;
+    }
 
     // Create line items
     const lineItems = [];
@@ -374,29 +393,52 @@ export class InvoicesService {
     const limit = Math.min(filters.limit || 20, 100);
     const offset = filters.offset || 0;
 
-    console.log('📋 listInvoices - User:', { role: user.role, company_id: user.company_id, agency_id: user.agency_id });
+    console.log('📋 listInvoices - User:', { role: user.role, company_id: user.company_id, agency_id: user.agency_id, user_id: user.user_id });
 
-    // Build where clause for database query
+    // Build where clause for database query with STRICT role-based filtering
     const whereClause: any = {};
     
-    // Role-based filtering
+    // 🔒 CRITICAL: Role-based data isolation
     if (user.role === 'super_admin') {
       // Super admin sees all invoices - no filtering
+      console.log('✅ Super admin - no filtering');
     } else if (user.role === 'agency_admin') {
-      // Agency admin sees all invoices for properties in their agency
-      if (user.agency_id) {
-        whereClause.property = {
-          agency_id: user.agency_id,
-        };
-        console.log('🔍 Agency admin filter applied - agency_id:', user.agency_id);
-      } else {
-        console.warn('⚠️ Agency admin has no agency_id!');
+      // ⚠️ Agency admin sees all invoices for properties in their agency
+      if (!user.agency_id) {
+        console.error('❌ Agency admin has no agency_id! Cannot list invoices.');
+        return { invoices: [], total: 0, stats: {} };
       }
-    } else if (user.role === 'landlord' || user.role === 'agent') {
-      // Landlord and agent see invoices for their company
-      if (user.company_id) {
-        whereClause.company_id = user.company_id;
+      whereClause.property = {
+        agency_id: user.agency_id,
+      };
+      console.log('✅ Agency admin filter applied - agency_id:', user.agency_id);
+    } else if (user.role === 'landlord') {
+      // ⚠️ FIXED: Landlord must ONLY see invoices from THEIR OWN properties
+      whereClause.property = {
+        owner_id: user.user_id,
+      };
+      console.log('✅ Landlord filter applied - owner_id:', user.user_id);
+    } else if (user.role === 'agent') {
+      // ⚠️ FIXED: Agent must ONLY see invoices from properties they are ASSIGNED to
+      const agentAssignments = await this.prisma.staffPropertyAssignment.findMany({
+        where: {
+          staff_id: user.user_id,
+          status: 'active',
+        },
+        select: { property_id: true },
+      });
+      const propertyIds = agentAssignments.map(a => a.property_id);
+      
+      if (propertyIds.length === 0) {
+        console.log('⚠️ Agent has no assigned properties - returning empty result');
+        return { invoices: [], total: 0, stats: {} };
       }
+      whereClause.property_id = { in: propertyIds };
+      console.log('✅ Agent filter applied - property_ids:', propertyIds.length);
+    } else {
+      // ⚠️ Other roles should not access invoice list
+      console.error('❌ Unauthorized role accessing invoice list:', user.role);
+      throw new Error('insufficient permissions to list invoices');
     }
     
     console.log('📊 Final whereClause:', JSON.stringify(whereClause, null, 2));
@@ -698,7 +740,7 @@ export class InvoicesService {
         throw new Error('invoice not found');
       }
 
-      // Check permissions (same as delete)
+      // Check permissions
       let hasPermission = false;
       if (user.role === 'super_admin') {
         hasPermission = true;
@@ -707,22 +749,38 @@ export class InvoicesService {
       } else if (user.role === 'landlord' && 
                  (invoice.issued_by === user.user_id || user.company_id === invoice.company_id)) {
         hasPermission = true;
+      } else if (user.role === 'agent' && user.company_id === invoice.company_id) {
+        // ✅ Agents can send invoices for properties they're assigned to
+        if (invoice.property_id) {
+          const assignment = await this.prisma.staffPropertyAssignment.findFirst({
+            where: {
+              staff_id: user.user_id,
+              property_id: invoice.property_id,
+              status: 'active',
+            },
+          });
+          hasPermission = !!assignment;
+        } else {
+          // If no property_id on invoice, allow if same company
+          hasPermission = true;
+        }
       }
 
       if (!hasPermission) {
         throw new Error('insufficient permissions to send this invoice');
       }
 
-      // Only draft invoices can be sent
-      if (invoice.status !== 'draft') {
-        throw new Error(`cannot send invoice with status: ${invoice.status}. Only draft invoices can be sent.`);
+      // ✅ Allow sending draft or sent invoices (idempotent), but not paid/cancelled/void
+      const unsendableStatuses = ['paid', 'cancelled', 'void'];
+      if (unsendableStatuses.includes(invoice.status)) {
+        throw new Error(`cannot send invoice with status: ${invoice.status}. Only draft or sent invoices can be re-sent.`);
       }
 
-      // Update invoice status to 'sent'
+      // Update invoice status to 'sent' if it's still draft
       const updatedInvoice = await this.prisma.invoice.update({
         where: { id },
         data: {
-          status: 'sent',
+          status: 'sent', // Update to sent if it's draft, or keep as sent if already sent
           updated_at: new Date(),
         },
         include: {

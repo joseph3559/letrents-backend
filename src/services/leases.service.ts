@@ -137,9 +137,9 @@ export class LeasesService {
     return lease;
   }
 
-  async createLease(req: CreateLeaseRequest, user: JWTClaims): Promise<any> {
-    // Validate permissions
-    if (!['super_admin', 'agency_admin', 'landlord'].includes(user.role)) {
+  async createLease(req: CreateLeaseRequest, user: JWTClaims, retryCount: number = 0): Promise<any> {
+    // Validate permissions - agents can create leases for their assigned properties
+    if (!['super_admin', 'agency_admin', 'landlord', 'agent'].includes(user.role)) {
       throw new Error('insufficient permissions to create lease');
     }
 
@@ -174,73 +174,142 @@ export class LeasesService {
     if (!companyId) {
       throw new Error('unable to determine company for lease creation');
     }
-    const leaseNumber = await this.generateLeaseNumber(companyId);
+    
+    try {
+      const leaseNumber = await this.generateLeaseNumber(companyId, retryCount);
 
-    // Create lease
-    const lease = await this.prisma.lease.create({
-      data: {
-        lease_number: leaseNumber,
-        tenant_id: req.tenant_id,
-        unit_id: req.unit_id,
-        property_id: req.property_id,
-        company_id: companyId,
-        lease_type: req.lease_type as any,
-        start_date: new Date(req.start_date),
-        end_date: req.end_date ? new Date(req.end_date) : new Date(new Date(req.start_date).getTime() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year from start
-        move_in_date: req.move_in_date ? new Date(req.move_in_date) : null,
-        rent_amount: req.rent_amount,
-        deposit_amount: req.deposit_amount,
-        payment_frequency: req.payment_frequency as any || 'monthly',
-        payment_day: req.payment_day || 1,
-        notice_period_days: req.notice_period_days || 30,
-        renewable: req.renewable ?? true,
-        auto_renewal: req.auto_renewal ?? false,
-        pets_allowed: req.pets_allowed ?? false,
-        smoking_allowed: req.smoking_allowed ?? false,
-        subletting_allowed: req.subletting_allowed ?? false,
-        special_terms: req.special_terms,
-        status: 'active' as any,
-        created_by: user.user_id,
-      },
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            email: true,
-            phone_number: true,
-          }
+      // Create lease
+      const lease = await this.prisma.lease.create({
+        data: {
+          lease_number: leaseNumber,
+          tenant_id: req.tenant_id,
+          unit_id: req.unit_id,
+          property_id: req.property_id,
+          company_id: companyId,
+          lease_type: req.lease_type as any,
+          start_date: new Date(req.start_date),
+          end_date: req.end_date ? new Date(req.end_date) : new Date(new Date(req.start_date).getTime() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year from start
+          move_in_date: req.move_in_date ? new Date(req.move_in_date) : null,
+          rent_amount: req.rent_amount,
+          deposit_amount: req.deposit_amount,
+          payment_frequency: req.payment_frequency as any || 'monthly',
+          payment_day: req.payment_day || 1,
+          notice_period_days: req.notice_period_days || 30,
+          renewable: req.renewable ?? true,
+          auto_renewal: req.auto_renewal ?? false,
+          pets_allowed: req.pets_allowed ?? false,
+          smoking_allowed: req.smoking_allowed ?? false,
+          subletting_allowed: req.subletting_allowed ?? false,
+          special_terms: req.special_terms,
+          status: 'active' as any,
+          created_by: user.user_id,
         },
-        unit: {
-          select: {
-            id: true,
-            unit_number: true,
-            unit_type: true,
-          }
-        },
-        property: {
-          select: {
-            id: true,
-            name: true,
+        include: {
+          tenant: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              email: true,
+              phone_number: true,
+            }
+          },
+          unit: {
+            select: {
+              id: true,
+              unit_number: true,
+              unit_type: true,
+            }
+          },
+          property: {
+            select: {
+              id: true,
+              name: true,
+            }
           }
         }
-      }
-    });
+      });
 
-    // Update unit status to occupied and assign tenant
-    await this.prisma.unit.update({
-      where: { id: req.unit_id },
-      data: {
-        status: 'occupied' as any,
-        current_tenant_id: req.tenant_id,
-        lease_start_date: new Date(req.start_date),
-        lease_end_date: req.end_date ? new Date(req.end_date) : null,
-        lease_type: req.lease_type as any,
-      }
-    });
+      // Update unit status to occupied and assign tenant
+      await this.prisma.unit.update({
+        where: { id: req.unit_id },
+        data: {
+          status: 'occupied' as any,
+          current_tenant_id: req.tenant_id,
+          lease_start_date: new Date(req.start_date),
+          lease_end_date: req.end_date ? new Date(req.end_date) : null,
+          lease_type: req.lease_type as any,
+        }
+      });
 
-    return lease;
+      // Auto-generate invoices for deposit and first month's rent
+      try {
+        const { InvoicesService } = await import('./invoices.service.js');
+        const invoicesService = new InvoicesService();
+        
+        const startDate = new Date(req.start_date);
+        const depositDueDate = new Date(startDate);
+        depositDueDate.setDate(depositDueDate.getDate() + 7); // Deposit due in 7 days
+        
+        const firstRentDueDate = new Date(startDate);
+        firstRentDueDate.setMonth(firstRentDueDate.getMonth() + 1);
+        firstRentDueDate.setDate(req.payment_day || 5);
+
+        // 1. Create DEPOSIT invoice
+        if (req.deposit_amount && req.deposit_amount > 0) {
+          const depositInvoice = await invoicesService.createInvoice({
+            tenant_id: req.tenant_id,
+            property_id: req.property_id,
+            unit_id: req.unit_id,
+            title: 'Security Deposit',
+            description: `Security deposit for ${lease.property.name} - Unit ${lease.unit.unit_number}`,
+            invoice_type: 'deposit',
+            rent_amount: 0,
+            total_amount: req.deposit_amount,
+            due_date: depositDueDate.toISOString().split('T')[0],
+            utility_bills: [],
+          }, user);
+          
+          console.log(`✅ Auto-generated DEPOSIT invoice ${depositInvoice.invoice_number} for KES ${req.deposit_amount}`);
+        }
+
+        // 2. Create FIRST MONTH RENT invoice
+        if (req.rent_amount && req.rent_amount > 0) {
+          const rentInvoice = await invoicesService.createInvoice({
+            tenant_id: req.tenant_id,
+            property_id: req.property_id,
+            unit_id: req.unit_id,
+            title: 'Monthly Rent',
+            description: `Rent for ${lease.property.name} - Unit ${lease.unit.unit_number}`,
+            invoice_type: 'rent',
+            rent_amount: req.rent_amount,
+            total_amount: req.rent_amount,
+            due_date: firstRentDueDate.toISOString().split('T')[0],
+            utility_bills: [],
+          }, user);
+          
+          console.log(`✅ Auto-generated FIRST RENT invoice ${rentInvoice.invoice_number} for KES ${req.rent_amount}`);
+        }
+      } catch (invoiceError: any) {
+        console.error('⚠️ Failed to auto-generate invoices for new lease:', invoiceError.message);
+        // Don't fail the lease creation if invoice generation fails
+      }
+
+      return lease;
+    } catch (error: any) {
+      // Check if it's a unique constraint violation on lease_number
+      if (error.code === 'P2002' && error.meta?.target?.includes('lease_number')) {
+        // Retry up to 5 times with exponential backoff
+        if (retryCount < 5) {
+          console.log(`⚠️ Lease number collision detected, retrying (attempt ${retryCount + 1}/5)...`);
+          // Add a small delay to reduce race condition probability
+          await new Promise(resolve => setTimeout(resolve, 50 * (retryCount + 1)));
+          return this.createLease(req, user, retryCount + 1);
+        }
+      }
+      // If not a unique constraint error or max retries reached, throw the error
+      throw error;
+    }
   }
 
   async updateLease(id: string, req: UpdateLeaseRequest, user: JWTClaims): Promise<any> {
@@ -479,7 +548,7 @@ export class LeasesService {
     return newLease;
   }
 
-  private async generateLeaseNumber(companyId: string): Promise<string> {
+  private async generateLeaseNumber(companyId: string, attempt: number = 0): Promise<string> {
     const now = new Date();
     const year = now.getFullYear();
     const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 01-12
@@ -505,8 +574,28 @@ export class LeasesService {
       nextNumber = lastNumber + 1;
     }
 
+    // Add attempt offset to handle race conditions
+    if (attempt > 0) {
+      nextNumber += attempt;
+    }
+
     // Format: LSE-2025-10-0001
-    return `${prefix}-${nextNumber.toString().padStart(4, '0')}`;
+    const leaseNumber = `${prefix}-${nextNumber.toString().padStart(4, '0')}`;
+    
+    // Verify uniqueness
+    const existing = await this.prisma.lease.findFirst({
+      where: {
+        company_id: companyId,
+        lease_number: leaseNumber,
+      },
+    });
+
+    // If duplicate found and we haven't retried too many times, try again
+    if (existing && attempt < 10) {
+      return this.generateLeaseNumber(companyId, attempt + 1);
+    }
+
+    return leaseNumber;
   }
 
   private hasLeaseAccess(lease: any, user: JWTClaims): boolean {

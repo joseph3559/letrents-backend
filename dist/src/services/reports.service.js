@@ -488,7 +488,7 @@ export const reportsService = {
         });
     },
     async getMaintenanceReport(user, period = 'monthly', filters = {}) {
-        const whereClause = buildWhereClause(user);
+        const whereClause = buildWhereClause(user, {}, 'maintenance'); // ✅ Specify 'maintenance' modelType
         const maintenanceRequests = await prisma.maintenanceRequest.findMany({
             where: {
                 ...whereClause,

@@ -144,8 +144,8 @@ export const staffService = {
      * Create a new staff member
      */
     async createStaffMember(user, role, staffData) {
-        // Validate permissions
-        if (!['landlord', 'agency_admin', 'super_admin'].includes(user.role)) {
+        // Validate permissions - allow agents, landlords, agency admins, and super admins to create staff
+        if (!['agent', 'landlord', 'agency_admin', 'super_admin'].includes(user.role)) {
             throw new Error(`Insufficient permissions to create ${role}`);
         }
         // CRITICAL: Validate that creator has a company_id
@@ -197,12 +197,26 @@ export const staffService = {
             emergency_relationship: staffData.emergency_relationship,
             working_hours: staffData.working_hours,
             off_days: Array.isArray(staffData.off_days) ? staffData.off_days.join(',') : staffData.off_days,
-            skills: staffData.skills,
-            languages: staffData.languages,
+            skills: Array.isArray(staffData.skills) ? staffData.skills.join(',') : staffData.skills,
+            languages: Array.isArray(staffData.languages) ? staffData.languages.join(',') : staffData.languages,
         };
         // CRITICAL: Always set company_id - this is mandatory for all staff members
         // Apply company/agency scoping based on creator's role
-        if (user.role === 'agency_admin') {
+        if (user.role === 'agent') {
+            // Agents should use their company_id
+            if (user.company_id) {
+                createData.company_id = user.company_id;
+            }
+            else {
+                // This should never happen due to check above, but add as safeguard
+                throw new Error('Cannot create staff: Agent has no company_id');
+            }
+            // Set agency_id if the agent has one
+            if (user.agency_id) {
+                createData.agency_id = user.agency_id;
+            }
+        }
+        else if (user.role === 'agency_admin') {
             // Always set company_id for agency admin
             if (user.company_id) {
                 createData.company_id = user.company_id;

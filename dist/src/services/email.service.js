@@ -186,7 +186,7 @@ export class EmailService {
           }
           .email-wrapper { background-color: #f3f4f6; padding: 40px 20px; }
           .container { 
-            max-width: 600px; 
+            max-width: 750px; 
             margin: 0 auto; 
             background: white; 
             border-radius: 16px;
@@ -196,28 +196,89 @@ export class EmailService {
           .header { 
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white; 
-            padding: 40px 30px; 
-            text-align: center; 
+            padding: 50px 30px; 
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+          }
+          .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            z-index: 0;
+          }
+          .header::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -5%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            z-index: 0;
+          }
+          .header-content {
+            position: relative;
+            z-index: 1;
           }
           .header-icon { 
-            width: 80px; 
-            height: 80px; 
-            background: rgba(255, 255, 255, 0.2); 
+            width: 100px; 
+            height: 100px; 
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);
+            border: 4px solid rgba(255, 255, 255, 0.4);
             border-radius: 50%; 
             display: inline-flex; 
             align-items: center; 
             justify-content: center; 
-            font-size: 40px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            animation: float 3s ease-in-out infinite;
+            position: relative;
+          }
+          .header-icon::before {
+            content: '✓';
+            font-size: 55px;
+            font-weight: bold;
+            color: white;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
           }
           .header h1 { 
-            font-size: 28px; 
-            font-weight: 700; 
-            margin-bottom: 8px; 
+            font-size: 32px; 
+            font-weight: 800; 
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            letter-spacing: -0.5px;
           }
           .header p { 
             font-size: 16px; 
-            opacity: 0.95; 
+            opacity: 0.95;
+            font-weight: 400;
+            letter-spacing: 0.3px;
+          }
+          .header-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
           }
           .success-badge {
             background: #10b981;
@@ -273,7 +334,7 @@ export class EmailService {
           .details-section {
             background: #f9fafb;
             border-radius: 12px;
-            padding: 24px;
+            padding: 28px 32px;
             margin: 24px 0;
           }
           .details-title {
@@ -288,30 +349,38 @@ export class EmailService {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 0;
+            padding: 20px 8px;
             border-bottom: 1px solid #e5e7eb;
-            min-height: 52px;
+            min-height: 65px;
+            gap: 40px;
           }
           .detail-row:last-child { border-bottom: none; }
           .detail-label {
             font-size: 14px;
             color: #6b7280;
-            font-weight: 500;
+            font-weight: 600;
+            flex: 0 0 auto;
+            max-width: 40%;
+            min-width: 180px;
           }
           .detail-value {
             font-size: 14px;
             color: #1f2937;
-            font-weight: 600;
+            font-weight: 700;
             text-align: right;
+            flex: 1 1 auto;
+            word-break: break-word;
           }
           .reference-highlight {
             background: #dbeafe;
             color: #1e40af;
-            padding: 2px 8px;
+            padding: 4px 10px;
             border-radius: 6px;
             font-family: 'Courier New', monospace;
             font-weight: 700;
             letter-spacing: 1px;
+            font-size: 13px;
+            display: inline-block;
           }
           .invoice-list {
             background: #fef3c7;
@@ -396,8 +465,25 @@ export class EmailService {
             .email-wrapper { padding: 20px 10px; }
             .content { padding: 24px 20px; }
             .amount-value { font-size: 36px; }
-            .detail-row { flex-direction: column; align-items: flex-start; }
-            .detail-value { margin-top: 4px; text-align: left; }
+            .details-section { padding: 20px 16px; }
+            .detail-row { 
+              flex-direction: column; 
+              align-items: flex-start; 
+              padding: 18px 4px;
+              min-height: auto;
+              gap: 10px;
+            }
+            .detail-label {
+              max-width: 100%;
+              min-width: auto;
+              font-size: 13px;
+            }
+            .detail-value { 
+              margin-top: 4px; 
+              text-align: left;
+              font-size: 14px;
+              width: 100%;
+            }
           }
         </style>
       </head>
@@ -405,11 +491,14 @@ export class EmailService {
         <div class="email-wrapper">
           <div class="container">
             <!-- Header -->
-            <div class="header">
-              <div class="header-icon">✓</div>
-              <h1>Payment Successful!</h1>
-              <p>Your payment has been processed and confirmed</p>
-            </div>
+        <div class="header">
+          <div class="header-content">
+            <div class="header-icon"></div>
+            <h1>Payment Successful!</h1>
+            <p>Your payment has been processed and confirmed</p>
+            <div class="header-badge">✓ VERIFIED PAYMENT</div>
+          </div>
+        </div>
 
             <!-- Content -->
             <div class="content">

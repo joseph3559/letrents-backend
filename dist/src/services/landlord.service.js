@@ -60,7 +60,9 @@ export const landlordService = {
     },
     // Properties services
     getProperties: async (user, filters) => {
-        const whereClause = user.company_id ? { company_id: user.company_id } : {};
+        console.log('🔍 landlordService.getProperties - User:', { role: user.role, user_id: user.user_id });
+        // 🔒 CRITICAL: Landlord must ONLY see THEIR OWN properties
+        const whereClause = { owner_id: user.user_id };
         if (filters.status) {
             whereClause.status = filters.status;
         }
@@ -71,6 +73,7 @@ export const landlordService = {
                 { city: { contains: filters.search_query, mode: 'insensitive' } },
             ];
         }
+        console.log('✅ Landlord properties filter applied - owner_id:', user.user_id);
         const properties = await prisma.property.findMany({
             where: whereClause,
             include: {
@@ -200,12 +203,54 @@ export const landlordService = {
     },
     // Tenants services
     getTenants: async (user, filters) => {
+        console.log('🔍 landlordService.getTenants - User:', { role: user.role, user_id: user.user_id });
+        // 🔒 CRITICAL: Landlord must ONLY see tenants from THEIR OWN properties
+        const landlordProperties = await prisma.property.findMany({
+            where: { owner_id: user.user_id },
+            select: {
+                id: true,
+                name: true,
+                units: { select: { id: true, unit_number: true, current_tenant_id: true } },
+            },
+        });
+        console.log(`📊 Found ${landlordProperties.length} properties for landlord:`, landlordProperties.map(p => ({ id: p.id, name: p.name, units: p.units.length })));
+        const propertyIds = landlordProperties.map(p => p.id);
+        const directTenantIds = landlordProperties.flatMap(p => p.units.map(u => u.current_tenant_id)).filter(id => id !== null);
+        console.log(`👥 Units with tenants:`, landlordProperties.flatMap(p => p.units.filter(u => u.current_tenant_id).map(u => ({ unit: u.unit_number, tenant_id: u.current_tenant_id }))));
+        if (propertyIds.length === 0) {
+            console.log('⚠️ Landlord has no properties - returning empty result');
+            return { tenants: [], total: 0 };
+        }
+        // ✅ SIMPLIFIED: Just filter by tenant IDs found in units + leases
+        let allTenantIds = [];
+        if (directTenantIds.length === 0 && propertyIds.length > 0) {
+            // Check if there are any leases for these properties
+            const leases = await prisma.lease.findMany({
+                where: { property_id: { in: propertyIds } },
+                select: { tenant_id: true },
+            });
+            const leaseTenantIds = [...new Set(leases.map((l) => l.tenant_id))];
+            if (leaseTenantIds.length === 0) {
+                console.log('⚠️ Landlord has no tenants (no units occupied, no leases) - returning empty result');
+                return { tenants: [], total: 0 };
+            }
+            allTenantIds = leaseTenantIds;
+            console.log('✅ Landlord filter applied (leases only) - tenant_ids:', leaseTenantIds.length);
+        }
+        else {
+            // Get additional tenant IDs from leases
+            const leases = await prisma.lease.findMany({
+                where: { property_id: { in: propertyIds } },
+                select: { tenant_id: true },
+            });
+            const leaseTenantIds = leases.map((l) => l.tenant_id);
+            allTenantIds = [...new Set([...directTenantIds, ...leaseTenantIds])];
+            console.log('✅ Landlord filter applied - tenant_ids:', allTenantIds.length, '(from units:', directTenantIds.length, ', from leases:', leaseTenantIds.length, ')');
+        }
         const whereClause = {
             role: 'tenant',
+            id: { in: allTenantIds },
         };
-        if (user.company_id) {
-            whereClause.company_id = user.company_id;
-        }
         if (filters.status) {
             whereClause.status = filters.status;
         }

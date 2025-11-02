@@ -1,160 +1,33 @@
 npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
 
-> letrents-backend-v2@2.0.0 dev
-> nodemon --watch src --ext ts,tsx --exec 'npx tsc && node dist/src/index.js'
+> letrents-backend-v2@2.0.0 start
+> npm run prisma:push && node init-db.js && node dist/src/index.js
 
-[33m[nodemon] 3.1.10[39m
-[33m[nodemon] to restart at any time, enter `rs`[39m
-[33m[nodemon] watching path(s): src/**/*[39m
-[33m[nodemon] watching extensions: ts,tsx[39m
-[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
 npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
-[dotenv@17.2.2] injecting env (20) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
 
-╔════════════════════════════════════════════════════════════════╗
-║                                                                ║
-║        🏢 LetRents Property Management System v2.0.0          ║
-║                                                                ║
-╚════════════════════════════════════════════════════════════════╝
+> letrents-backend-v2@2.0.0 prisma:push
+> prisma db push
 
-✅ Server Status:        Running
-🌐 Environment:         development
-🔗 Server URL:          http://0.0.0.0:8080
-🏥 Health Check:        http://0.0.0.0:8080/health
-📚 API Documentation:   http://0.0.0.0:8080/docs
-📡 API Endpoint:        http://0.0.0.0:8080/api/v1
-⏰ Started at:          10/31/2025, 5:06:00 PM
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "letrents", schema "public" at "localhost:5432"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The database is already in sync with the Prisma schema.
 
-💡 Press Ctrl+C to stop the server
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v6.16.2) to ./node_modules/@prisma/client in 1.58s
 
-[2025-10-31 17:06:00.214 +0300] [32mINFO[39m (68901): [36mServer started[39m
-    [35mport[39m: 8080
-    [35mhost[39m: "0.0.0.0"
-[32m[nodemon] restarting due to changes...[39m
-[32m[nodemon] starting `npx tsc && node dist/src/index.js`[39m
-npm warn cli npm v11.1.0 does not support Node.js v18.19.1. This version of npm supports the following node versions: `^20.17.0 || >=22.9.0`. You can find the latest version at https://nodejs.org/.
-[dotenv@17.2.2] injecting env (20) from .env -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+file:///home/scott/Desktop/Office/letrents/backend%20v2/init-db.js:4
+const { PrismaClient } = require('@prisma/client');
+                         ^
 
-╔════════════════════════════════════════════════════════════════╗
-║                                                                ║
-║        🏢 LetRents Property Management System v2.0.0          ║
-║                                                                ║
-╚════════════════════════════════════════════════════════════════╝
+ReferenceError: require is not defined in ES module scope, you can use import instead
+This file is being treated as an ES module because it has a '.js' file extension and '/home/scott/Desktop/Office/letrents/backend v2/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///home/scott/Desktop/Office/letrents/backend%20v2/init-db.js:4:26
+    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:336:24)
+    at async loadESM (node:internal/process/esm_loader:34:7)
+    at async handleMainPromise (node:internal/modules/run_main:106:12)
 
-✅ Server Status:        Running
-🌐 Environment:         development
-🔗 Server URL:          http://0.0.0.0:8080
-🏥 Health Check:        http://0.0.0.0:8080/health
-📚 API Documentation:   http://0.0.0.0:8080/docs
-📡 API Endpoint:        http://0.0.0.0:8080/api/v1
-⏰ Started at:          10/31/2025, 5:07:17 PM
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💡 Press Ctrl+C to stop the server
-
-[2025-10-31 17:07:17.756 +0300] [32mINFO[39m (69754): [36mServer started[39m
-    [35mport[39m: 8080
-    [35mhost[39m: "0.0.0.0"
-[0mGET /api/v1/notifications/unread-count [36m304[0m 148.387 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 178.686 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 8.369 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 174.779 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 12.562 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 13.415 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.300 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.870 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 5.458 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 5.477 ms - -[0m
-[0mPOST /api/v1/notifications/e79642fe-5977-4526-8c5e-d8e986183420/read [32m200[0m 16.720 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 4.662 ms - 90[0m
-[0mPOST /api/v1/notifications/79026626-b943-436e-8232-dd7711c9afcd/read [32m200[0m 24.718 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 13.143 ms - 90[0m
-[0mPOST /api/v1/notifications/65a17e8d-e777-4fa6-80a1-bb1c1a340581/read [32m200[0m 29.316 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 11.604 ms - 90[0m
-[0mPOST /api/v1/notifications/bulk [32m200[0m 10.071 ms - 153[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 11.567 ms - 17817[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 24.769 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 7.970 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 20.796 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 15.985 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 58.210 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 15.254 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.911 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.441 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 5.511 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 6.713 ms - -[0m
-[0mPOST /api/v1/notifications/65a17e8d-e777-4fa6-80a1-bb1c1a340581/read [32m200[0m 16.913 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 6.150 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 29.392 ms - 17817[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 15.307 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 12.444 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 8.174 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 51.408 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 14.108 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.486 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.503 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 4.920 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 4.809 ms - -[0m
-[0mPOST /api/v1/notifications/e79642fe-5977-4526-8c5e-d8e986183420/read [32m200[0m 10.927 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 5.526 ms - -[0m
-[0mPOST /api/v1/notifications/38a2bba0-3128-4b1a-acd0-aae9536d51c1/read [32m200[0m 8.887 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 5.309 ms - 89[0m
-[0mPOST /api/v1/notifications/a4707459-9381-4586-a15d-aa2a9099753c/read [32m200[0m 12.061 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 5.300 ms - 89[0m
-[0mPOST /api/v1/notifications/bulk [32m200[0m 16.527 ms - 153[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 19.301 ms - 17855[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 44.299 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 36.166 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 48.726 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 14.953 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 8.423 ms - -[0m
-[0mGET /api/v1/dashboard/stats [36m304[0m 19.702 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.865 ms - -[0m
-[0mGET /api/v1/maintenance/overview [36m304[0m 2.336 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 4.887 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 4.924 ms - -[0m
-[0mPOST /api/v1/notifications/6050d392-8280-4247-bf66-62a960efc612/read [32m200[0m 28.933 ms - 1136[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 10.494 ms - 89[0m
-[0mPOST /api/v1/notifications/8e221b3d-283b-4988-9d7d-0af0f67eea7a/read [32m200[0m 22.964 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 13.495 ms - 89[0m
-[0mPOST /api/v1/notifications/525d1ef2-3dba-4a4b-8c77-aa7fbfd3fc71/read [32m200[0m 24.126 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 11.935 ms - 89[0m
-[0mPOST /api/v1/notifications/ea9353b2-bfe0-4be2-af76-9b87b6bf5b50/read [32m200[0m 29.408 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 5.205 ms - 89[0m
-[0mPOST /api/v1/notifications/58d2f17d-3be4-44f7-a5bc-96db2cabdca9/read [32m200[0m 24.075 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 10.672 ms - 89[0m
-[0mPOST /api/v1/notifications/8c0683c4-9d95-4c6d-ac6c-0fc9d124e7d6/read [32m200[0m 26.881 ms - 1134[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 10.537 ms - 89[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 5.846 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0&status=unread [32m200[0m 13.100 ms - 4876[0m
-[0mPOST /api/v1/notifications/0974e7f3-810b-4c43-9f1c-a44708c0a96a/read [32m200[0m 30.453 ms - 892[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 10.582 ms - 89[0m
-[0mPOST /api/v1/notifications/89f4aecf-54a0-47e2-8992-78003b151995/read [32m200[0m 23.470 ms - 941[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 10.225 ms - -[0m
-[0mPOST /api/v1/notifications/6bc65c73-ae97-4d33-b6ba-73d4cf471e4d/read [32m200[0m 23.230 ms - 895[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 11.693 ms - -[0m
-[0mPOST /api/v1/notifications/78b50f8d-ec29-4a8b-84c7-f7b99f85ffb5/read [32m200[0m 26.393 ms - 893[0m
-[0mGET /api/v1/notifications/unread-count [32m200[0m 10.541 ms - 89[0m
-[0mPOST /api/v1/notifications/bcfdcd5b-3b88-4a3a-a8b7-2e8bac7ea3dd/read [32m200[0m 24.430 ms - 946[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 10.424 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 10.340 ms - 18064[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 6.326 ms - -[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [36m304[0m 12.200 ms - -[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 6.881 ms - -[0m
-[0mDELETE /api/v1/notifications/e79642fe-5977-4526-8c5e-d8e986183420 [32m200[0m 548.636 ms - 62[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 6.645 ms - -[0m
-[0mDELETE /api/v1/notifications/79026626-b943-436e-8232-dd7711c9afcd [32m200[0m 33.011 ms - 62[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 5.161 ms - -[0m
-[0mPOST /api/v1/notifications/bulk [32m200[0m 334.994 ms - 143[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 42.718 ms - 12114[0m
-[0mPOST /api/v1/notifications/bulk [32m200[0m 340.151 ms - 143[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 9.951 ms - 10922[0m
-[0mPOST /api/v1/notifications/bulk [32m200[0m 566.183 ms - 143[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 8.958 ms - 9731[0m
-[0mDELETE /api/v1/notifications/525d1ef2-3dba-4a4b-8c77-aa7fbfd3fc71 [32m200[0m 424.998 ms - 62[0m
-[0mGET /api/v1/notifications/unread-count [36m304[0m 6.115 ms - -[0m
-[0mPOST /api/v1/notifications/bulk [32m200[0m 316.649 ms - 143[0m
-[0mGET /api/v1/notifications?limit=50&offset=0 [32m200[0m 9.672 ms - 7592[0m
+Node.js v18.19.1

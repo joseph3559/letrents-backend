@@ -80,8 +80,8 @@ export class TenantsService {
   private leasesService = new LeasesService();
 
   async createTenant(req: CreateTenantRequest, user: JWTClaims): Promise<any> {
-    // Validate user permissions
-    if (!['super_admin', 'agency_admin', 'landlord'].includes(user.role)) {
+    // Validate user permissions - agents can create tenants for their assigned properties
+    if (!['super_admin', 'agency_admin', 'landlord', 'agent'].includes(user.role)) {
       throw new Error('insufficient permissions to create tenants');
     }
 
@@ -110,6 +110,7 @@ export class TenantsService {
             },
           },
         },
+        // Include deposit_amount and deposit_months for flexible deposit calculation
       });
 
       if (!unit) {
@@ -117,7 +118,7 @@ export class TenantsService {
       }
 
       // Check if user has access to this unit's property
-      if (!this.hasPropertyAccess(unit.property, user)) {
+      if (!(await this.hasPropertyAccessAsync(unit.property, user))) {
         throw new Error('insufficient permissions to assign tenant to this unit');
       }
 
@@ -163,7 +164,11 @@ export class TenantsService {
         const leasesService = new LeasesService();
         
         const rentAmount = Number(unit.rent_amount) || 0;
-        const securityDeposit = rentAmount * 2; // 2 months security deposit
+        
+        // Security deposit calculation - configurable per unit/landlord
+        // Option 1: Use pre-configured deposit_amount from unit
+        // Option 2: Calculate based on deposit_months (flexible: 1, 2, 3+ months)
+        const securityDeposit = Number(unit.deposit_amount) || (rentAmount * (unit.deposit_months || 1));
         
         const leaseData = {
           tenant_id: tenant.id,
@@ -181,7 +186,7 @@ This lease agreement is automatically generated for the property unit ${unit.uni
 TERMS AND CONDITIONS:
 1. Rent is due on the 5th of each month
 2. Late fee of KES 500 applies after 5 days grace period
-3. Security deposit of KES ${securityDeposit} is required
+3. Security deposit of KES ${securityDeposit.toLocaleString()} (${unit.deposit_months || 1} month${(unit.deposit_months || 1) > 1 ? 's' : ''} rent) is required
 4. Tenant is responsible for utilities unless otherwise specified
 5. Property must be maintained in good condition
 6. No subletting without written permission
@@ -194,7 +199,8 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
         // Try to create lease - if this fails, we won't create payment or assign unit
         lease = await leasesService.createLease(leaseData, user);
         leaseId = lease.id;
-        console.log(`✅ Auto-generated lease agreement for tenant ${tenant.first_name} ${tenant.last_name} - Lease ID: ${lease.id} - Number: ${lease.lease_number}`);
+        console.log(`✅ Auto-generated lease agreement for tenant ${tenant.first_name} ${tenant.last_name}`);
+        console.log(`   Lease: ${lease.lease_number} | Rent: KES ${rentAmount} | Deposit: KES ${securityDeposit} (${unit.deposit_months || 1} month${(unit.deposit_months || 1) > 1 ? 's' : ''})`);
       } catch (leaseError: any) {
         console.error('❌ Failed to auto-generate lease:', leaseError);
         // If lease creation fails (e.g., duplicate lease number), don't continue with payment/assignment
@@ -239,37 +245,9 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
         // Don't fail tenant creation if profile creation fails
       }
 
-      // Create pending payment record for the first month's rent (ONLY if lease was created)
-      try {
-        const currentDate = new Date();
-        const paymentPeriod = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        
-        await this.prisma.payment.create({
-          data: {
-            company_id: user.company_id || unit.property.company_id,
-            tenant_id: tenant.id,
-            unit_id: req.unit_id,
-            property_id: unit.property.id,
-            lease_id: leaseId, // Link to the successfully created lease
-            amount: Number(unit.rent_amount) || 0,
-            currency: 'KES',
-            payment_method: 'cash', // Default method, will be updated when actual payment is made
-            payment_type: 'rent',
-            status: 'pending',
-            payment_date: new Date(),
-            payment_period: paymentPeriod,
-            receipt_number: `PENDING-${Date.now()}`,
-            received_from: `${tenant.first_name} ${tenant.last_name}`,
-            notes: 'Initial rent payment - pending after tenant onboarding',
-            created_by: user.user_id,
-          },
-        });
-
-        console.log(`✅ Created pending payment record for tenant ${tenant.first_name} ${tenant.last_name} - Amount: ${unit.rent_amount} KES`);
-      } catch (paymentError) {
-        console.error('❌ Failed to create pending payment record:', paymentError);
-        // Don't fail tenant creation if payment creation fails
-      }
+      // Note: Payment records are created when tenant actually submits payment
+      // Invoices are auto-generated by the lease creation (deposit + first rent)
+      // This keeps the payment flow clean: Invoice → Tenant Pays → Payment Record
     }
 
     // Send invitation email if requested (default is true)
@@ -409,8 +387,23 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       }
     });
 
-    // Calculate outstanding balance (sum of unpaid invoices)
-    const outstandingBalance = unpaidInvoices.reduce((sum, inv) => 
+    // Get pending payments (not yet approved)
+    const pendingPayments = await this.prisma.payment.findMany({
+      where: {
+        tenant_id: id,
+        status: 'pending' // Payments awaiting approval
+      },
+      select: {
+        id: true,
+        amount: true,
+        payment_date: true,
+      }
+    });
+
+    // Calculate outstanding balance
+    // Outstanding balance = Unpaid invoices (money owed)
+    // Note: Pending payments are claims awaiting approval - they don't change what's owed
+    let outstandingBalance = unpaidInvoices.reduce((sum, inv) => 
       sum + Number(inv.total_amount || 0), 0
     );
 
@@ -419,8 +412,14 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
     const hasOverdueInvoice = unpaidInvoices.some(inv => 
       inv.status === 'overdue' || new Date(inv.due_date) < now
     );
+    const hasPendingPayments = pendingPayments.length > 0;
+    
+    // Payment status logic:
+    // - overdue: Has at least one overdue invoice
+    // - pending: Has unpaid invoices OR payments awaiting approval
+    // - paid: All invoices paid and no pending payments
     const paymentStatus = hasOverdueInvoice ? 'overdue' : 
-                         (outstandingBalance > 0 ? 'pending' : 'paid');
+                         (outstandingBalance > 0 || hasPendingPayments ? 'pending' : 'paid');
 
     return {
       ...tenant,
@@ -739,39 +738,242 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
     const limit = Math.min(filters.limit || 20, 100);
     const offset = filters.offset || 0;
 
-    // Build where clause with company scoping
+    console.log('🔍 listTenants - User:', { role: user.role, company_id: user.company_id, agency_id: user.agency_id, user_id: user.user_id });
+
+    // Build where clause with STRICT role-based scoping
     const where: any = {
       role: 'tenant' as any,
     };
 
-    // Company scoping for non-super-admin users
-    if (user.role !== 'super_admin' && user.company_id) {
-      where.company_id = user.company_id;
+    // 🔒 CRITICAL: Role-based data isolation
+    if (user.role === 'super_admin') {
+      // Super admin sees all tenants - no filtering
+      console.log('✅ Super admin - no filtering');
+    } else if (user.role === 'agency_admin') {
+      // ⚠️ FIXED: Agency admin must ONLY see tenants from properties in THEIR AGENCY
+      console.log('🔍 Agency admin tenant filtering - user.agency_id:', user.agency_id, 'user.company_id:', user.company_id);
+      
+      if (!user.agency_id) {
+        console.error('❌ Agency admin has no agency_id! Cannot list tenants.');
+        console.log('👤 User details:', { role: user.role, user_id: user.user_id, email: user.email });
+        return { tenants: [], total: 0 };
+      }
+      
+      // Get all property IDs and unit IDs for this agency
+      const agencyProperties = await this.prisma.property.findMany({
+        where: { agency_id: user.agency_id },
+        select: { 
+          id: true,
+          name: true,
+          units: { select: { id: true, unit_number: true, current_tenant_id: true } },
+        },
+      });
+      
+      console.log(`📊 Found ${agencyProperties.length} properties for agency:`, agencyProperties.map(p => ({ id: p.id, name: p.name, units: p.units.length })));
+      
+      const propertyIds = agencyProperties.map(p => p.id);
+      const unitIds = agencyProperties.flatMap(p => p.units.map(u => u.id));
+      const directTenantIds = agencyProperties.flatMap(p => p.units.map(u => u.current_tenant_id)).filter(id => id !== null);
+      
+      console.log(`👥 Units with tenants:`, agencyProperties.flatMap(p => p.units.filter(u => u.current_tenant_id).map(u => ({ unit: u.unit_number, tenant_id: u.current_tenant_id }))));
+      
+      if (propertyIds.length === 0) {
+        console.log('⚠️ Agency admin has no properties - returning empty result');
+        return { tenants: [], total: 0 };
+      }
+      
+      // ✅ SIMPLIFIED: Just filter by tenant IDs found in units + leases
+      if (directTenantIds.length === 0 && propertyIds.length > 0) {
+        // Check if there are any leases for these properties
+        const leases = await this.prisma.lease.findMany({
+          where: { property_id: { in: propertyIds } },
+          select: { tenant_id: true },
+        });
+        const leaseTenantIds = [...new Set(leases.map(l => l.tenant_id))];
+        
+        if (leaseTenantIds.length === 0) {
+          console.log('⚠️ Agency admin has no tenants (no units occupied, no leases) - returning empty result');
+          return { tenants: [], total: 0 };
+        }
+        
+        where.id = { in: leaseTenantIds };
+        console.log('✅ Agency admin filter applied (leases only) - tenant_ids:', leaseTenantIds.length);
+      } else {
+        // Get additional tenant IDs from leases
+        const leases = await this.prisma.lease.findMany({
+          where: { property_id: { in: propertyIds } },
+          select: { tenant_id: true },
+        });
+        const leaseTenantIds = leases.map(l => l.tenant_id);
+        const allTenantIds = [...new Set([...directTenantIds, ...leaseTenantIds])];
+        
+        where.id = { in: allTenantIds };
+        console.log('✅ Agency admin filter applied - tenant_ids:', allTenantIds.length, '(from units:', directTenantIds.length, ', from leases:', leaseTenantIds.length, ')');
+      }
+    } else if (user.role === 'landlord') {
+      // ⚠️ FIXED: Landlord must ONLY see tenants from THEIR OWN properties
+      console.log('🔍 Landlord tenant filtering - user.user_id:', user.user_id, 'user.company_id:', user.company_id);
+      
+      const landlordProperties = await this.prisma.property.findMany({
+        where: { owner_id: user.user_id },
+        select: { 
+          id: true,
+          name: true,
+          units: { select: { id: true, unit_number: true, current_tenant_id: true } },
+        },
+      });
+      
+      console.log(`📊 Found ${landlordProperties.length} properties for landlord:`, landlordProperties.map(p => ({ id: p.id, name: p.name, units: p.units.length })));
+      
+      const propertyIds = landlordProperties.map(p => p.id);
+      const unitIds = landlordProperties.flatMap(p => p.units.map(u => u.id));
+      const directTenantIds = landlordProperties.flatMap(p => p.units.map(u => u.current_tenant_id)).filter(id => id !== null);
+      
+      console.log(`👥 Units with tenants:`, landlordProperties.flatMap(p => p.units.filter(u => u.current_tenant_id).map(u => ({ unit: u.unit_number, tenant_id: u.current_tenant_id }))));
+      
+      if (propertyIds.length === 0) {
+        console.log('⚠️ Landlord has no properties - returning empty result');
+        console.log('👤 User details:', { role: user.role, user_id: user.user_id, email: user.email });
+        return { tenants: [], total: 0 };
+      }
+      
+      // ✅ SIMPLIFIED: Just filter by tenant IDs found in units + leases
+      if (directTenantIds.length === 0 && propertyIds.length > 0) {
+        // Check if there are any leases for these properties
+        const leases = await this.prisma.lease.findMany({
+          where: { property_id: { in: propertyIds } },
+          select: { tenant_id: true },
+        });
+        const leaseTenantIds = [...new Set(leases.map(l => l.tenant_id))];
+        
+        if (leaseTenantIds.length === 0) {
+          console.log('⚠️ Landlord has no tenants (no units occupied, no leases) - returning empty result');
+          return { tenants: [], total: 0 };
+        }
+        
+        where.id = { in: leaseTenantIds };
+        console.log('✅ Landlord filter applied (leases only) - tenant_ids:', leaseTenantIds.length);
+      } else {
+        // Get additional tenant IDs from leases
+        const leases = await this.prisma.lease.findMany({
+          where: { property_id: { in: propertyIds } },
+          select: { tenant_id: true },
+        });
+        const leaseTenantIds = leases.map(l => l.tenant_id);
+        const allTenantIds = [...new Set([...directTenantIds, ...leaseTenantIds])];
+        
+        where.id = { in: allTenantIds };
+        console.log('✅ Landlord filter applied - tenant_ids:', allTenantIds.length, '(from units:', directTenantIds.length, ', from leases:', leaseTenantIds.length, ')');
+      }
+    } else if (user.role === 'agent') {
+      // ⚠️ FIXED: Agent must ONLY see tenants from properties they are ASSIGNED to
+      console.log('🔍 Agent tenant filtering - user.user_id:', user.user_id);
+      
+      const agentAssignments = await this.prisma.staffPropertyAssignment.findMany({
+        where: {
+          staff_id: user.user_id,
+          status: 'active',
+        },
+        select: { 
+          property_id: true,
+          property: {
+            select: {
+              name: true,
+              units: { select: { id: true, unit_number: true, current_tenant_id: true } },
+            },
+          },
+        },
+      });
+      
+      console.log(`📊 Agent assigned to ${agentAssignments.length} properties:`, agentAssignments.map(a => ({ name: a.property.name, units: a.property.units.length })));
+      
+      const propertyIds = agentAssignments.map(a => a.property_id);
+      const directTenantIds = agentAssignments.flatMap(a => a.property.units.map(u => u.current_tenant_id)).filter(id => id !== null);
+      
+      console.log(`👥 Units with tenants:`, agentAssignments.flatMap(a => a.property.units.filter(u => u.current_tenant_id).map(u => ({ unit: u.unit_number, tenant_id: u.current_tenant_id }))));
+      
+      if (propertyIds.length === 0) {
+        console.log('⚠️ Agent has no assigned properties - returning empty result');
+        return { tenants: [], total: 0 };
+      }
+      
+      // ✅ SIMPLIFIED: Just filter by tenant IDs found in units + leases
+      if (directTenantIds.length === 0 && propertyIds.length > 0) {
+        // Check if there are any leases for these properties
+        const leases = await this.prisma.lease.findMany({
+          where: { property_id: { in: propertyIds } },
+          select: { tenant_id: true },
+        });
+        const leaseTenantIds = [...new Set(leases.map(l => l.tenant_id))];
+        
+        if (leaseTenantIds.length === 0) {
+          console.log('⚠️ Agent has no tenants (no units occupied, no leases) - returning empty result');
+          return { tenants: [], total: 0 };
+        }
+        
+        where.id = { in: leaseTenantIds };
+        console.log('✅ Agent filter applied (leases only) - tenant_ids:', leaseTenantIds.length);
+      } else {
+        // Get additional tenant IDs from leases
+        const leases = await this.prisma.lease.findMany({
+          where: { property_id: { in: propertyIds } },
+          select: { tenant_id: true },
+        });
+        const leaseTenantIds = leases.map(l => l.tenant_id);
+        const allTenantIds = [...new Set([...directTenantIds, ...leaseTenantIds])];
+        
+        where.id = { in: allTenantIds };
+        console.log('✅ Agent filter applied - tenant_ids:', allTenantIds.length, '(from units:', directTenantIds.length, ', from leases:', leaseTenantIds.length, ')');
+      }
+    } else {
+      // ⚠️ Other roles should not access tenant list
+      console.error('❌ Unauthorized role accessing tenant list:', user.role);
+      throw new Error('insufficient permissions to list tenants');
     }
 
-    // Apply filters
+    // Apply additional filters
     if (filters.status) where.status = filters.status;
 
-    // Property/Unit filtering
+    // Property/Unit filtering (additional to role-based filtering)
     if (filters.property_id || filters.unit_id) {
-      where.assigned_units = {};
-      if (filters.unit_id) {
-        where.assigned_units.id = filters.unit_id;
-      }
-      if (filters.property_id) {
-        where.assigned_units.property_id = filters.property_id;
+      // Add filters to existing OR conditions
+      if (where.OR && Array.isArray(where.OR)) {
+        where.OR = where.OR.map((condition: any) => {
+          if (condition.tenant_leases?.some) {
+            if (filters.property_id) condition.tenant_leases.some.property_id = filters.property_id;
+            if (filters.unit_id) condition.tenant_leases.some.unit_id = filters.unit_id;
+          }
+          if (condition.assigned_units?.some) {
+            if (filters.property_id) condition.assigned_units.some.property_id = filters.property_id;
+            if (filters.unit_id) condition.assigned_units.some.id = filters.unit_id;
+          }
+          return condition;
+        });
       }
     }
 
     // Search query
     if (filters.search_query) {
-      where.OR = [
+      const searchConditions = [
         { first_name: { contains: filters.search_query, mode: 'insensitive' } },
         { last_name: { contains: filters.search_query, mode: 'insensitive' } },
         { email: { contains: filters.search_query, mode: 'insensitive' } },
         { phone_number: { contains: filters.search_query, mode: 'insensitive' } },
       ];
+      
+      // If OR conditions exist (from role-based filtering), merge with AND logic
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchConditions },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
+
+    console.log('📊 Final whereClause:', JSON.stringify(where, null, 2));
 
     // Build order by clause
     const orderBy: any = {};
@@ -1087,7 +1289,7 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
     }
 
     // Check property access
-    if (!this.hasPropertyAccess(unit.property, user)) {
+    if (!(await this.hasPropertyAccessAsync(unit.property, user))) {
       throw new Error('insufficient permissions to assign tenant to this unit');
     }
 
@@ -1274,7 +1476,7 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
     }
 
     // Check property access
-    if (!this.hasPropertyAccess(currentUnit.property, user)) {
+    if (!(await this.hasPropertyAccessAsync(currentUnit.property, user))) {
       throw new Error('insufficient permissions to release tenant from this unit');
     }
 
@@ -1477,8 +1679,8 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
   }
 
   async sendInvitation(tenantId: string, user: JWTClaims): Promise<void> {
-    // Check permissions
-    if (!['super_admin', 'agency_admin', 'landlord'].includes(user.role)) {
+    // Check permissions - agents can send invitations for their assigned properties
+    if (!['super_admin', 'agency_admin', 'landlord', 'agent'].includes(user.role)) {
       throw new Error('insufficient permissions to send tenant invitations');
     }
 
@@ -1508,43 +1710,168 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
       
       const emailResult = await emailService.sendEmail({
         to: tenant.email!,
-        subject: 'Welcome to LetRents - Complete Your Tenant Setup',
+        subject: '🏠 Welcome to LetRents - Complete Your Tenant Setup',
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Welcome to LetRents!</h2>
-            
-            <p>Hello ${tenant.first_name} ${tenant.last_name},</p>
-            
-            <p>You've been invited to join LetRents as a tenant. Please complete your account setup to access your tenant portal.</p>
-            
-            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #374151;">What you can do with your tenant portal:</h3>
-              <ul style="color: #6b7280;">
-                <li>View your lease information</li>
-                <li>Submit maintenance requests</li>
-                <li>Make rent payments online</li>
-                <li>View payment history</li>
-                <li>Communicate with property management</li>
-              </ul>
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${invitationLink}" 
-                 style="background-color: #2563eb; color: white; padding: 12px 24px; 
-                        text-decoration: none; border-radius: 6px; display: inline-block;">
-                Complete Account Setup
-              </a>
-            </div>
-            
-            <p style="color: #6b7280; font-size: 14px;">
-              If you have any questions, please contact your property management team.
-            </p>
-            
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-            <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-              This email was sent by LetRents Property Management System
-            </p>
-          </div>
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Welcome to LetRents</title>
+          </head>
+          <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f8fafc; line-height: 1.6;">
+            <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f8fafc;">
+              <tr>
+                <td align="center" style="padding: 40px 20px;">
+                  <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); overflow: hidden;">
+                    
+                    <!-- Header with gradient background -->
+                    <tr>
+                      <td style="background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); padding: 40px 30px; text-align: center;">
+                        <div style="background-color: rgba(255, 255, 255, 0.15); width: 80px; height: 80px; border-radius: 20px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                          <span style="font-size: 40px; color: #ffffff;">🏠</span>
+                        </div>
+                        <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Welcome to LetRents!</h1>
+                        <p style="margin: 10px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 16px; font-weight: 400;">Your Modern Property Management Portal</p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Main Content -->
+                    <tr>
+                      <td style="padding: 40px 30px;">
+                        <div style="margin-bottom: 30px;">
+                          <h2 style="margin: 0 0 15px; color: #1e293b; font-size: 20px; font-weight: 600;">Hello ${tenant.first_name} ${tenant.last_name},</h2>
+                          <p style="margin: 0 0 15px; color: #475569; font-size: 16px; line-height: 1.6;">
+                            🎉 Congratulations! You've been invited to join LetRents as a tenant. We're excited to have you on board!
+                          </p>
+                          <p style="margin: 0; color: #475569; font-size: 16px; line-height: 1.6;">
+                            Complete your account setup to unlock access to your personalized tenant portal and enjoy a seamless rental experience.
+                          </p>
+                        </div>
+                        
+                        <!-- Call to Action Button -->
+                        <div style="text-align: center; margin: 35px 0;">
+                          <a href="${invitationLink}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); transition: transform 0.2s;">
+                            ✨ Complete Account Setup
+                          </a>
+                          <p style="margin: 15px 0 0; color: #94a3b8; font-size: 13px;">
+                            Click the button above to get started
+                          </p>
+                        </div>
+                        
+                        <!-- Features Section -->
+                        <div style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); padding: 30px; border-radius: 12px; margin: 30px 0;">
+                          <h3 style="margin: 0 0 20px; color: #1e293b; font-size: 18px; font-weight: 600; text-align: center;">
+                            🚀 What You Can Do with Your Portal
+                          </h3>
+                          <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                              <td style="padding: 10px 0;">
+                                <div style="display: flex; align-items: flex-start;">
+                                  <span style="font-size: 20px; margin-right: 12px;">📋</span>
+                                  <div>
+                                    <strong style="color: #334155; font-size: 15px; display: block; margin-bottom: 3px;">View Lease Details</strong>
+                                    <span style="color: #64748b; font-size: 14px;">Access your lease agreement and important dates</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding: 10px 0;">
+                                <div style="display: flex; align-items: flex-start;">
+                                  <span style="font-size: 20px; margin-right: 12px;">🔧</span>
+                                  <div>
+                                    <strong style="color: #334155; font-size: 15px; display: block; margin-bottom: 3px;">Submit Maintenance Requests</strong>
+                                    <span style="color: #64748b; font-size: 14px;">Report issues and track repair progress in real-time</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding: 10px 0;">
+                                <div style="display: flex; align-items: flex-start;">
+                                  <span style="font-size: 20px; margin-right: 12px;">💳</span>
+                                  <div>
+                                    <strong style="color: #334155; font-size: 15px; display: block; margin-bottom: 3px;">Make Online Payments</strong>
+                                    <span style="color: #64748b; font-size: 14px;">Pay rent securely via M-Pesa or bank transfer</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding: 10px 0;">
+                                <div style="display: flex; align-items: flex-start;">
+                                  <span style="font-size: 20px; margin-right: 12px;">📊</span>
+                                  <div>
+                                    <strong style="color: #334155; font-size: 15px; display: block; margin-bottom: 3px;">Track Payment History</strong>
+                                    <span style="color: #64748b; font-size: 14px;">View invoices, receipts, and payment records</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding: 10px 0;">
+                                <div style="display: flex; align-items: flex-start;">
+                                  <span style="font-size: 20px; margin-right: 12px;">💬</span>
+                                  <div>
+                                    <strong style="color: #334155; font-size: 15px; display: block; margin-bottom: 3px;">Communicate Easily</strong>
+                                    <span style="color: #64748b; font-size: 14px;">Chat directly with your property management team</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </table>
+                        </div>
+                        
+                        <!-- Next Steps -->
+                        <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px; margin: 25px 0;">
+                          <h4 style="margin: 0 0 10px; color: #92400e; font-size: 16px; font-weight: 600;">📌 Next Steps:</h4>
+                          <ol style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px; line-height: 1.8;">
+                            <li>Click the "Complete Account Setup" button above</li>
+                            <li>Create your secure password</li>
+                            <li>Verify your email address</li>
+                            <li>Explore your tenant dashboard</li>
+                            <li>Review your lease and payment details</li>
+                          </ol>
+                        </div>
+                        
+                        <!-- Help Section -->
+                        <div style="text-align: center; margin: 30px 0 0; padding-top: 25px; border-top: 2px solid #e2e8f0;">
+                          <p style="margin: 0 0 10px; color: #64748b; font-size: 14px;">
+                            Need help? Have questions?
+                          </p>
+                          <p style="margin: 0; color: #475569; font-size: 15px; font-weight: 500;">
+                            📧 Contact your property management team anytime
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                      <td style="background-color: #f8fafc; padding: 25px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
+                        <p style="margin: 0 0 8px; color: #64748b; font-size: 13px; line-height: 1.5;">
+                          Welcome to hassle-free property management! 🎊
+                        </p>
+                        <p style="margin: 0 0 15px; color: #94a3b8; font-size: 12px;">
+                          This email was sent by LetRents Property Management System
+                        </p>
+                        <div style="margin: 15px 0 0;">
+                          <span style="color: #cbd5e1; font-size: 12px;">© ${new Date().getFullYear()} LetRents. All rights reserved.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                  
+                  <!-- Email client hint -->
+                  <p style="margin: 20px 0 0; color: #94a3b8; font-size: 12px; text-align: center; max-width: 600px;">
+                    💡 <strong>Tip:</strong> Add noreply@letrents.com to your contacts to ensure you receive future updates.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </body>
+          </html>
         `,
         text: `
 Welcome to LetRents!
@@ -1710,7 +2037,7 @@ If you have any questions, please contact your property management team.
     }
 
     // Check property access
-    if (!this.hasPropertyAccess(newUnit.property, user)) {
+    if (!(await this.hasPropertyAccessAsync(newUnit.property, user))) {
       throw new Error('insufficient permissions to access this property');
     }
 
@@ -2008,6 +2335,47 @@ If you have any questions, please contact your property management team.
 
     // Agency admin can access properties from their agency
     if (user.role === 'agency_admin' && user.agency_id && property.agency_id === user.agency_id) return true;
+
+    return false;
+  }
+
+  private async hasPropertyAccessAsync(property: any, user: JWTClaims): Promise<boolean> {
+    // Super admin has access to all properties
+    if (user.role === 'super_admin') return true;
+
+    // Company scoping - user can only access properties from their company
+    if (user.company_id && property.company_id === user.company_id) {
+      // For agents, also check if they're assigned to this specific property
+      if (user.role === 'agent') {
+        const assignment = await this.prisma.staffPropertyAssignment.findFirst({
+          where: {
+            staff_id: user.user_id,
+            property_id: property.id,
+            status: 'active',
+          },
+        });
+        return !!assignment;
+      }
+      return true;
+    }
+
+    // Owner can access their own properties
+    if (property.owner_id === user.user_id) return true;
+
+    // Agency admin can access properties from their agency
+    if (user.role === 'agency_admin' && user.agency_id && property.agency_id === user.agency_id) return true;
+
+    // Agent: Check if assigned to this property
+    if (user.role === 'agent') {
+      const assignment = await this.prisma.staffPropertyAssignment.findFirst({
+        where: {
+          staff_id: user.user_id,
+          property_id: property.id,
+          status: 'active',
+        },
+      });
+      return !!assignment;
+    }
 
     return false;
   }

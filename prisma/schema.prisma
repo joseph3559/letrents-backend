@@ -403,6 +403,7 @@ model Property {
   leases               Lease[]                   @relation("LeaseProperty")
   maintenance_requests MaintenanceRequest[]
   mpesa_transactions   MpesaTransaction[]        @relation("MpesaProperty")
+  notifications        Notification[]            @relation("NotificationProperty")
   payments             Payment[]                 @relation("PaymentProperty")
   agency               Agency?                   @relation(fields: [agency_id], references: [id])
   company              Company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -461,6 +462,7 @@ model Unit {
   leases                Lease[]              @relation("LeaseUnit")
   maintenance_requests  MaintenanceRequest[]
   mpesa_transactions    MpesaTransaction[]   @relation("MpesaUnit")
+  notifications         Notification[]       @relation("NotificationUnit")
   payments              Payment[]            @relation("PaymentUnit")
   tasks                 Task[]               @relation("TaskUnit")
   tenant_profiles       TenantProfile[]      @relation("TenantCurrentUnit")
@@ -574,6 +576,8 @@ model Notification {
   company_id          String             @db.Uuid
   sender_id           String?            @db.Uuid
   recipient_id        String             @db.Uuid
+  property_id         String?            @db.Uuid
+  unit_id             String?            @db.Uuid
   title               String             @db.VarChar(255)
   message             String
   notification_type   String             @db.VarChar(50)
@@ -594,6 +598,8 @@ model Notification {
   company             Company            @relation(fields: [company_id], references: [id], onDelete: Cascade)
   recipient           User               @relation("NotificationRecipient", fields: [recipient_id], references: [id], onDelete: Cascade)
   sender              User?              @relation("NotificationSender", fields: [sender_id], references: [id])
+  property            Property?          @relation("NotificationProperty", fields: [property_id], references: [id], onDelete: Cascade)
+  unit                Unit?              @relation("NotificationUnit", fields: [unit_id], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }

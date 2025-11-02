@@ -94,7 +94,12 @@ export function buildWhereClause(user: JWTClaims, additionalFilters: any = {}, m
   }
 
   // Apply agency scoping
-  if (roleFilters.agencyId) {
+  // ⚠️ IMPORTANT: Many models don't have agency_id field
+  // Only apply agency_id filter for models that actually have this field
+  // Models WITHOUT agency_id: user, maintenance, lease, payment, invoice, unit, tenant_profile
+  // Models WITH agency_id: property (in some cases), company
+  const modelsWithoutAgencyId = ['user', 'maintenance', 'lease', 'payment', 'invoice', 'unit', 'tenant_profile'];
+  if (roleFilters.agencyId && !modelsWithoutAgencyId.includes(modelType)) {
     whereClause.agency_id = roleFilters.agencyId;
   }
 

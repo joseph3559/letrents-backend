@@ -258,11 +258,14 @@ export function parseInvoiceNumber(invoiceNumber: string): {
 /**
  * Get the next invoice number for a company
  * This queries the database to find the latest invoice for the current month
+ * 
+ * @param attempt - Retry attempt number (used for collision handling)
  */
 export async function getNextInvoiceNumber(
   prisma: any,
   companyId: string,
-  propertyCode?: string
+  propertyCode?: string,
+  attempt: number = 0
 ): Promise<string> {
   const now = new Date();
   const year = now.getFullYear();
@@ -296,12 +299,33 @@ export async function getNextInvoiceNumber(
     }
   }
   
-  return generateInvoiceNumber(sequenceNumber, {
+  // Add attempt offset to handle concurrent requests
+  if (attempt > 0) {
+    sequenceNumber += attempt;
+  }
+  
+  const invoiceNumber = generateInvoiceNumber(sequenceNumber, {
     companyId,
     propertyCode,
     year,
     month,
   });
+  
+  // ✅ Check if this invoice number already exists
+  const existing = await prisma.invoice.findFirst({
+    where: {
+      company_id: companyId,
+      invoice_number: invoiceNumber,
+    },
+  });
+  
+  // If invoice number exists and we haven't exceeded retry limit, try again
+  if (existing && attempt < 10) {
+    console.log(`⚠️ Invoice number collision detected: ${invoiceNumber}, retrying (attempt ${attempt + 1}/10)...`);
+    return getNextInvoiceNumber(prisma, companyId, propertyCode, attempt + 1);
+  }
+  
+  return invoiceNumber;
 }
 
 /**

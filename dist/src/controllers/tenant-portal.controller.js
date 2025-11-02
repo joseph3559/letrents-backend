@@ -851,10 +851,78 @@ export const createMaintenanceRequest = async (req, res) => {
                 requested_date: new Date()
             },
             include: {
-                property: true,
-                unit: true
+                property: {
+                    select: {
+                        id: true,
+                        name: true,
+                        owner_id: true
+                    }
+                },
+                unit: {
+                    select: {
+                        id: true,
+                        unit_number: true
+                    }
+                },
+                requester: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true
+                    }
+                }
             }
         });
+        // ✅ Create notification for landlord/property owner
+        try {
+            const notificationMessage = `New maintenance request from ${maintenanceRequest.requester?.first_name} ${maintenanceRequest.requester?.last_name}\n\nProperty: ${maintenanceRequest.property?.name}\nUnit: ${maintenanceRequest.unit?.unit_number}\nCategory: ${category}\nPriority: ${priority || 'medium'}\n\nTitle: ${title}\n\nDescription: ${description}`;
+            await notificationsService.createNotification(user, {
+                company_id: user.company_id,
+                sender_id: user.user_id,
+                recipient_id: maintenanceRequest.property?.owner_id,
+                notification_type: 'maintenance_request',
+                title: `New Maintenance Request - ${category}`,
+                message: notificationMessage,
+                priority: priority === 'urgent' ? 'high' : priority === 'high' ? 'high' : 'medium',
+                category: 'maintenance',
+                action_required: true,
+                action_url: `/landlord/maintenance/${maintenanceRequest.id}`,
+                property_id: targetPropertyId,
+                unit_id: targetUnitId,
+                metadata: {
+                    maintenance_request_id: maintenanceRequest.id,
+                    category,
+                    priority: priority || 'medium',
+                    tenant_id: user.user_id,
+                    tenant_name: `${maintenanceRequest.requester?.first_name} ${maintenanceRequest.requester?.last_name}`,
+                    property_id: targetPropertyId,
+                    unit_id: targetUnitId
+                }
+            });
+            // ✅ Also create a confirmation notification for the tenant
+            await notificationsService.createNotification(user, {
+                company_id: user.company_id,
+                sender_id: user.user_id,
+                recipient_id: user.user_id,
+                notification_type: 'maintenance_submitted',
+                title: 'Maintenance Request Submitted',
+                message: `Your maintenance request for "${title}" has been submitted successfully. Your landlord will review your request and respond shortly.`,
+                priority: 'medium',
+                category: 'maintenance',
+                action_required: false,
+                action_url: `/tenant/maintenance/${maintenanceRequest.id}`,
+                metadata: {
+                    maintenance_request_id: maintenanceRequest.id,
+                    category,
+                    priority: priority || 'medium'
+                }
+            });
+        }
+        catch (notificationError) {
+            console.error('❌ Error creating notifications:', notificationError);
+            // Don't fail the request if notification creation fails
+        }
         res.status(201).json({
             success: true,
             message: 'Maintenance request created successfully',
