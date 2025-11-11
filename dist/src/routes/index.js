@@ -122,14 +122,7 @@ router.get('/revenue/dashboard', requireAuth, requireSuperAdmin, async (req, res
     const { getRevenueDashboard } = await import('../controllers/super-admin.controller.js');
     await getRevenueDashboard(req, res);
 });
-router.get('/agencies', requireAuth, requireSuperAdmin, async (req, res) => {
-    const { getAgencyManagement } = await import('../controllers/super-admin.controller.js');
-    await getAgencyManagement(req, res);
-});
-router.get('/agencies/performance', requireAuth, requireSuperAdmin, async (req, res) => {
-    const { getAgencyPerformance } = await import('../controllers/super-admin.controller.js');
-    await getAgencyPerformance(req, res);
-});
+// Removed duplicate /agencies routes - they're now in /super-admin/agencies
 // Additional missing endpoints
 // Test endpoint for user metrics
 router.get('/test-user-metrics', (req, res) => {
@@ -265,6 +258,11 @@ router.get('/messaging/broadcasts', requireAuth, requireSuperAdmin, async (req, 
 router.get('/system/settings', requireAuth, requireSuperAdmin, async (req, res) => {
     const { getSystemSettings } = await import('../controllers/super-admin.controller.js');
     await getSystemSettings(req, res);
+});
+// Debug logging for super-admin routes
+router.use('/super-admin', (req, res, next) => {
+    console.log(`📍 Main router /super-admin: ${req.method} ${req.path}`);
+    next();
 });
 // Full super-admin routes
 router.use('/super-admin', superAdmin);

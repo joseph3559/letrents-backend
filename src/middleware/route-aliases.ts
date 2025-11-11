@@ -13,32 +13,8 @@ interface RouteAlias {
 
 // Define route aliases for backward compatibility
 const routeAliases: RouteAlias[] = [
-  // Super Admin aliases
-  {
-    pattern: /^\/super-admin\/dashboard$/,
-    replacement: '/dashboard',
-    description: 'Super admin dashboard → unified dashboard'
-  },
-  {
-    pattern: /^\/super-admin\/users$/,
-    replacement: '/users',
-    description: 'Super admin users → unified users'
-  },
-  {
-    pattern: /^\/super-admin\/agencies$/,
-    replacement: '/agencies',
-    description: 'Super admin agencies → unified agencies'
-  },
-  {
-    pattern: /^\/super-admin\/properties$/,
-    replacement: '/properties',
-    description: 'Super admin properties → unified properties'
-  },
-  {
-    pattern: /^\/super-admin\/reports\/(.+)$/,
-    replacement: '/reports/$1',
-    description: 'Super admin reports → unified reports'
-  },
+  // NOTE: Super Admin routes should NOT be aliased - they go through the super-admin router
+  // Removed super-admin aliases to prevent conflicts with the super-admin router
 
   // Agency Admin aliases
   {
@@ -134,12 +110,8 @@ const routeAliases: RouteAlias[] = [
     description: 'Landlord reports → unified reports'
   },
 
-  // Generic patterns for nested routes
-  {
-    pattern: /^\/super-admin\/(.+)$/,
-    replacement: '/$1',
-    description: 'Generic super admin routes → unified routes'
-  },
+  // NOTE: Generic super-admin pattern removed - super-admin routes should go through the super-admin router
+  // Do NOT alias super-admin routes as they have their own router with authentication
   {
     pattern: /^\/agency-admin\/(.+)$/,
     replacement: '/$1',

@@ -98,6 +98,12 @@ try {
 	}
 } catch (_) {}
 
+// Debug logging
+app.use('/api/v1', (req, res, next) => {
+	console.log(`🌍 App.ts /api/v1: ${req.method} ${req.path}`);
+	next();
+});
+
 // API routes
 app.use('/api/v1', routes);
 

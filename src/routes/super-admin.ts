@@ -10,6 +10,7 @@ import {
   updateSystemSettings,
   getSecurityLogs,
   getUserManagement,
+  getUserById,
   createUser,
   updateUser,
   deleteUser,
@@ -18,9 +19,19 @@ import {
   updateCompany,
   deleteCompany,
   getAgencyManagement,
+  getAgencyById,
+  getAgencyProperties,
+  getAgencyUnits,
   createAgency,
   updateAgency,
-  deleteAgency
+  deleteAgency,
+  activateEntity,
+  deactivateEntity,
+  suspendEntity,
+  sendInvitation,
+  getEntitySubscription,
+  updateEntitySubscription,
+  getAgencyBilling
 } from '../controllers/super-admin.controller.js';
 
 const router = Router();
@@ -34,6 +45,12 @@ const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
 	}
 	return next();
 };
+
+// Logging middleware for debugging
+router.use((req, res, next) => {
+	console.log(`🔍 Super-admin router: ${req.method} ${req.path}`);
+	next();
+});
 
 // All super-admin routes require authentication and super_admin role
 router.use(requireAuth);
@@ -55,6 +72,7 @@ router.get('/security-logs', getSecurityLogs);
 
 // User Management
 router.get('/users', getUserManagement);
+router.get('/users/:id', getUserById);
 router.post('/users', createUser);
 router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
@@ -67,8 +85,26 @@ router.delete('/companies/:id', deleteCompany);
 
 // Agency Management
 router.get('/agencies', getAgencyManagement);
+router.get('/agencies/:id', getAgencyById);
+router.get('/agencies/:id/properties', getAgencyProperties);
+router.get('/agencies/:id/units', getAgencyUnits);
 router.post('/agencies', createAgency);
 router.put('/agencies/:id', updateAgency);
 router.delete('/agencies/:id', deleteAgency);
+
+// Entity Status Management (works for users, companies, and agencies)
+router.post('/entities/:entityType/:entityId/activate', activateEntity);
+router.post('/entities/:entityType/:entityId/deactivate', deactivateEntity);
+router.post('/entities/:entityType/:entityId/suspend', suspendEntity);
+
+// Invitation Management
+router.post('/entities/:entityType/:entityId/invite', sendInvitation);
+
+// Subscription Management
+router.get('/entities/:entityType/:entityId/subscription', getEntitySubscription);
+router.put('/entities/:entityType/:entityId/subscription', updateEntitySubscription);
+
+// Billing Management
+router.get('/billing/agencies', getAgencyBilling);
 
 export default router;

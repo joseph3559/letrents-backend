@@ -11,6 +11,17 @@ export class PropertiesService {
         if (user.role !== 'super_admin' && !companyId) {
             throw new Error('user must be associated with a company');
         }
+        // CRITICAL: For agency_admin, automatically set agency_id from user's JWT claims
+        // This ensures properties created by agency_admin are associated with their agency
+        // and will be visible when listing properties (which filters by agency_id)
+        let agencyId = req.agency_id;
+        if (user.role === 'agency_admin') {
+            if (!user.agency_id) {
+                throw new Error('agency_admin must be associated with an agency to create properties');
+            }
+            agencyId = user.agency_id; // Override with user's agency_id
+            console.log('✅ Agency admin creating property - using agency_id from JWT:', user.agency_id);
+        }
         // Create property
         const property = await this.prisma.property.create({
             data: {
@@ -26,7 +37,7 @@ export class PropertiesService {
                 longitude: req.longitude,
                 ownership_type: req.ownership_type,
                 owner_id: req.owner_id,
-                agency_id: req.agency_id,
+                agency_id: agencyId, // Use the agency_id (from JWT for agency_admin, or from request for others)
                 company_id: companyId,
                 number_of_units: req.number_of_units,
                 number_of_blocks: req.number_of_blocks,
@@ -40,6 +51,14 @@ export class PropertiesService {
                 status: 'active',
                 created_by: user.user_id,
             },
+        });
+        console.log('✅ Property created successfully:', {
+            id: property.id,
+            name: property.name,
+            agency_id: property.agency_id,
+            company_id: property.company_id,
+            created_by: user.user_id,
+            creator_role: user.role
         });
         return property;
     }

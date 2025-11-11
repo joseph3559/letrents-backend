@@ -73,11 +73,15 @@ export class AuthService {
                         updated_at: new Date(),
                     },
                 });
+                // Fetch the user with updated agency_id if it was set during registration
+                const userWithAgency = await this.prisma.user.findUnique({
+                    where: { id: updatedUser.id },
+                });
                 // Auto-login the updated user
                 const sessionId = crypto.randomUUID();
-                const { token, expiresAt } = this.generateJwt(updatedUser, sessionId);
-                const refresh = await this.createRefreshToken(updatedUser.id, undefined, undefined, undefined, env.security.sessionTimeoutHours);
-                return { token, refresh_token: refresh.token, user: updatedUser, expires_at: expiresAt };
+                const { token, expiresAt } = this.generateJwt(userWithAgency || updatedUser, sessionId);
+                const refresh = await this.createRefreshToken((userWithAgency || updatedUser).id, undefined, undefined, undefined, env.security.sessionTimeoutHours);
+                return { token, refresh_token: refresh.token, user: userWithAgency || updatedUser, expires_at: expiresAt };
             }
             else if (existingTenant) {
                 // Tenant exists but doesn't match criteria
@@ -104,8 +108,24 @@ export class AuthService {
         }
         const password_hash = payload.password ? await bcrypt.hash(payload.password, 10) : null;
         let company_id = null;
-        if (role === 'landlord' || role === 'agency_admin') {
-            const companyName = payload.company_name || `${payload.first_name} ${payload.last_name} ${role === 'agency_admin' ? 'Agency' : 'Properties'}`;
+        let agency_id = null;
+        if (role === 'landlord' || role === 'agency_admin' || role === 'super_admin') {
+            let companyName;
+            let maxProps = 100;
+            let maxUnits = 1000;
+            let subscriptionPlan = 'starter';
+            if (role === 'super_admin') {
+                companyName = payload.company_name || 'LetRents Platform';
+                maxProps = 999999; // Unlimited for super admin
+                maxUnits = 999999;
+                subscriptionPlan = 'enterprise';
+            }
+            else if (role === 'agency_admin') {
+                companyName = payload.company_name || `${payload.first_name} ${payload.last_name} Agency`;
+            }
+            else {
+                companyName = payload.company_name || `${payload.first_name} ${payload.last_name} Properties`;
+            }
             const existingCompany = await this.prisma.company.findFirst({ where: { name: companyName } }).catch(() => null);
             if (existingCompany) {
                 company_id = existingCompany.id;
@@ -117,11 +137,11 @@ export class AuthService {
                         business_type: payload.business_type || 'property_management',
                         country: 'Kenya',
                         industry: 'Property Management',
-                        company_size: 'small',
-                        status: 'active',
-                        subscription_plan: 'starter',
-                        max_properties: 100,
-                        max_units: 1000,
+                        company_size: role === 'super_admin' ? 'enterprise' : 'small',
+                        status: 'pending', // Changed from 'active' to 'pending' as per user request
+                        subscription_plan: subscriptionPlan,
+                        max_properties: maxProps,
+                        max_units: maxUnits,
                         max_tenants: 1000,
                         max_staff: 50,
                     },
@@ -129,6 +149,7 @@ export class AuthService {
                 company_id = company.id;
             }
         }
+        // Create user first (without agency_id for agency_admin, we'll update it after creating the agency)
         const user = await this.prisma.user.create({
             data: {
                 email: payload.email,
@@ -140,8 +161,45 @@ export class AuthService {
                 status: env.security.requireEmailVerification ? 'pending' : 'active',
                 email_verified: !env.security.requireEmailVerification,
                 company_id: company_id || undefined,
+                agency_id: agency_id || undefined, // Will be set below for agency_admin
             },
         });
+        // For agency_admin, create an agency and assign it to the user
+        if (role === 'agency_admin' && company_id) {
+            // Check if agency with this email already exists
+            const existingAgency = await this.prisma.agency.findUnique({
+                where: { email: payload.email }
+            }).catch(() => null);
+            if (!existingAgency) {
+                // Create the agency with the user as creator
+                const agency = await this.prisma.agency.create({
+                    data: {
+                        company_id: company_id,
+                        name: payload.company_name || `${payload.first_name} ${payload.last_name} Agency`,
+                        email: payload.email,
+                        phone_number: payload.phone_number || undefined,
+                        address: undefined, // Can be set later
+                        status: 'pending', // Set to 'pending' as per user request
+                        created_by: user.id,
+                    },
+                });
+                // Update the user with the agency_id
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { agency_id: agency.id },
+                });
+                // Update the user object for response
+                user.agency_id = agency.id;
+            }
+            else {
+                // Agency already exists, assign it to the user
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { agency_id: existingAgency.id },
+                });
+                user.agency_id = existingAgency.id;
+            }
+        }
         if (env.security.requireEmailVerification && payload.email) {
             // create email verification token
             const raw = crypto.randomBytes(32).toString('hex');
@@ -178,13 +236,21 @@ export class AuthService {
                 console.log(`🔗 Verification URL: ${verificationUrl}`);
                 console.log('👆 Click this link to verify the account\n');
             }
-            return { user, requires_mfa: true, mfa_methods: ['email'] };
+            // Fetch the user with agency_id if it was set (for agency_admin)
+            const userWithAgency = await this.prisma.user.findUnique({
+                where: { id: user.id },
+            });
+            return { user: userWithAgency || user, requires_mfa: true, mfa_methods: ['email'] };
         }
+        // Fetch the updated user with agency_id (if it was set for agency_admin)
+        const updatedUser = await this.prisma.user.findUnique({
+            where: { id: user.id },
+        });
         // autologin path (no email verification required)
         const sessionId = crypto.randomUUID();
-        const { token, expiresAt } = this.generateJwt(user, sessionId);
-        const refresh = await this.createRefreshToken(user.id, undefined, undefined, undefined, env.security.sessionTimeoutHours);
-        return { token, refresh_token: refresh.token, user, expires_at: expiresAt };
+        const { token, expiresAt } = this.generateJwt(updatedUser || user, sessionId);
+        const refresh = await this.createRefreshToken((updatedUser || user).id, undefined, undefined, undefined, env.security.sessionTimeoutHours);
+        return { token, refresh_token: refresh.token, user: updatedUser || user, expires_at: expiresAt };
     }
     async verifyEmail(token) {
         const tokenHash = this.hashToken(token);
