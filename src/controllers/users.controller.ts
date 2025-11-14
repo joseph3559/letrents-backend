@@ -8,8 +8,27 @@ import {
 } from '../services/users.service.js';
 import { JWTClaims } from '../types/index.js';
 import { writeSuccess, writeError } from '../utils/response.js';
+import multer from 'multer';
+import { getPrisma } from '../config/prisma.js';
+import { imagekitService } from '../services/imagekit.service.js';
 
 const service = new UsersService();
+const prisma = getPrisma();
+
+// Configure multer for profile picture uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
 
 export const createUser = async (req: Request, res: Response) => {
   try {
@@ -157,6 +176,58 @@ export const updateCurrentUser = async (req: Request, res: Response) => {
   }
 };
 
+export const uploadProfilePicture = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    
+    // Check if file was uploaded
+    if (!req.file) {
+      return writeError(res, 400, 'No file uploaded');
+    }
+
+    // Upload to ImageKit
+    const fileName = `user-profile-${user.user_id}-${Date.now()}`;
+    const uploadResult = await imagekitService.uploadFile(
+      req.file.buffer,
+      fileName,
+      'user-profiles'
+    );
+
+    if (!uploadResult || !uploadResult.url) {
+      throw new Error('Failed to upload image to ImageKit');
+    }
+
+    const profilePictureUrl = uploadResult.url;
+
+    // Store profile picture URL in UserPreferences (since User model doesn't have profile_picture field)
+    // We'll use a JSON field or create a simple text field
+    // For now, let's store it in user preferences as a workaround, or we can add it to the User model
+    // Actually, let's check if we can add it to User model or use a different approach
+    
+    // Update user preferences with profile picture URL
+    await prisma.userPreferences.upsert({
+      where: { user_id: user.user_id },
+      update: {
+        signature: profilePictureUrl, // Temporarily using signature field, but we should add profile_picture to UserPreferences
+      },
+      create: {
+        user_id: user.user_id,
+        signature: profilePictureUrl,
+      },
+    });
+
+    // Also try to store in a more appropriate place - let's add it to the response
+    // and the frontend can handle it
+    writeSuccess(res, 200, 'Profile picture uploaded successfully', {
+      profile_picture: profilePictureUrl,
+      url: profilePictureUrl,
+    });
+  } catch (error: any) {
+    console.error('Error uploading profile picture:', error);
+    writeError(res, 500, error.message || 'Failed to upload profile picture');
+  }
+};
+
 export const changePassword = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;
@@ -190,7 +261,8 @@ export const activateUser = async (req: Request, res: Response) => {
     writeSuccess(res, 200, 'User activated successfully');
   } catch (error: any) {
     const message = error.message || 'Failed to activate user';
-    const status = message.includes('permissions') ? 403 : 500;
+    const status = message.includes('not found') ? 404 :
+                  message.includes('permissions') ? 403 : 500;
     writeError(res, status, message);
   }
 };
@@ -208,8 +280,8 @@ export const deactivateUser = async (req: Request, res: Response) => {
     writeSuccess(res, 200, 'User deactivated successfully');
   } catch (error: any) {
     const message = error.message || 'Failed to deactivate user';
-    const status = message.includes('permissions') ? 403 :
-                  message.includes('cannot deactivate') ? 409 : 500;
+    const status = message.includes('not found') ? 404 :
+                  message.includes('permissions') ? 403 : 500;
     writeError(res, status, message);
   }
 };

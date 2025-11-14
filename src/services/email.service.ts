@@ -717,6 +717,119 @@ export class EmailService {
       text: `Payment Receipt\n\nReceipt Number: ${receipt_number}\n${reference_number ? `Reference: ${reference_number}\n` : ''}Amount: KSh ${payment_amount.toLocaleString()}\nDate: ${formattedDate}\nProperty: ${property_name}\nUnit: ${unit_number}\n\nThank you for your payment!`,
     });
   }
+
+  /**
+   * Send welcome email from CEO Joseph to new company registrations (landlords and agencies)
+   */
+  async sendWelcomeEmail(
+    email: string,
+    userName: string,
+    companyName: string,
+    userRole: 'landlord' | 'agency_admin'
+  ): Promise<EmailResult> {
+    const loginUrl = `${env.appUrl || process.env.APP_URL || 'http://localhost:3000'}/login`;
+    const dashboardUrl = `${env.appUrl || process.env.APP_URL || 'http://localhost:3000'}/${userRole === 'landlord' ? 'landlord' : 'agency-admin'}`;
+    const roleDisplayName = userRole === 'agency_admin' ? 'Property Agency' : 'Independent Landlord';
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to LetRents</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f8fafc; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0; }
+          .content { padding: 40px 30px; background: white; }
+          .signature { padding: 30px; background: #f8f9fa; border-left: 4px solid #2563eb; margin: 25px 0; }
+          .button { display: inline-block; background: #2563eb; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; margin: 25px 0; font-weight: 600; }
+          .footer { background: #f8f9fa; padding: 30px; text-align: center; font-size: 14px; color: #666; border-radius: 0 0 16px 16px; }
+          h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          h2 { margin: 0 0 15px; color: #1e293b; font-size: 20px; font-weight: 600; }
+          p { margin: 0 0 15px; color: #475569; font-size: 16px; }
+          ul { margin: 15px 0; padding-left: 20px; }
+          li { margin: 8px 0; color: #475569; }
+          .highlight { background: #eff6ff; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #2563eb; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Welcome to LetRents! 🎉</h1>
+            <p style="margin: 10px 0 0; opacity: 0.9;">Your Property Management Journey Starts Here</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${userName},</h2>
+            <p>
+              On behalf of the entire LetRents team, I'm thrilled to welcome you and <strong>${companyName}</strong> to our platform! As the CEO of LetRents, I'm personally excited about the opportunity to help transform your property management operations.
+            </p>
+            
+            <p>
+              You've taken an important step toward modernizing your property management. Whether you're managing a single property or a growing portfolio, LetRents is designed to make your life easier and your business more profitable.
+            </p>
+
+            <div class="highlight">
+              <h3 style="margin-top: 0; color: #1e293b; font-size: 18px;">🚀 Get Started in 3 Simple Steps:</h3>
+              <ol style="margin: 15px 0; padding-left: 20px;">
+                <li><strong>Add Your Properties</strong> - Start by adding your first property. Our intuitive wizard guides you through every step.</li>
+                <li><strong>Create Units</strong> - Add units to your properties and set up rent amounts, lease terms, and more.</li>
+                <li><strong>Invite Your Team</strong> - Add staff members or caretakers to help manage your properties efficiently.</li>
+              </ol>
+            </div>
+
+            <h3 style="color: #1e293b; font-size: 18px;">What You Can Do Right Now:</h3>
+            <ul>
+              <li>📊 <strong>Track Everything</strong> - Monitor rent collections, expenses, and property performance in real-time</li>
+              <li>💰 <strong>Collect Rent Easily</strong> - Accept payments via M-Pesa, bank transfers, and other convenient methods</li>
+              <li>👥 <strong>Manage Tenants</strong> - Keep detailed tenant records, track lease agreements, and handle maintenance requests</li>
+              <li>📈 <strong>Generate Reports</strong> - Get insights into your property portfolio with comprehensive financial reports</li>
+              <li>📱 <strong>Access Anywhere</strong> - Use our mobile-responsive platform from any device, anywhere</li>
+            </ul>
+
+            <p>
+              Our team is here to support you every step of the way. If you have any questions or need assistance getting started, don't hesitate to reach out. We're committed to your success.
+            </p>
+
+            <div style="text-align: center; margin: 35px 0;">
+              <a href="${dashboardUrl}" class="button" style="background: #2563eb; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                Go to Your Dashboard →
+              </a>
+            </div>
+
+            <div class="signature">
+              <p style="margin: 0 0 5px; font-weight: 600; color: #1e293b;">Warm regards,</p>
+              <p style="margin: 0; color: #475569;"><strong>Joseph</strong></p>
+              <p style="margin: 5px 0 0; color: #64748b; font-size: 14px;">CEO, LetRents</p>
+              <p style="margin: 10px 0 0; color: #64748b; font-size: 14px;">joseph@letrents.com</p>
+            </div>
+
+            <p style="margin-top: 30px; font-size: 14px; color: #64748b;">
+              <strong>Need Help?</strong> Check out our <a href="${env.appUrl}/help" style="color: #2563eb;">help center</a> or reply to this email. We typically respond within 24 hours.
+            </p>
+          </div>
+          <div class="footer">
+            <p style="margin: 0 0 10px;">
+              <strong>LetRents</strong> - Modern Property Management for Africa
+            </p>
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+              © ${new Date().getFullYear()} LetRents. All rights reserved.<br>
+              This email was sent to ${email}
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: email,
+      subject: `Welcome to LetRents! Let's Get Started 🚀`,
+      html,
+      text: `Welcome to LetRents!\n\nHello ${userName},\n\nOn behalf of the entire LetRents team, I'm thrilled to welcome you and ${companyName} to our platform!\n\nGet started by:\n1. Adding your properties\n2. Creating units\n3. Inviting your team\n\nVisit your dashboard: ${dashboardUrl}\n\nWarm regards,\nJoseph\nCEO, LetRents`,
+    });
+  }
 }
 
 // SendGrid Provider Implementation

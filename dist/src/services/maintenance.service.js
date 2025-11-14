@@ -84,7 +84,11 @@ export class MaintenanceService {
         if (user.company_id) {
             where.company_id = user.company_id;
         }
-        if (filters.property_id) {
+        // Handle property_ids (for super-admin) or property_id (single)
+        if (filters.property_ids && filters.property_ids.length > 0) {
+            where.property_id = { in: filters.property_ids };
+        }
+        else if (filters.property_id) {
             where.property_id = filters.property_id;
         }
         if (filters.unit_id) {

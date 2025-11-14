@@ -129,10 +129,35 @@ export class ChecklistsService {
     inspection_type?: InspectionType;
     property_id?: string;
     is_active?: boolean;
+    agencyId?: string; // For super-admin viewing as specific agency
   }): Promise<any[]> {
-    const where: any = {
-      company_id: user.company_id!,
-    };
+    let companyId = user.company_id;
+    
+    // If agencyId is provided (super-admin viewing as agency), get the agency's company_id
+    if (filters?.agencyId && user.role === 'super_admin') {
+      const agency = await prisma.agency.findUnique({
+        where: { id: filters.agencyId },
+        select: { company_id: true }
+      });
+      
+      if (!agency || !agency.company_id) {
+        throw new Error('Agency not found or has no associated company');
+      }
+      
+      companyId = agency.company_id;
+    }
+    
+    // For non-super-admin users, company_id must be present
+    if (!companyId && user.role !== 'super_admin') {
+      throw new Error('User must be associated with a company');
+    }
+    
+    const where: any = {};
+    
+    // Only filter by company_id if we have one (skip for super admin without agencyId)
+    if (companyId) {
+      where.company_id = companyId;
+    }
 
     if (filters?.inspection_type) {
       where.inspection_type = filters.inspection_type;
@@ -439,10 +464,35 @@ export class ChecklistsService {
     tenant_id?: string;
     inspection_type?: InspectionType;
     status?: InspectionStatus;
+    agencyId?: string; // For super-admin viewing as specific agency
   }): Promise<any[]> {
-    const where: any = {
-      company_id: user.company_id!,
-    };
+    let companyId = user.company_id;
+    
+    // If agencyId is provided (super-admin viewing as agency), get the agency's company_id
+    if (filters?.agencyId && user.role === 'super_admin') {
+      const agency = await prisma.agency.findUnique({
+        where: { id: filters.agencyId },
+        select: { company_id: true }
+      });
+      
+      if (!agency || !agency.company_id) {
+        throw new Error('Agency not found or has no associated company');
+      }
+      
+      companyId = agency.company_id;
+    }
+    
+    // For non-super-admin users, company_id must be present
+    if (!companyId && user.role !== 'super_admin') {
+      throw new Error('User must be associated with a company');
+    }
+    
+    const where: any = {};
+    
+    // Only filter by company_id if we have one (skip for super admin without agencyId)
+    if (companyId) {
+      where.company_id = companyId;
+    }
 
     // Role-based filtering
     if (user.role === 'tenant') {

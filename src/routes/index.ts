@@ -30,6 +30,7 @@ import checklists from './checklists.js';
 import cleanup from './cleanup.js';
 import tasks from './task.routes.js';
 import webhooks from './webhooks.js';
+import emergencyContacts from './emergency-contacts.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 
@@ -66,6 +67,13 @@ router.get('/billing/plans', async (req, res) => {
   return getPlans(req, res);
 });
 
+// Verify subscription endpoint (optional auth for new registrations)
+router.post('/billing/subscription/verify', async (req, res, next) => {
+  const { optionalAuth } = await import('../middleware/auth.js');
+  const { verifySubscription } = await import('../controllers/billing.controller.js');
+  optionalAuth(req, res, () => verifySubscription(req, res));
+});
+
 router.post('/billing/webhook/paystack', async (req, res) => {
   const { paystackWebhook } = await import('../controllers/billing.controller.js');
   return paystackWebhook(req, res);
@@ -96,6 +104,7 @@ router.use('/setup', setup);
 router.use('/test-email', testEmail);
 router.use('/checklists', requireAuth, checklists);
 router.use('/cleanup', requireAuth, cleanup);
+router.use('/emergency-contacts', requireAuth, emergencyContacts);
 
 // Super Admin middleware - only allow super_admin role
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
@@ -275,6 +284,21 @@ router.get('/billing/invoices', requireAuth, requireSuperAdmin, async (req, res)
 router.get('/applications', requireAuth, requireSuperAdmin, async (req, res) => {
 	const { getApplications } = await import('../controllers/super-admin.controller.js');
 	await getApplications(req, res);
+});
+
+router.get('/applications/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { getApplication } = await import('../controllers/super-admin.controller.js');
+	await getApplication(req, res);
+});
+
+router.post('/applications/:id/approve', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { approveApplication } = await import('../controllers/super-admin.controller.js');
+	await approveApplication(req, res);
+});
+
+router.post('/applications/:id/reject', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { rejectApplication } = await import('../controllers/super-admin.controller.js');
+	await rejectApplication(req, res);
 });
 
 router.get('/messaging/broadcasts', requireAuth, requireSuperAdmin, async (req, res) => {

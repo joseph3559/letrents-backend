@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { 
-  createUser, 
-  getUser, 
-  updateUser, 
-  deleteUser, 
+import {
+  createUser,
+  getUser,
+  updateUser,
+  deleteUser,
   listUsers,
   getCurrentUser,
   updateCurrentUser,
@@ -11,8 +11,25 @@ import {
   activateUser,
   deactivateUser,
   getCurrentUserPreferences,
-  updateCurrentUserPreferences
+  updateCurrentUserPreferences,
+  uploadProfilePicture
 } from '../controllers/users.controller.js';
+import multer from 'multer';
+
+// Configure multer for profile picture uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
 import {
   getUserPreferences,
   getUserNotificationSettings,
@@ -29,6 +46,7 @@ router.get('/', rbacResource('users', 'read'), listUsers);
 router.get('/me', getCurrentUser); // No RBAC needed - users can always access their own profile
 router.put('/me', updateCurrentUser); // No RBAC needed - users can always update their own profile
 router.put('/me/password', changePassword); // No RBAC needed - users can always change their own password
+router.post('/me/profile-picture', upload.single('file'), uploadProfilePicture); // No RBAC needed - users can upload their own profile picture
 
 // User Preferences
 router.get('/me/preferences', getCurrentUserPreferences); // No RBAC needed - users can access their own preferences

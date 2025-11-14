@@ -4,7 +4,9 @@ const service = new DashboardService();
 export const getDashboardStats = async (req, res) => {
     try {
         const user = req.user;
-        const stats = await service.getDashboardStats(user);
+        // Extract owner_id from query params (for super_admin viewing specific landlord)
+        const ownerId = req.query.owner_id;
+        const stats = await service.getDashboardStats(user, ownerId);
         writeSuccess(res, 200, 'Dashboard stats retrieved successfully', stats);
     }
     catch (error) {

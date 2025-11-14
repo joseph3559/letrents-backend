@@ -5,9 +5,24 @@ import { buildWhereClause, formatDataForRole, getDashboardScope } from '../utils
 const prisma = new PrismaClient();
 
 export const reportsService = {
-  async getReports(user: JWTClaims, reportType?: string, period: string = 'monthly') {
+  async getReports(user: JWTClaims, reportType?: string, period: string = 'monthly', propertyIds?: string[]) {
     const scope = getDashboardScope(user);
-    const whereClause = buildWhereClause(user);
+    let whereClause = buildWhereClause(user);
+
+    // If property_ids are provided (for super_admin filtering), override the where clause
+    // This ensures we only get properties matching the provided IDs
+    if (propertyIds && propertyIds.length > 0) {
+      // For super_admin, we want to filter by the provided property IDs
+      // If user is super_admin, use propertyIds directly; otherwise merge with existing whereClause
+      if (user.role === 'super_admin') {
+        whereClause = { id: { in: propertyIds } };
+      } else {
+        whereClause = {
+          ...whereClause,
+          id: { in: propertyIds }
+        };
+      }
+    }
 
     // Generate different reports based on type
     if (reportType) {
@@ -16,39 +31,45 @@ export const reportsService = {
           // Return overview of all available reports (same as default behavior)
           break;
         case 'property':
-          return await this.getPropertyReport(user, { period });
+          return await this.getPropertyReport(user, { period, property_ids: propertyIds });
         case 'financial':
-          return await this.getFinancialReport(user, 'revenue', period);
+          return await this.getFinancialReport(user, 'revenue', period, propertyIds);
         case 'occupancy':
-          return await this.getOccupancyReport(user, period);
+          return await this.getOccupancyReport(user, period, propertyIds);
         case 'rent-collection':
-          return await this.getRentCollectionReport(user, { period });
+          return await this.getRentCollectionReport(user, { period, property_ids: propertyIds });
         case 'maintenance':
-          return await this.getMaintenanceReport(user, period);
+          return await this.getMaintenanceReport(user, period, undefined, propertyIds);
         default:
           throw new Error('Invalid report type');
       }
     }
 
     // Return overview of all available reports
+    // Build unit where clause - if propertyIds provided, filter by property_id
+    const unitWhereClause: any = propertyIds && propertyIds.length > 0
+      ? { property_id: { in: propertyIds } }
+      : { property: whereClause };
+    
+    // Build maintenance where clause - if propertyIds provided, filter by property_id
+    const maintenanceWhereClause: any = {};
+    if (user.role !== 'super_admin' && user.company_id) {
+      maintenanceWhereClause.company_id = user.company_id;
+    }
+    if (propertyIds && propertyIds.length > 0) {
+      maintenanceWhereClause.property_id = { in: propertyIds };
+    }
+    
     const [propertyCount, unitCount, tenantCount, maintenanceCount] = await Promise.all([
       prisma.property.count({ where: whereClause }),
-      prisma.unit.count({ 
-        where: {
-          property: whereClause
-        }
-      }),
+      prisma.unit.count({ where: unitWhereClause }),
       prisma.user.count({ 
         where: {
           role: 'tenant',
           company_id: user.company_id
         }
       }),
-      prisma.maintenanceRequest.count({ 
-        where: {
-          company_id: user.company_id
-        }
-      })
+      prisma.maintenanceRequest.count({ where: maintenanceWhereClause })
     ]);
 
     return {
@@ -90,7 +111,20 @@ export const reportsService = {
   },
 
   async getPropertyReport(user: JWTClaims, filters: any = {}) {
-    const whereClause = buildWhereClause(user);
+    let whereClause = buildWhereClause(user);
+    
+    // If property_ids are provided (for super_admin filtering), add them to where clause
+    if (filters.property_ids && Array.isArray(filters.property_ids) && filters.property_ids.length > 0) {
+      // For super_admin, use propertyIds directly; otherwise merge with existing whereClause
+      if (user.role === 'super_admin') {
+        whereClause = { id: { in: filters.property_ids } };
+      } else {
+        whereClause = {
+          ...whereClause,
+          id: { in: filters.property_ids }
+        };
+      }
+    }
     
     const properties = await prisma.property.findMany({
       where: whereClause,
@@ -175,8 +209,21 @@ export const reportsService = {
     });
   },
 
-  async getFinancialReport(user: JWTClaims, type: string = 'revenue', period: string = 'monthly') {
-    const whereClause = buildWhereClause(user);
+  async getFinancialReport(user: JWTClaims, type: string = 'revenue', period: string = 'monthly', propertyIds?: string[]) {
+    let whereClause = buildWhereClause(user);
+    
+    // If property_ids are provided (for super_admin filtering), add them to where clause
+    if (propertyIds && propertyIds.length > 0) {
+      // For super_admin, use propertyIds directly; otherwise merge with existing whereClause
+      if (user.role === 'super_admin') {
+        whereClause = { id: { in: propertyIds } };
+      } else {
+        whereClause = {
+          ...whereClause,
+          id: { in: propertyIds }
+        };
+      }
+    }
     
     // Calculate date range based on period
     const now = new Date();
@@ -199,12 +246,19 @@ export const reportsService = {
         start_date = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
+    // Build unit where clause - if propertyIds provided, filter by property_id directly
+    const unitWhereClause: any = {
+      status: 'occupied'
+    };
+    if (propertyIds && propertyIds.length > 0) {
+      unitWhereClause.property_id = { in: propertyIds };
+    } else {
+      unitWhereClause.property = whereClause;
+    }
+    
     // Get revenue data from occupied units
     const revenueData = await prisma.unit.findMany({
-      where: {
-        status: 'occupied',
-        property: whereClause
-      },
+      where: unitWhereClause,
       select: {
         id: true,
         unit_number: true,
@@ -225,14 +279,23 @@ export const reportsService = {
       }
     });
 
+    // Build invoice where clause for financial report
+    const financialInvoiceWhereClause: any = {
+      created_at: {
+        gte: start_date
+      }
+    };
+    if (user.role !== 'super_admin' && user.company_id) {
+      financialInvoiceWhereClause.company_id = user.company_id;
+    }
+    // If propertyIds provided, filter invoices by property_id
+    if (propertyIds && propertyIds.length > 0) {
+      financialInvoiceWhereClause.property_id = { in: propertyIds };
+    }
+    
     // Get invoice data for actual collections
     const invoices = await prisma.invoice.findMany({
-      where: {
-        created_at: {
-          gte: start_date
-        },
-        ...(user.role !== 'super_admin' && { company_id: user.company_id })
-      },
+      where: financialInvoiceWhereClause,
       select: {
         id: true,
         total_amount: true,
@@ -300,13 +363,29 @@ export const reportsService = {
     });
   },
 
-  async getOccupancyReport(user: JWTClaims, period: string = 'monthly') {
-    const whereClause = buildWhereClause(user);
+  async getOccupancyReport(user: JWTClaims, period: string = 'monthly', propertyIds?: string[]) {
+    let whereClause = buildWhereClause(user);
+    
+    // If property_ids are provided (for super_admin filtering), add them to where clause
+    if (propertyIds && propertyIds.length > 0) {
+      // For super_admin, use propertyIds directly; otherwise merge with existing whereClause
+      if (user.role === 'super_admin') {
+        whereClause = { id: { in: propertyIds } };
+      } else {
+        whereClause = {
+          ...whereClause,
+          id: { in: propertyIds }
+        };
+      }
+    }
+    
+    // Build unit where clause - if propertyIds provided, filter by property_id directly
+    const unitWhereClause: any = propertyIds && propertyIds.length > 0
+      ? { property_id: { in: propertyIds } }
+      : { property: whereClause };
     
     const units = await prisma.unit.findMany({
-      where: {
-        property: whereClause
-      },
+      where: unitWhereClause,
       select: {
         id: true,
         unit_number: true,
@@ -435,19 +514,48 @@ export const reportsService = {
   },
 
   async getRentCollectionReport(user: JWTClaims, filters: any = {}) {
-    const whereClause = buildWhereClause(user);
+    let whereClause = buildWhereClause(user);
+    
+    // If property_ids are provided (for super_admin filtering), add them to where clause
+    if (filters.property_ids && Array.isArray(filters.property_ids) && filters.property_ids.length > 0) {
+      // For super_admin, use propertyIds directly; otherwise merge with existing whereClause
+      if (user.role === 'super_admin') {
+        whereClause = { id: { in: filters.property_ids } };
+      } else {
+        whereClause = {
+          ...whereClause,
+          id: { in: filters.property_ids }
+        };
+      }
+    }
+    
+    // Build invoice where clause
+    const invoiceWhereClause: any = {};
+    if (user.role !== 'super_admin' && user.company_id) {
+      invoiceWhereClause.company_id = user.company_id;
+    }
+    // If property_ids provided, filter invoices by property_id
+    if (filters.property_ids && Array.isArray(filters.property_ids) && filters.property_ids.length > 0) {
+      invoiceWhereClause.property_id = { in: filters.property_ids };
+    }
+    
+    // Add date filters to invoice where clause
+    if (filters.start_date) {
+      invoiceWhereClause.created_at = {
+        ...invoiceWhereClause.created_at,
+        gte: new Date(filters.start_date)
+      };
+    }
+    if (filters.end_date) {
+      invoiceWhereClause.created_at = {
+        ...invoiceWhereClause.created_at,
+        lte: new Date(filters.end_date)
+      };
+    }
     
     // Get all invoices with filtering
     const invoices = await prisma.invoice.findMany({
-      where: {
-        ...(user.role !== 'super_admin' && { company_id: user.company_id }),
-        ...(filters.start_date && { 
-          created_at: { gte: new Date(filters.startDate) }
-        }),
-        ...(filters.end_date && { 
-          created_at: { lte: new Date(filters.endDate) }
-        }),
-      },
+      where: invoiceWhereClause,
       include: {
         // tenant: {
         //   select: {
@@ -534,8 +642,21 @@ export const reportsService = {
     });
   },
 
-  async getMaintenanceReport(user: JWTClaims, period: string = 'monthly', filters: any = {}) {
-    const whereClause = buildWhereClause(user, {}, 'maintenance'); // ✅ Specify 'maintenance' modelType
+  async getMaintenanceReport(user: JWTClaims, period: string = 'monthly', filters: any = {}, propertyIds?: string[]) {
+    let whereClause = buildWhereClause(user, {}, 'maintenance'); // ✅ Specify 'maintenance' modelType
+    
+    // If property_ids are provided (for super_admin filtering), filter by property_id
+    if (propertyIds && propertyIds.length > 0) {
+      // For super_admin, use propertyIds directly; otherwise merge with existing whereClause
+      if (user.role === 'super_admin') {
+        whereClause = { property_id: { in: propertyIds } };
+      } else {
+        whereClause = {
+          ...whereClause,
+          property_id: { in: propertyIds }
+        };
+      }
+    }
     
     const maintenanceRequests = await prisma.maintenanceRequest.findMany({
       where: {

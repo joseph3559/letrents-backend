@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createUnit, createUnits, getUnit, getUnitFinancials, updateUnit, deleteUnit, listUnits, updateUnitStatus, assignTenant, releaseTenant, searchAvailableUnits, cleanupDuplicateTenantAssignments } from '../controllers/units.controller.js';
+import { uploadUnitImages, deleteUnitImage, uploadMiddleware } from '../controllers/images.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
 // Units CRUD
@@ -8,6 +9,9 @@ router.post('/batch', rbacResource('units', 'create'), createUnits);
 router.get('/', rbacResource('units', 'read'), listUnits);
 router.get('/available', searchAvailableUnits); // Public endpoint for searching available units
 router.get('/:id/financials', rbacResource('units', 'read'), getUnitFinancials); // Must come before /:id route
+// Unit images management (must come before /:id route)
+router.post('/:id/images', rbacResource('units', 'photos'), uploadMiddleware, uploadUnitImages);
+router.delete('/:id/images/:imageId', rbacResource('units', 'photos'), deleteUnitImage);
 router.get('/:id', rbacResource('units', 'read'), getUnit);
 router.put('/:id', rbacResource('units', 'update'), updateUnit);
 router.delete('/:id', rbacResource('units', 'delete'), deleteUnit);

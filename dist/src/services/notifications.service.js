@@ -3,6 +3,9 @@ import { formatDataForRole } from '../utils/roleBasedFiltering.js';
 const prisma = new PrismaClient();
 export const notificationsService = {
     async getNotifications(user, limit = 10, offset = 0, filters = {}) {
+        // Extract property_ids from filters if provided
+        const propertyIds = filters?.property_ids;
+        delete filters?.property_ids; // Remove from filters to avoid conflicts
         // Build role-based where clause for notifications
         // Include both sent and received notifications
         let whereClause = {
@@ -17,6 +20,10 @@ export const notificationsService = {
         if (user.role === 'super_admin') {
             delete whereClause.OR;
             delete whereClause.company_id;
+            // If property_ids provided, filter by property_id
+            if (propertyIds && Array.isArray(propertyIds) && propertyIds.length > 0) {
+                whereClause.property_id = { in: propertyIds };
+            }
         }
         // For agents, also include notifications related to their assigned properties
         if (user.role === 'agent') {

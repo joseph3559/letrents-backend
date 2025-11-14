@@ -9,7 +9,25 @@ export const staffController = {
       const user = (req as any).user as JWTClaims;
       console.log('🎯 GET /staff controller hit');
       console.log('  JWT User:', user);
-      const filters = req.query;
+      
+      // Parse property_ids (comma-separated) for super-admin filtering
+      let propertyIds: string[] | undefined = undefined;
+      if (req.query.property_ids) {
+        const propertyIdsParam = req.query.property_ids as string;
+        propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        console.log('🔍 Parsed property_ids from query:', propertyIds);
+      }
+      
+      const filters: any = { ...req.query };
+      if (propertyIds) {
+        filters.property_ids = propertyIds;
+      }
+      
+      // Extract company_id from query if provided (for filtering caretakers by property's company)
+      if (req.query.company_id) {
+        filters.company_id = req.query.company_id as string;
+      }
+      
       const staff = await careteakersService.getCaretakers(user, filters); // Uses the updated method that fetches all staff
       console.log('  Returning:', staff.length, 'staff members');
       writeSuccess(res, 200, 'Staff retrieved successfully', staff);

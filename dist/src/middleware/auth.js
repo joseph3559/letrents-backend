@@ -43,3 +43,33 @@ export const requireRole = (roles) => (req, res, next) => {
         return res.status(403).json({ success: false, message: 'Insufficient permissions' });
     return next();
 };
+/**
+ * Optional authentication middleware
+ * Sets req.user if a valid token is present, but doesn't fail if token is missing
+ */
+export const optionalAuth = (req, res, next) => {
+    const header = req.headers.authorization || '';
+    if (!header.startsWith('Bearer ')) {
+        // No token provided, continue without setting user
+        req.user = undefined;
+        return next();
+    }
+    const token = header.substring(7);
+    try {
+        const claims = jwt.verify(token, env.jwt.secret);
+        // Check if token is expired
+        const now = Math.floor(Date.now() / 1000);
+        if (claims.exp && claims.exp < now) {
+            // Token expired, continue without user
+            req.user = undefined;
+            return next();
+        }
+        req.user = claims;
+        return next();
+    }
+    catch (e) {
+        // Invalid token, continue without user
+        req.user = undefined;
+        return next();
+    }
+};

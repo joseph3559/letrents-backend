@@ -32,6 +32,8 @@ export interface UpdateUserRequest {
   email?: string;
   role?: string;
   status?: string;
+  id_number?: string;
+  profile_picture_url?: string;
 }
 
 export interface ChangePasswordRequest {
@@ -130,6 +132,14 @@ export class UsersService {
             last_name: true,
           },
         },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            phone_number: true,
+          },
+        },
+        id_number: true,
       },
     });
 
@@ -181,6 +191,7 @@ export class UsersService {
         ...(req.email && { email: req.email }),
         ...(req.role && { role: req.role as any }),
         ...(req.status && { status: req.status as any }),
+        ...(req.id_number !== undefined && { id_number: req.id_number }),
         updated_at: new Date(),
       },
       select: {
@@ -321,11 +332,13 @@ export class UsersService {
 
   async updateCurrentUser(req: UpdateUserRequest, user: JWTClaims): Promise<any> {
     // Users can update their own profile (excluding role and status)
-    const allowedFields = {
+    // Note: profile_picture_url is handled separately via upload endpoint
+    const allowedFields: UpdateUserRequest = {
       first_name: req.first_name,
       last_name: req.last_name,
       phone_number: req.phone_number,
       email: req.email,
+      id_number: req.id_number,
     };
 
     return this.updateUser(user.user_id, allowedFields, user);

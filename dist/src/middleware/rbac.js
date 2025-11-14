@@ -4,6 +4,7 @@ const permissions = {
         units: ['*'],
         tenants: ['*'],
         caretakers: ['*'],
+        staff: ['*'],
         agents: ['*'],
         dashboard: ['*'],
         financial: ['*'],
@@ -23,6 +24,7 @@ const permissions = {
         users: ['*'],
         companies: ['*'],
         checklists: ['*'],
+        emergency: ['*'],
     },
     agency_admin: {
         properties: ['create', 'read', 'update', 'delete', 'archive', 'duplicate', 'settings', 'history'],
@@ -50,6 +52,7 @@ const permissions = {
         settings: ['read', 'update'],
         users: ['create', 'read', 'update', 'delete'],
         checklists: ['create', 'read', 'update', 'delete'],
+        emergency: ['create', 'read', 'update', 'delete'],
     },
     landlord: {
         properties: ['create', 'read', 'update', 'delete', 'archive', 'duplicate', 'settings', 'history'],
@@ -77,6 +80,7 @@ const permissions = {
         settings: ['read', 'update'],
         users: ['create', 'read', 'update', 'delete'],
         checklists: ['create', 'read', 'update', 'delete'],
+        emergency: ['create', 'read', 'update', 'delete'],
     },
     agent: {
         properties: ['read'],
@@ -92,6 +96,7 @@ const permissions = {
         leases: ['create', 'read'],
         assignments: ['read'],
         checklists: ['create', 'read', 'update'],
+        emergency: ['read'],
     },
     caretaker: {
         properties: ['read'],
@@ -110,6 +115,7 @@ const permissions = {
         payments: ['create', 'read'],
         assignments: ['read'],
         checklists: ['create', 'read', 'update'],
+        emergency: ['read'],
     },
     tenant: {
         units: ['read'],

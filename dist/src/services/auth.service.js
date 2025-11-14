@@ -109,6 +109,7 @@ export class AuthService {
         const password_hash = payload.password ? await bcrypt.hash(payload.password, 10) : null;
         let company_id = null;
         let agency_id = null;
+        // CRITICAL: All landlords and agency_admins MUST have a company_id
         if (role === 'landlord' || role === 'agency_admin' || role === 'super_admin') {
             let companyName;
             let maxProps = 100;
@@ -126,6 +127,10 @@ export class AuthService {
             else {
                 companyName = payload.company_name || `${payload.first_name} ${payload.last_name} Properties`;
             }
+            // Ensure company name is not empty
+            if (!companyName || companyName.trim() === '') {
+                throw new Error('Company name is required for landlords and agencies');
+            }
             const existingCompany = await this.prisma.company.findFirst({ where: { name: companyName } }).catch(() => null);
             if (existingCompany) {
                 company_id = existingCompany.id;
@@ -133,7 +138,9 @@ export class AuthService {
             else {
                 const company = await this.prisma.company.create({
                     data: {
-                        name: companyName,
+                        name: companyName.trim(),
+                        email: payload.email || undefined,
+                        phone_number: payload.phone_number || undefined,
                         business_type: payload.business_type || 'property_management',
                         country: 'Kenya',
                         industry: 'Property Management',
@@ -148,6 +155,14 @@ export class AuthService {
                 });
                 company_id = company.id;
             }
+            // CRITICAL VALIDATION: Ensure company_id was successfully obtained
+            if (!company_id) {
+                throw new Error(`Failed to create or find company for ${role}. Company name: ${companyName}`);
+            }
+        }
+        // CRITICAL VALIDATION: Ensure landlords and agency_admins have company_id before creating user
+        if ((role === 'landlord' || role === 'agency_admin') && !company_id) {
+            throw new Error(`Cannot create ${role} without company_id. Company creation failed.`);
         }
         // Create user first (without agency_id for agency_admin, we'll update it after creating the agency)
         const user = await this.prisma.user.create({
@@ -164,6 +179,22 @@ export class AuthService {
                 agency_id: agency_id || undefined, // Will be set below for agency_admin
             },
         });
+        // POST-CREATION VALIDATION: Verify company_id was set for landlords and agency_admins
+        if ((role === 'landlord' || role === 'agency_admin') && !user.company_id) {
+            console.error(`❌ CRITICAL: User created without company_id! User ID: ${user.id}, Role: ${role}`);
+            // Try to fix it if we have company_id
+            if (company_id) {
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { company_id },
+                });
+                user.company_id = company_id;
+                console.log(`✅ Fixed: Assigned company_id ${company_id} to user ${user.id}`);
+            }
+            else {
+                throw new Error(`CRITICAL ERROR: ${role} user created without company_id and company creation failed`);
+            }
+        }
         // For agency_admin, create an agency and assign it to the user
         if (role === 'agency_admin' && company_id) {
             // Check if agency with this email already exists
@@ -240,12 +271,42 @@ export class AuthService {
             const userWithAgency = await this.prisma.user.findUnique({
                 where: { id: user.id },
             });
+            // Send welcome email for landlords and agencies (after verification email)
+            if ((role === 'landlord' || role === 'agency_admin') && userWithAgency?.company_id) {
+                try {
+                    const company = await this.prisma.company.findUnique({
+                        where: { id: userWithAgency.company_id },
+                    });
+                    if (company) {
+                        await emailService.sendWelcomeEmail(user.email, `${user.first_name} ${user.last_name}`, company.name, role);
+                    }
+                }
+                catch (error) {
+                    console.error('Error sending welcome email:', error);
+                    // Don't fail registration if welcome email fails
+                }
+            }
             return { user: userWithAgency || user, requires_mfa: true, mfa_methods: ['email'] };
         }
         // Fetch the updated user with agency_id (if it was set for agency_admin)
         const updatedUser = await this.prisma.user.findUnique({
             where: { id: user.id },
         });
+        // Send welcome email for landlords and agencies (autologin path)
+        if ((role === 'landlord' || role === 'agency_admin') && updatedUser?.company_id) {
+            try {
+                const company = await this.prisma.company.findUnique({
+                    where: { id: updatedUser.company_id },
+                });
+                if (company) {
+                    await emailService.sendWelcomeEmail(updatedUser.email, `${updatedUser.first_name} ${updatedUser.last_name}`, company.name, role);
+                }
+            }
+            catch (error) {
+                console.error('Error sending welcome email:', error);
+                // Don't fail registration if welcome email fails
+            }
+        }
         // autologin path (no email verification required)
         const sessionId = crypto.randomUUID();
         const { token, expiresAt } = this.generateJwt(updatedUser || user, sessionId);

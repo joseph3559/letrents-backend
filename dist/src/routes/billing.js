@@ -5,6 +5,7 @@ const router = Router();
 // Public endpoints are handled in the main router
 // Subscription management (authenticated)
 router.post('/subscription', rbacResource('billing', 'create'), createSubscription);
+// Note: /subscription/verify is handled in main router as a public endpoint
 router.get('/subscription', rbacResource('billing', 'read'), getCompanySubscription);
 router.post('/subscription/cancel', rbacResource('billing', 'update'), cancelSubscription);
 // Statistics (super admin only)

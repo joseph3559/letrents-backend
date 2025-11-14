@@ -809,12 +809,17 @@ export const createMaintenanceRequest = async (req, res) => {
                 message: 'Access denied. Tenant role required.'
             });
         }
-        const { title, description, category, priority, unit_id, property_id } = req.body;
+        const { title, description, category, priority, unit_id, property_id, images, preferred_time } = req.body;
         if (!title || !description || !category) {
             return res.status(400).json({
                 success: false,
                 message: 'Title, description, and category are required'
             });
+        }
+        // Validate images if provided
+        let normalizedImages = [];
+        if (images && Array.isArray(images)) {
+            normalizedImages = images.filter((img) => typeof img === 'string' && img.length > 0);
         }
         // Get tenant's current unit if not provided
         let targetUnitId = unit_id;
@@ -848,7 +853,9 @@ export const createMaintenanceRequest = async (req, res) => {
                 priority: priority || 'medium',
                 status: 'pending',
                 requested_by: user.user_id,
-                requested_date: new Date()
+                requested_date: new Date(),
+                images: normalizedImages.length > 0 ? normalizedImages : null,
+                preferred_time: preferred_time || null,
             },
             include: {
                 property: {

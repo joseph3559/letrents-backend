@@ -7,6 +7,7 @@ const permissions: Record<UserRole, Record<string, string[]>> = {
 		units: ['*'],
 		tenants: ['*'],
 		caretakers: ['*'],
+		staff: ['*'],
 		agents: ['*'],
 		dashboard: ['*'],
 		financial: ['*'],
@@ -26,6 +27,7 @@ const permissions: Record<UserRole, Record<string, string[]>> = {
 		users: ['*'],
 		companies: ['*'],
 		checklists: ['*'],
+		emergency: ['*'],
 	},
 	agency_admin: {
 		properties: ['create', 'read', 'update', 'delete', 'archive', 'duplicate', 'settings', 'history'],
@@ -53,6 +55,7 @@ const permissions: Record<UserRole, Record<string, string[]>> = {
 		settings: ['read', 'update'],
 		users: ['create', 'read', 'update', 'delete'],
 		checklists: ['create', 'read', 'update', 'delete'],
+		emergency: ['create', 'read', 'update', 'delete'],
 	},
 	landlord: {
 		properties: ['create', 'read', 'update', 'delete', 'archive', 'duplicate', 'settings', 'history'],
@@ -80,6 +83,7 @@ const permissions: Record<UserRole, Record<string, string[]>> = {
 		settings: ['read', 'update'],
 		users: ['create', 'read', 'update', 'delete'],
 		checklists: ['create', 'read', 'update', 'delete'],
+		emergency: ['create', 'read', 'update', 'delete'],
 	},
 	agent: {
 		properties: ['read'],
@@ -95,6 +99,7 @@ const permissions: Record<UserRole, Record<string, string[]>> = {
 		leases: ['create', 'read'],
 		assignments: ['read'],
 		checklists: ['create', 'read', 'update'],
+		emergency: ['read'],
 	},
 	caretaker: {
 		properties: ['read'],
@@ -113,6 +118,7 @@ const permissions: Record<UserRole, Record<string, string[]>> = {
 		payments: ['create', 'read'],
 		assignments: ['read'],
 		checklists: ['create', 'read', 'update'],
+		emergency: ['read'],
 	},
 	tenant: {
 		units: ['read'],

@@ -7,11 +7,30 @@ export const reportsController = {
   getReports: async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as JWTClaims;
-      const { type, period = 'monthly' } = req.query;
-      const reports = await reportsService.getReports(user, type as string, period as string);
+      const { type, period = 'monthly', property_ids } = req.query;
+      
+      console.log('📊 getReports - User:', { role: user.role, company_id: user.company_id, user_id: user.user_id });
+      console.log('📊 getReports - Query params:', { type, period, property_ids });
+      
+      // Convert property_ids query param to string array
+      let propertyIdsArray: string[] | undefined = undefined;
+      if (property_ids) {
+        if (typeof property_ids === 'string') {
+          propertyIdsArray = property_ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        } else if (Array.isArray(property_ids)) {
+          propertyIdsArray = property_ids.map(id => String(id)).filter(id => id.length > 0);
+        }
+        console.log('📊 Parsed propertyIdsArray:', propertyIdsArray);
+      } else {
+        console.log('⚠️ No property_ids in query params');
+      }
+      
+      const reports = await reportsService.getReports(user, type as string, period as string, propertyIdsArray);
       writeSuccess(res, 200, 'Reports retrieved successfully', reports);
     } catch (error: any) {
-      writeError(res, 500, error.message);
+      console.error('❌ Error in getReports:', error);
+      console.error('❌ Error stack:', error.stack);
+      writeError(res, 500, error.message || 'Failed to retrieve reports');
     }
   },
 

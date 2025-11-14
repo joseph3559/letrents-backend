@@ -137,9 +137,17 @@ export const listUnits = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;
     
+    // Parse property_ids (comma-separated) for super-admin filtering
+    let propertyIds: string[] | undefined = undefined;
+    if (req.query.property_ids) {
+      const propertyIdsParam = req.query.property_ids as string;
+      propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    }
+    
     // Parse query parameters
     const filters: UnitFilters = {
       property_id: req.query.property_id as string,
+      property_ids: propertyIds, // Add property_ids array
       unit_type: req.query.unit_type as string,
       status: req.query.status as string,
       condition: req.query.condition as string,
@@ -165,9 +173,9 @@ export const listUnits = async (req: Request, res: Response) => {
       search_query: req.query.search as string,
       sort_by: req.query.sort_by as string,
       sort_order: req.query.sort_order as string,
-      limit: req.query.limit ? Math.min(parseInt(req.query.limit as string), 100) : 20,
+      limit: req.query.limit ? Math.min(parseInt(req.query.limit as string), 1000) : 1000,
       offset: req.query.offset ? parseInt(req.query.offset as string) : 
-              req.query.page ? (parseInt(req.query.page as string) - 1) * (req.query.limit ? parseInt(req.query.limit as string) : 20) : 0,
+              req.query.page ? (parseInt(req.query.page as string) - 1) * (req.query.limit ? parseInt(req.query.limit as string) : 1000) : 0,
     };
 
     const result = await service.listUnits(filters, user);

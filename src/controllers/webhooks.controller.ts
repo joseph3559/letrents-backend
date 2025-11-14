@@ -5,6 +5,50 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
+ * Get human-readable display name for payment channel
+ */
+function getChannelDisplayName(channel: string, authorization?: any): string {
+  if (!channel) return 'Online Payment';
+  
+  const channelLower = channel.toLowerCase();
+  
+  // Map Paystack channels to display names
+  const channelMap: { [key: string]: string } = {
+    'card': 'Card',
+    'bank': 'Bank Transfer',
+    'ussd': 'USSD',
+    'qr': 'QR Code',
+    'mobile_money': 'Mobile Money',
+    'mobilemoney': 'Mobile Money',
+    'mpesa': 'M-Pesa',
+    'bank_transfer': 'Bank Transfer',
+    'eft': 'Bank Transfer',
+    'ach': 'Bank Transfer'
+  };
+  
+  // Check if we have a direct mapping
+  if (channelMap[channelLower]) {
+    return channelMap[channelLower];
+  }
+  
+  // Try to infer from authorization data
+  if (authorization) {
+    if (authorization.card_type) {
+      return `${authorization.card_type} Card`;
+    }
+    if (authorization.bank) {
+      return `${authorization.bank} Bank`;
+    }
+    if (authorization.brand) {
+      return `${authorization.brand} Card`;
+    }
+  }
+  
+  // Default: capitalize first letter
+  return channel.charAt(0).toUpperCase() + channel.slice(1).replace(/_/g, ' ');
+}
+
+/**
  * Paystack Webhook Handler
  * This endpoint is called directly by Paystack when a payment succeeds
  * It processes the payment WITHOUT relying on the frontend
@@ -44,14 +88,22 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
       amount, // Amount in kobo (Paystack)
       currency,
       customer,
-      metadata
+      metadata,
+      channel, // Payment channel: card, bank, ussd, qr, mobile_money, etc.
+      authorization // Authorization details with card_type, bank, etc.
     } = data;
+
+    // Extract payment channel information
+    const paymentChannel = channel || authorization?.channel || 'unknown';
+    const channelDisplay = getChannelDisplayName(paymentChannel, authorization);
 
     console.log('💰 Processing successful payment:', {
       reference,
       amount: amount / 100, // Convert kobo to KES
       currency,
       customer_email: customer?.email,
+      channel: paymentChannel,
+      channel_display: channelDisplay,
       metadata
     });
 
@@ -165,7 +217,15 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
               reference: reference,
               status: 'success',
               processed_via: 'webhook',
-              timestamp: now.toISOString()
+              timestamp: now.toISOString(),
+              channel: paymentChannel,
+              channel_display: channelDisplay,
+              authorization: authorization ? {
+                card_type: authorization.card_type,
+                bank: authorization.bank,
+                brand: authorization.brand,
+                last4: authorization.last4
+              } : null
             }])
           }
         });

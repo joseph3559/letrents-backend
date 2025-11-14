@@ -113,9 +113,16 @@ export const deleteUnit = async (req, res) => {
 export const listUnits = async (req, res) => {
     try {
         const user = req.user;
+        // Parse property_ids (comma-separated) for super-admin filtering
+        let propertyIds = undefined;
+        if (req.query.property_ids) {
+            const propertyIdsParam = req.query.property_ids;
+            propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        }
         // Parse query parameters
         const filters = {
             property_id: req.query.property_id,
+            property_ids: propertyIds, // Add property_ids array
             unit_type: req.query.unit_type,
             status: req.query.status,
             condition: req.query.condition,
@@ -141,9 +148,9 @@ export const listUnits = async (req, res) => {
             search_query: req.query.search,
             sort_by: req.query.sort_by,
             sort_order: req.query.sort_order,
-            limit: req.query.limit ? Math.min(parseInt(req.query.limit), 100) : 20,
+            limit: req.query.limit ? Math.min(parseInt(req.query.limit), 1000) : 1000,
             offset: req.query.offset ? parseInt(req.query.offset) :
-                req.query.page ? (parseInt(req.query.page) - 1) * (req.query.limit ? parseInt(req.query.limit) : 20) : 0,
+                req.query.page ? (parseInt(req.query.page) - 1) * (req.query.limit ? parseInt(req.query.limit) : 1000) : 0,
         };
         const result = await service.listUnits(filters, user);
         writeSuccess(res, 200, 'Units retrieved successfully', result);

@@ -5,6 +5,7 @@ import { getNextInvoiceNumber, generatePropertyCode } from '../utils/invoice-num
 export interface InvoiceFilters {
   tenant_id?: string;
   property_id?: string;
+  property_ids?: string[]; // For filtering by multiple property IDs (super-admin)
   unit_id?: string;
   status?: string;
   invoice_type?: string;
@@ -400,8 +401,13 @@ export class InvoicesService {
     
     // 🔒 CRITICAL: Role-based data isolation
     if (user.role === 'super_admin') {
-      // Super admin sees all invoices - no filtering
-      console.log('✅ Super admin - no filtering');
+      // Super admin sees all invoices - but filter by property_ids if provided
+      if (filters.property_ids && filters.property_ids.length > 0) {
+        whereClause.property_id = { in: filters.property_ids };
+        console.log('✅ Super admin - filtering by property_ids:', filters.property_ids.length);
+      } else {
+        console.log('✅ Super admin - no filtering');
+      }
     } else if (user.role === 'agency_admin') {
       // ⚠️ Agency admin sees all invoices for properties in their agency
       if (!user.agency_id) {
@@ -448,8 +454,17 @@ export class InvoicesService {
       whereClause.issued_to = filters.tenant_id;
     }
 
-    if (filters.property_id) {
-      whereClause.property_id = filters.property_id;
+    // Handle property_ids (for super-admin) or property_id (single)
+    if (filters.property_ids && filters.property_ids.length > 0) {
+      // If property_ids is already set (from super_admin role filtering), don't override
+      if (!whereClause.property_id) {
+        whereClause.property_id = { in: filters.property_ids };
+      }
+    } else if (filters.property_id) {
+      // Only apply property_id if property_ids wasn't already applied
+      if (!whereClause.property_id) {
+        whereClause.property_id = filters.property_id;
+      }
     }
 
     if (filters.unit_id) {

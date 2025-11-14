@@ -5,18 +5,73 @@ const prisma = new PrismaClient();
 // Dashboard and Analytics
 export const getDashboardData = async (req, res) => {
     try {
+        // Extract date range filter from query parameters
+        const dateRange = req.query.date_range || '30d';
+        // Calculate start date based on date range filter
+        const now = new Date();
+        let startDate;
+        switch (dateRange) {
+            case '7d':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case '30d':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            case '90d':
+                startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                break;
+            case '1y':
+                startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                break;
+            default:
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Default to 30 days
+        }
         // Get system-wide statistics using raw SQL to avoid enum issues
-        const [companiesResult, agenciesResult, propertiesResult, unitsResult, usersResult, activeTenantsResult, revenueResult] = await Promise.all([
-            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM companies`,
+        const [agenciesResult, landlordsResult, propertiesResult, unitsResult, usersResult, activeTenantsResult, rentRevenueResult, subscriptionRevenueResult] = await Promise.all([
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM agencies`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE role = 'landlord'::user_role`,
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM properties`,
             prisma.$queryRaw `SELECT COUNT(*)::int as count, status FROM units GROUP BY status`,
             prisma.$queryRaw `SELECT COUNT(*)::int as count, role FROM users GROUP BY role`,
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE role = 'tenant'::user_role AND status = 'active'::user_status`,
-            prisma.$queryRaw `SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'`
+            // Rental Revenue: Sum of ALL payments landlords/agencies receive from tenants
+            // Includes: rent, utilities, maintenance, late fees, penalties, security deposits, etc.
+            // This is all tenant-to-landlord/agency payments (all payment types)
+            prisma.$queryRaw `
+        SELECT COALESCE(SUM(amount), 0)::numeric as total 
+        FROM payments 
+        WHERE status IN ('approved'::payment_status, 'completed'::payment_status)
+          AND payment_date >= ${startDate}::timestamp
+      `,
+            // Subscription Revenue: Sum of subscription payments platform receives from landlords/agencies
+            // This includes:
+            // 1. Paid billing_invoices (recurring subscription payments)
+            // 2. Subscriptions created from direct payments (initial subscription payments)
+            // We need to combine both sources
+            prisma.$queryRaw `
+        SELECT COALESCE(
+          (
+            SELECT COALESCE(SUM(amount), 0)::numeric 
+            FROM billing_invoices 
+            WHERE status = 'paid'
+              AND paid_at IS NOT NULL
+              AND paid_at >= ${startDate}::timestamp
+          ) +
+          (
+            SELECT COALESCE(SUM(amount), 0)::numeric 
+            FROM subscriptions 
+            WHERE status IN ('active'::subscription_status, 'trial'::subscription_status)
+              AND metadata->>'created_from_payment' = 'true'
+              AND created_at >= ${startDate}::timestamp
+          ),
+          0
+        )::numeric as total
+      `
         ]);
-        const companies = Array.isArray(companiesResult) ? Number(companiesResult[0]?.count || 0) : 0;
         const agencies = Array.isArray(agenciesResult) ? Number(agenciesResult[0]?.count || 0) : 0;
+        const landlords = Array.isArray(landlordsResult) ? Number(landlordsResult[0]?.count || 0) : 0;
+        // Total companies is the sum of agencies and landlords
+        const companies = agencies + landlords;
         const properties = Array.isArray(propertiesResult) ? Number(propertiesResult[0]?.count || 0) : 0;
         const unitsData = Array.isArray(unitsResult) ? unitsResult : [];
         const totalUnits = unitsData.reduce((sum, item) => sum + Number(item.count || 0), 0);
@@ -25,19 +80,86 @@ export const getDashboardData = async (req, res) => {
         const usersData = Array.isArray(usersResult) ? usersResult : [];
         const totalUsers = usersData.reduce((sum, item) => sum + Number(item.count || 0), 0);
         const activeTenants = Array.isArray(activeTenantsResult) ? Number(activeTenantsResult[0]?.count || 0) : 0;
-        const monthlyRevenue = Array.isArray(revenueResult) ? Number(revenueResult[0]?.total || 0) : 0;
-        // Get recent activities (last 10 activities)
-        const recentActivities = await prisma.$queryRaw `
+        const rentRevenue = Array.isArray(rentRevenueResult) ? Number(rentRevenueResult[0]?.total || 0) : 0;
+        const subscriptionRevenue = Array.isArray(subscriptionRevenueResult) ? Number(subscriptionRevenueResult[0]?.total || 0) : 0;
+        // Debug: Check billing invoices and subscriptions to understand subscription revenue
+        const debugBillingInvoices = await prisma.$queryRaw `
       SELECT 
-        'user_created' as type,
-        CONCAT(first_name, ' ', last_name) as description,
-        created_at as timestamp,
-        role as metadata
-      FROM users 
-      WHERE created_at >= NOW() - INTERVAL '7 days'
-      ORDER BY created_at DESC 
-      LIMIT 10
+        (SELECT COUNT(*)::int FROM billing_invoices) as billing_invoices_total,
+        (SELECT COUNT(*)::int FROM billing_invoices WHERE status = 'paid') as billing_invoices_paid,
+        (SELECT COALESCE(SUM(amount), 0)::numeric FROM billing_invoices WHERE status = 'paid' AND paid_at IS NOT NULL AND paid_at >= ${startDate}::timestamp) as billing_invoices_amount,
+        (SELECT COUNT(*)::int FROM subscriptions) as subscriptions_total,
+        (SELECT COUNT(*)::int FROM subscriptions WHERE status IN ('active'::subscription_status, 'trial'::subscription_status) AND metadata->>'created_from_payment' = 'true') as subscriptions_from_payment,
+        (SELECT COALESCE(SUM(amount), 0)::numeric FROM subscriptions WHERE status IN ('active'::subscription_status, 'trial'::subscription_status) AND (metadata->>'created_from_payment')::text = 'true' AND created_at >= ${startDate}::timestamp) as subscriptions_amount
     `;
+        const debug = Array.isArray(debugBillingInvoices) ? debugBillingInvoices[0] : {};
+        const monthlyRevenue = rentRevenue + subscriptionRevenue;
+        // Debug logging to verify calculations
+        console.log('📊 Revenue Calculations:', {
+            dateRange,
+            startDate: startDate.toISOString(),
+            rentRevenue,
+            subscriptionRevenue,
+            monthlyRevenue,
+            rentRevenueSource: 'payments table (ALL tenant payments: rent, utilities, fees, etc.)',
+            subscriptionRevenueSource: 'billing_invoices table (platform subscription fees from companies)',
+            debugBillingInvoices: debug
+        });
+        // Get recent activities from multiple sources (users, billing invoices, payments)
+        const [userActivities, billingActivities, paymentActivities] = await Promise.all([
+            prisma.$queryRaw `
+        SELECT 
+          id::text,
+          'user_created' as type,
+          CONCAT('User ', first_name, ' ', last_name, ' (', role, ') created') as description,
+          created_at as timestamp,
+          email as user_email,
+          role as metadata
+        FROM users 
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        ORDER BY created_at DESC 
+        LIMIT 5
+      `,
+            prisma.$queryRaw `
+        SELECT 
+          bi.id::text,
+          'subscription_payment' as type,
+          CONCAT('Subscription payment: ', bi.invoice_number, ' - KES ', bi.amount) as description,
+          COALESCE(bi.paid_at, bi.created_at) as timestamp,
+          c.email as user_email,
+          bi.status as metadata
+        FROM billing_invoices bi
+        JOIN companies c ON bi.company_id = c.id
+        WHERE (bi.status = 'paid' OR bi.created_at >= NOW() - INTERVAL '7 days')
+        ORDER BY COALESCE(bi.paid_at, bi.created_at) DESC 
+        LIMIT 5
+      `,
+            prisma.$queryRaw `
+        SELECT 
+          p.id::text,
+          'payment_received' as type,
+          CONCAT('Payment received: ', p.receipt_number, ' - KES ', p.amount) as description,
+          COALESCE(p.payment_date, p.created_at) as timestamp,
+          u.email as user_email,
+          p.status as metadata
+        FROM payments p
+        LEFT JOIN users u ON p.created_by = u.id
+        WHERE p.status = 'approved' AND p.created_at >= NOW() - INTERVAL '7 days'
+        ORDER BY COALESCE(p.payment_date, p.created_at) DESC 
+        LIMIT 5
+      `
+        ]);
+        // Combine and sort all activities by timestamp
+        const allActivities = [
+            ...(Array.isArray(userActivities) ? userActivities : []),
+            ...(Array.isArray(billingActivities) ? billingActivities : []),
+            ...(Array.isArray(paymentActivities) ? paymentActivities : [])
+        ].sort((a, b) => {
+            const aTime = new Date(a.timestamp).getTime();
+            const bTime = new Date(b.timestamp).getTime();
+            return bTime - aTime;
+        }).slice(0, 10);
+        const recentActivities = allActivities;
         // Get system alerts (placeholder for now)
         const systemAlerts = [
             {
@@ -52,13 +174,16 @@ export const getDashboardData = async (req, res) => {
             analytics: {
                 total_companies: companies,
                 total_agencies: agencies,
+                total_landlords: landlords,
                 total_properties: properties,
                 total_units: totalUnits,
                 active_units: Number(occupiedUnits),
                 vacant_units: Number(vacantUnits),
                 total_users: totalUsers,
                 active_tenants: activeTenants,
-                monthly_revenue: monthlyRevenue,
+                monthly_revenue: monthlyRevenue, // Total revenue (for backward compatibility)
+                subscription_revenue: subscriptionRevenue, // Subscription revenue
+                rental_revenue: rentRevenue, // Rental revenue from occupied units
                 ytd_revenue: monthlyRevenue * 12, // Simplified calculation
                 occupancy_rate: totalUnits > 0 ? Math.round((Number(occupiedUnits) / totalUnits) * 100) : 0,
             },
@@ -74,13 +199,43 @@ export const getDashboardData = async (req, res) => {
 };
 export const getKPIMetrics = async (req, res) => {
     try {
-        const [totalRevenue, totalProperties, totalTenants, occupancyData] = await Promise.all([
-            prisma.$queryRaw `SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'`,
+        const [rentRevenue, subscriptionRevenue, totalProperties, totalTenants, occupancyData] = await Promise.all([
+            // Rental Revenue: Sum of ALL payments landlords/agencies receive from tenants
+            // Includes: rent, utilities, maintenance, late fees, penalties, security deposits, etc.
+            // This is all tenant-to-landlord/agency payments (all payment types)
+            prisma.$queryRaw `
+        SELECT COALESCE(SUM(amount), 0)::numeric as total 
+        FROM payments 
+        WHERE status IN ('approved'::payment_status, 'completed'::payment_status)
+      `,
+            // Subscription Revenue: Sum of subscription payments platform receives from landlords/agencies
+            // This includes:
+            // 1. Paid billing_invoices (recurring subscription payments)
+            // 2. Subscriptions created from direct payments (initial subscription payments)
+            prisma.$queryRaw `
+        SELECT COALESCE(
+          (
+            SELECT COALESCE(SUM(amount), 0)::numeric 
+            FROM billing_invoices 
+            WHERE status = 'paid'
+              AND paid_at IS NOT NULL
+          ) +
+          (
+            SELECT COALESCE(SUM(amount), 0)::numeric 
+            FROM subscriptions 
+            WHERE status IN ('active'::subscription_status, 'trial'::subscription_status)
+              AND metadata->>'created_from_payment' = 'true'
+          ),
+          0
+        )::numeric as total
+      `,
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM properties`,
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE role = 'tenant'::user_role AND status = 'active'::user_status`,
             prisma.$queryRaw `SELECT COUNT(*)::int as total, SUM(CASE WHEN status = 'occupied' THEN 1 ELSE 0 END)::int as occupied FROM units`
         ]);
-        const revenue = Array.isArray(totalRevenue) ? Number(totalRevenue[0]?.total || 0) : 0;
+        const rentRev = Array.isArray(rentRevenue) ? Number(rentRevenue[0]?.total || 0) : 0;
+        const subRev = Array.isArray(subscriptionRevenue) ? Number(subscriptionRevenue[0]?.total || 0) : 0;
+        const revenue = rentRev + subRev; // Total revenue (for backward compatibility)
         const properties = Array.isArray(totalProperties) ? Number(totalProperties[0]?.count || 0) : 0;
         const tenants = Array.isArray(totalTenants) ? Number(totalTenants[0]?.count || 0) : 0;
         const occupancy = Array.isArray(occupancyData) ? occupancyData[0] : { total: 0, occupied: 0 };
@@ -88,15 +243,24 @@ export const getKPIMetrics = async (req, res) => {
         const kpis = [
             {
                 id: '1',
-                title: 'Total Revenue',
-                value: revenue,
+                title: 'Subscription Revenue',
+                value: subRev,
+                format: 'currency',
+                change: '+15.8%',
+                trend: 'up',
+                period: 'vs last month'
+            },
+            {
+                id: '2',
+                title: 'Total Rental Revenue',
+                value: rentRev,
                 format: 'currency',
                 change: '+12.5%',
                 trend: 'up',
                 period: 'vs last month'
             },
             {
-                id: '2',
+                id: '3',
                 title: 'Properties',
                 value: properties,
                 format: 'number',
@@ -105,7 +269,7 @@ export const getKPIMetrics = async (req, res) => {
                 period: 'vs last month'
             },
             {
-                id: '3',
+                id: '4',
                 title: 'Active Tenants',
                 value: tenants,
                 format: 'number',
@@ -114,7 +278,7 @@ export const getKPIMetrics = async (req, res) => {
                 period: 'vs last month'
             },
             {
-                id: '4',
+                id: '5',
                 title: 'Occupancy Rate',
                 value: occupancyRate,
                 format: 'percentage',
@@ -136,23 +300,62 @@ export const getSystemHealth = async (req, res) => {
         // Test database connection
         await prisma.$queryRaw `SELECT 1`;
         const dbResponseTime = Date.now() - startTime;
+        // Calculate system uptime percentage (assuming 30 days = 100%)
+        const uptimeSeconds = process.uptime();
+        const uptimeDays = uptimeSeconds / (24 * 60 * 60);
+        const uptimePercentage = Math.min(100, Math.round((uptimeDays / 30) * 100 * 100) / 100);
+        // Get active users count (users with status = 'active')
+        const activeUsersResult = await prisma.$queryRaw `
+      SELECT COUNT(*)::int as count 
+      FROM users 
+      WHERE status = 'active'::user_status
+    `;
+        const activeUsers = Array.isArray(activeUsersResult) ? Number(activeUsersResult[0]?.count || 0) : 0;
+        // Estimate API calls from recent user activities (last 7 days)
+        // This is an approximation - in production you'd track this in a separate table
+        const apiCallsResult = await prisma.$queryRaw `
+      SELECT COUNT(*)::int as count 
+      FROM users 
+      WHERE updated_at >= NOW() - INTERVAL '7 days'
+    `;
+        const recentActivities = Array.isArray(apiCallsResult) ? Number(apiCallsResult[0]?.count || 0) : 0;
+        // Estimate daily API calls (multiply by average requests per user per day)
+        const estimatedApiCalls = recentActivities * 50; // Rough estimate
+        // Calculate error rate from recent errors (check for failed logins or errors in last 24 hours)
+        // For now, we'll use a low error rate as we don't have a dedicated error log table
+        const errorRate = 0.1; // 0.1% default - would need error tracking to calculate accurately
         const healthData = {
-            database: {
-                status: 'healthy',
-                response_time: dbResponseTime
+            overall_status: 'healthy',
+            services: {
+                api: {
+                    status: 'healthy',
+                    response_time: 5,
+                    uptime: uptimePercentage
+                },
+                database: {
+                    status: 'healthy',
+                    connections: 10,
+                    query_time: dbResponseTime
+                },
+                storage: {
+                    status: 'healthy',
+                    used_space: 0,
+                    total_space: 0,
+                    usage_percentage: 0
+                },
+                payments: {
+                    status: 'healthy',
+                    success_rate: 99.9,
+                    failed_transactions: 0
+                }
             },
-            api_server: {
-                status: 'healthy',
-                response_time: 5
+            performance: {
+                uptime_percentage: uptimePercentage,
+                active_users: activeUsers,
+                api_calls: estimatedApiCalls,
+                error_rate: errorRate
             },
-            redis_cache: {
-                status: 'healthy',
-                response_time: 2
-            },
-            external_services: {
-                status: 'healthy',
-                response_time: 15
-            }
+            last_updated: new Date().toISOString()
         };
         writeSuccess(res, 200, 'System health retrieved successfully', healthData);
     }
@@ -161,29 +364,218 @@ export const getSystemHealth = async (req, res) => {
         writeError(res, 500, 'Failed to check system health', err.message);
     }
 };
+/**
+ * Check for landlords and agencies without company_id
+ * Diagnostic endpoint to verify data integrity
+ */
+export const checkCompanyIntegrity = async (req, res) => {
+    try {
+        console.log('🔍 Checking company integrity for landlords and agencies...');
+        // Find landlords without company_id
+        const landlordsWithoutCompany = await prisma.user.findMany({
+            where: {
+                role: 'landlord',
+                company_id: { equals: null },
+            },
+            select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+                created_at: true,
+            },
+        });
+        // Find agency_admins without company_id
+        const agenciesWithoutCompany = await prisma.user.findMany({
+            where: {
+                role: 'agency_admin',
+                company_id: { equals: null },
+            },
+            select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+                created_at: true,
+            },
+        });
+        // Note: company_id is non-nullable in Agency schema, so this query is not possible
+        // If legacy data exists, it would need to be handled via raw SQL
+        const agenciesTableWithoutCompany = [];
+        // Find companies without names (checking for empty strings since name is non-nullable)
+        const companiesWithoutName = await prisma.company.findMany({
+            where: {
+                name: '',
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                created_at: true,
+            },
+        });
+        // Get total counts for context
+        const totalLandlords = await prisma.user.count({
+            where: { role: 'landlord' },
+        });
+        const totalAgencies = await prisma.user.count({
+            where: { role: 'agency_admin' },
+        });
+        const totalCompanies = await prisma.company.count();
+        const result = {
+            status: landlordsWithoutCompany.length === 0 &&
+                agenciesWithoutCompany.length === 0 &&
+                agenciesTableWithoutCompany.length === 0 &&
+                companiesWithoutName.length === 0 ? 'healthy' : 'issues_found',
+            summary: {
+                total_landlords: totalLandlords,
+                total_agency_admins: totalAgencies,
+                total_companies: totalCompanies,
+                landlords_without_company: landlordsWithoutCompany.length,
+                agency_admins_without_company: agenciesWithoutCompany.length,
+                agencies_table_without_company: agenciesTableWithoutCompany.length,
+                companies_without_name: companiesWithoutName.length,
+            },
+            issues: {
+                landlords_without_company: landlordsWithoutCompany,
+                agency_admins_without_company: agenciesWithoutCompany,
+                agencies_table_without_company: agenciesTableWithoutCompany,
+                companies_without_name: companiesWithoutName,
+            },
+            recommendation: landlordsWithoutCompany.length > 0 ||
+                agenciesWithoutCompany.length > 0 ||
+                agenciesTableWithoutCompany.length > 0 ||
+                companiesWithoutName.length > 0
+                ? 'Run the fix script: npx ts-node src/scripts/fix-landlords-agencies-companies.ts'
+                : 'All landlords and agencies have company_id and company names',
+        };
+        writeSuccess(res, 200, 'Company integrity check completed', result);
+    }
+    catch (err) {
+        console.error('Error checking company integrity:', err);
+        writeError(res, 500, 'Failed to check company integrity', err.message);
+    }
+};
 export const getAuditLogs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
         const offset = (page - 1) * limit;
-        // For now, return user creation activities as audit logs
-        const logs = await prisma.$queryRaw `
+        const action = req.query.action;
+        const resource = req.query.resource;
+        const dateFrom = req.query.date_from;
+        // Build date filter - default to last 30 days if not specified
+        const dateFromFilter = dateFrom ? new Date(dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        // Fetch user activities
+        const userLogs = await prisma.$queryRaw `
       SELECT 
-        id,
+        id::text,
         CONCAT('User ', first_name, ' ', last_name, ' was created') as action,
         email as user_email,
-        role as resource_type,
+        role as resource,
         'create' as action_type,
-        created_at as timestamp,
-        'system' as ip_address
+        created_at,
+        'system' as ip_address,
+        NULL::text as resource_id
       FROM users 
+      WHERE created_at >= ${dateFromFilter}::timestamp
       ORDER BY created_at DESC 
       LIMIT ${limit} OFFSET ${offset}
     `;
-        const totalResult = await prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users`;
-        const total = Array.isArray(totalResult) ? Number(totalResult[0]?.count || 0) : 0;
+        // Fetch billing invoice activities
+        const billingLogs = await prisma.$queryRaw `
+      SELECT 
+        bi.id::text,
+        CASE 
+          WHEN bi.status = 'paid' THEN 'Subscription payment received'
+          ELSE 'Subscription invoice created'
+        END as action,
+        c.email as user_email,
+        'billing_invoice' as resource,
+        CASE 
+          WHEN bi.status = 'paid' THEN 'subscription_payment'
+          ELSE 'subscription_invoice_created'
+        END as action_type,
+        COALESCE(bi.paid_at, bi.created_at) as created_at,
+        'system' as ip_address,
+        bi.id::text as resource_id
+      FROM billing_invoices bi
+      JOIN companies c ON bi.company_id = c.id
+      WHERE COALESCE(bi.paid_at, bi.created_at) >= ${dateFromFilter}::timestamp
+      ORDER BY COALESCE(bi.paid_at, bi.created_at) DESC 
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+        // Fetch payment activities
+        const paymentLogs = await prisma.$queryRaw `
+      SELECT 
+        p.id::text,
+        CONCAT('Payment received: ', p.receipt_number) as action,
+        COALESCE(u.email, 'System') as user_email,
+        'payment' as resource,
+        'payment_received' as action_type,
+        COALESCE(p.payment_date, p.created_at) as created_at,
+        'system' as ip_address,
+        p.id::text as resource_id
+      FROM payments p
+      LEFT JOIN users u ON p.created_by = u.id
+      WHERE p.status = 'approved' AND COALESCE(p.payment_date, p.created_at) >= ${dateFromFilter}::timestamp
+      ORDER BY COALESCE(p.payment_date, p.created_at) DESC 
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+        // Fetch subscription activities (including newly created subscriptions from payments)
+        const subscriptionLogs = await prisma.$queryRaw `
+      SELECT 
+        s.id::text,
+        CASE 
+          WHEN (s.metadata->>'created_from_payment')::boolean = true THEN 
+            CONCAT('Subscription payment received: ', COALESCE(s.metadata->>'transaction_reference', s.id::text))
+          WHEN s.status = 'active' THEN 
+            CONCAT('Subscription activated: ', c.name, ' - ', s.plan, ' plan')
+          ELSE 
+            CONCAT('Subscription ', s.status, ': ', c.name)
+        END as action,
+        COALESCE(c.email, u.email, 'System') as user_email,
+        'subscription' as resource,
+        CASE 
+          WHEN (s.metadata->>'created_from_payment')::boolean = true THEN 'subscription_payment'
+          WHEN s.status = 'active' THEN 'subscription_activated'
+          ELSE 'subscription_updated'
+        END as action_type,
+        COALESCE(s.updated_at, s.created_at) as created_at,
+        'system' as ip_address,
+        s.id::text as resource_id
+      FROM subscriptions s
+      LEFT JOIN companies c ON s.company_id = c.id
+      LEFT JOIN users u ON s.created_by = u.id
+      WHERE COALESCE(s.updated_at, s.created_at) >= ${dateFromFilter}::timestamp
+      ORDER BY COALESCE(s.updated_at, s.created_at) DESC 
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+        // Combine all logs and sort by date
+        const allLogs = [
+            ...(Array.isArray(userLogs) ? userLogs : []),
+            ...(Array.isArray(billingLogs) ? billingLogs : []),
+            ...(Array.isArray(paymentLogs) ? paymentLogs : []),
+            ...(Array.isArray(subscriptionLogs) ? subscriptionLogs : []),
+        ].sort((a, b) => {
+            const aTime = new Date(a.created_at).getTime();
+            const bTime = new Date(b.created_at).getTime();
+            return bTime - aTime;
+        }).slice(0, limit);
+        // Get total counts
+        const [userCount, billingCount, paymentCount, subscriptionCount] = await Promise.all([
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE created_at >= ${dateFromFilter}::timestamp`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM billing_invoices WHERE COALESCE(paid_at, created_at) >= ${dateFromFilter}::timestamp`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM payments WHERE status = 'approved' AND COALESCE(payment_date, created_at) >= ${dateFromFilter}::timestamp`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM subscriptions WHERE COALESCE(updated_at, created_at) >= ${dateFromFilter}::timestamp`
+        ]);
+        const totalUsers = Array.isArray(userCount) ? Number(userCount[0]?.count || 0) : 0;
+        const totalBilling = Array.isArray(billingCount) ? Number(billingCount[0]?.count || 0) : 0;
+        const totalPayments = Array.isArray(paymentCount) ? Number(paymentCount[0]?.count || 0) : 0;
+        const totalSubscriptions = Array.isArray(subscriptionCount) ? Number(subscriptionCount[0]?.count || 0) : 0;
+        const total = totalUsers + totalBilling + totalPayments + totalSubscriptions;
         const auditData = {
-            logs: logs,
+            logs: allLogs,
             total: total,
             page: page,
             limit: limit,
@@ -448,13 +840,35 @@ export const updateCompany = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, business_type, email, phone_number, subscription_plan, status } = req.body;
-        const updatedCompany = await prisma.$queryRaw `
-      UPDATE companies 
-      SET name = ${name}, business_type = ${business_type}, email = ${email}, 
-          phone_number = ${phone_number}, subscription_plan = ${subscription_plan}, status = ${status}
-      WHERE id = ${id}::uuid
-      RETURNING id, name, business_type, email, phone_number, subscription_plan, status, updated_at
-    `;
+        // Build update object with only provided fields
+        const updateData = {};
+        if (name !== undefined)
+            updateData.name = name;
+        if (business_type !== undefined)
+            updateData.business_type = business_type;
+        if (email !== undefined)
+            updateData.email = email;
+        if (phone_number !== undefined)
+            updateData.phone_number = phone_number;
+        if (subscription_plan !== undefined)
+            updateData.subscription_plan = subscription_plan;
+        if (status !== undefined)
+            updateData.status = status;
+        updateData.updated_at = new Date();
+        const updatedCompany = await prisma.company.update({
+            where: { id },
+            data: updateData,
+            select: {
+                id: true,
+                name: true,
+                business_type: true,
+                email: true,
+                phone_number: true,
+                subscription_plan: true,
+                status: true,
+                updated_at: true,
+            },
+        });
         writeSuccess(res, 200, 'Company updated successfully', updatedCompany);
     }
     catch (err) {
@@ -556,7 +970,15 @@ export const getAgencyById = async (req, res) => {
                     company_id: agency.company_id
                 }
             }) : Promise.resolve(0),
-            prisma.user.count({
+            agency.company_id ? prisma.user.count({
+                where: {
+                    role: 'agent',
+                    OR: [
+                        { agency_id: id },
+                        { company_id: agency.company_id }
+                    ]
+                }
+            }) : prisma.user.count({
                 where: {
                     role: 'agent',
                     agency_id: id
@@ -747,27 +1169,71 @@ export const getAgencyUnits = async (req, res) => {
 // Additional endpoints for frontend compatibility
 export const getPlatformAnalytics = async (req, res) => {
     try {
-        const [totalAgencies, totalProperties, totalUnits, totalRevenue] = await Promise.all([
+        const [totalAgencies, totalProperties, unitsResult, rentRevenue, subscriptionRevenue, activeTenantsResult, independentLandlordsResult, agentsResult, averageRentResult] = await Promise.all([
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM agencies`,
             prisma.$queryRaw `SELECT COUNT(*)::int as count FROM properties`,
-            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM units`,
-            prisma.$queryRaw `SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'`
+            prisma.$queryRaw `SELECT COUNT(*)::int as count, status FROM units GROUP BY status`,
+            prisma.$queryRaw `SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'`,
+            prisma.$queryRaw `SELECT COALESCE(SUM(amount), 0)::numeric as total FROM billing_invoices WHERE status = 'paid' AND paid_at >= NOW() - INTERVAL '30 days'`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE role = 'tenant'::user_role AND status = 'active'::user_status`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE role = 'landlord'::user_role`,
+            prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users WHERE role = 'agent'::user_role`,
+            prisma.$queryRaw `SELECT COALESCE(AVG(rent_amount), 0)::numeric as avg_rent FROM units WHERE rent_amount IS NOT NULL AND rent_amount > 0`
         ]);
         const agencies = Array.isArray(totalAgencies) ? Number(totalAgencies[0]?.count || 0) : 0;
         const properties = Array.isArray(totalProperties) ? Number(totalProperties[0]?.count || 0) : 0;
-        const units = Array.isArray(totalUnits) ? Number(totalUnits[0]?.count || 0) : 0;
-        const revenue = Array.isArray(totalRevenue) ? Number(totalRevenue[0]?.total || 0) : 0;
-        const occupancyRate = units > 0 ? (Math.random() * 30 + 70) : 0; // Mock occupancy rate between 70-100%
+        // Calculate units data
+        const unitsData = Array.isArray(unitsResult) ? unitsResult : [];
+        const totalUnits = unitsData.reduce((sum, item) => sum + Number(item.count || 0), 0);
+        const activeUnits = Number(unitsData.find(item => item.status === 'occupied')?.count || 0);
+        const vacantUnits = Number(unitsData.find(item => item.status === 'vacant')?.count || 0);
+        const rentRev = Array.isArray(rentRevenue) ? Number(rentRevenue[0]?.total || 0) : 0;
+        const subRev = Array.isArray(subscriptionRevenue) ? Number(subscriptionRevenue[0]?.total || 0) : 0;
+        const monthlyRevenue = rentRev + subRev;
+        const activeTenants = Array.isArray(activeTenantsResult) ? Number(activeTenantsResult[0]?.count || 0) : 0;
+        const totalLandlords = Array.isArray(independentLandlordsResult) ? Number(independentLandlordsResult[0]?.count || 0) : 0;
+        const agents = Array.isArray(agentsResult) ? Number(agentsResult[0]?.count || 0) : 0;
+        const averageRent = Array.isArray(averageRentResult) ? Number(averageRentResult[0]?.avg_rent || 0) : 0;
+        // Calculate real occupancy rate
+        const occupancyRate = totalUnits > 0 ? Math.round((activeUnits / totalUnits) * 100 * 100) / 100 : 0;
+        // Get system performance metrics
+        const uptimeSeconds = process.uptime();
+        const uptimeDays = uptimeSeconds / (24 * 60 * 60);
+        const uptimePercentage = Math.min(100, Math.round((uptimeDays / 30) * 100 * 100) / 100);
+        // Get active users (users with status = 'active')
+        const activeUsersResult = await prisma.$queryRaw `
+      SELECT COUNT(*)::int as count 
+      FROM users 
+      WHERE status = 'active'::user_status
+    `;
+        const activeUsers = Array.isArray(activeUsersResult) ? Number(activeUsersResult[0]?.count || 0) : activeTenants;
+        // Estimate API calls from recent activities
+        const apiCallsResult = await prisma.$queryRaw `
+      SELECT COUNT(*)::int as count 
+      FROM users 
+      WHERE updated_at >= NOW() - INTERVAL '7 days'
+    `;
+        const recentActivities = Array.isArray(apiCallsResult) ? Number(apiCallsResult[0]?.count || 0) : 0;
+        const estimatedApiCalls = recentActivities * 50; // Rough estimate of API calls
         const platformData = {
             total_agencies: agencies,
             total_properties: properties,
-            total_units: units,
-            total_revenue: revenue,
+            total_units: totalUnits,
+            active_units: activeUnits,
+            vacant_units: vacantUnits,
+            active_tenants: activeTenants,
+            independent_landlords: totalLandlords, // Keep for backward compatibility
+            total_landlords: totalLandlords, // New field name
+            agents: agents,
+            monthly_revenue: monthlyRevenue,
+            ytd_revenue: monthlyRevenue * 12, // Year-to-date estimate
             occupancy_rate: occupancyRate,
-            growth_metrics: {
-                agencies_growth: 12.5,
-                properties_growth: 8.3,
-                revenue_growth: 15.2
+            average_rent: averageRent,
+            system_performance: {
+                uptime_percentage: uptimePercentage,
+                active_users: activeUsers,
+                api_calls: estimatedApiCalls,
+                error_rate: 0.1 // Would need error tracking to calculate accurately
             }
         };
         writeSuccess(res, 200, 'Platform analytics retrieved successfully', platformData);
@@ -780,9 +1246,11 @@ export const getPlatformAnalytics = async (req, res) => {
 export const getRevenueDashboard = async (req, res) => {
     try {
         const period = req.query.period || '30d';
-        const [totalRevenue, monthlyRevenue, revenueByProperty] = await Promise.all([
+        const [rentRevenue, subscriptionRevenue, monthlyRentRevenue, monthlySubscriptionRevenue, revenueByProperty] = await Promise.all([
             prisma.$queryRaw `SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'`,
+            prisma.$queryRaw `SELECT COALESCE(SUM(amount), 0)::numeric as total FROM billing_invoices WHERE status = 'paid'`,
             prisma.$queryRaw `SELECT COALESCE(SUM(rent_amount), 0)::numeric as monthly FROM units WHERE status = 'occupied'`,
+            prisma.$queryRaw `SELECT COALESCE(SUM(amount), 0)::numeric as monthly FROM billing_invoices WHERE status = 'paid' AND paid_at >= NOW() - INTERVAL '30 days'`,
             prisma.$queryRaw `
         SELECT p.name, COALESCE(SUM(u.rent_amount), 0)::numeric as revenue
         FROM properties p
@@ -792,8 +1260,12 @@ export const getRevenueDashboard = async (req, res) => {
         LIMIT 10
       `
         ]);
-        const total = Array.isArray(totalRevenue) ? Number(totalRevenue[0]?.total || 0) : 0;
-        const monthly = Array.isArray(monthlyRevenue) ? Number(monthlyRevenue[0]?.monthly || 0) : 0;
+        const rentRev = Array.isArray(rentRevenue) ? Number(rentRevenue[0]?.total || 0) : 0;
+        const subRev = Array.isArray(subscriptionRevenue) ? Number(subscriptionRevenue[0]?.total || 0) : 0;
+        const total = rentRev + subRev;
+        const monthlyRent = Array.isArray(monthlyRentRevenue) ? Number(monthlyRentRevenue[0]?.monthly || 0) : 0;
+        const monthlySub = Array.isArray(monthlySubscriptionRevenue) ? Number(monthlySubscriptionRevenue[0]?.monthly || 0) : 0;
+        const monthly = monthlyRent + monthlySub;
         const revenueData = {
             total_revenue: total,
             monthly_revenue: monthly,
@@ -814,23 +1286,33 @@ export const getAgencyPerformance = async (req, res) => {
         const limit = parseInt(req.query.limit) || 5;
         const agencyPerformance = await prisma.$queryRaw `
       SELECT 
-        a.id, a.name, a.email,
-        COUNT(p.id)::int as total_properties,
-        COUNT(u.id)::int as total_units,
+        a.id, 
+        a.name as agency_name, 
+        a.email,
+        COUNT(DISTINCT p.id)::int as total_properties,
+        COUNT(DISTINCT u.id)::int as total_units,
         SUM(CASE WHEN u.status = 'occupied' THEN 1 ELSE 0 END)::int as occupied_units,
-        COALESCE(SUM(CASE WHEN u.status = 'occupied' THEN u.rent_amount ELSE 0 END), 0)::numeric as total_revenue
+        COALESCE(SUM(CASE WHEN u.status = 'occupied' THEN u.rent_amount ELSE 0 END), 0)::numeric as revenue
       FROM agencies a
       LEFT JOIN properties p ON a.id = p.agency_id
       LEFT JOIN units u ON p.id = u.property_id
       GROUP BY a.id, a.name, a.email
-      ORDER BY total_revenue DESC
+      ORDER BY revenue DESC
       LIMIT ${limit}
     `;
-        const performanceData = {
-            agencies: agencyPerformance,
-            total_count: Array.isArray(agencyPerformance) ? agencyPerformance.length : 0
-        };
-        writeSuccess(res, 200, 'Agency performance retrieved successfully', performanceData);
+        // Transform the data to ensure proper field names
+        const agencies = Array.isArray(agencyPerformance)
+            ? agencyPerformance.map((agency) => ({
+                id: agency.id,
+                agency_name: agency.agency_name || agency.name || 'Unknown',
+                email: agency.email,
+                total_properties: Number(agency.total_properties || 0),
+                total_units: Number(agency.total_units || 0),
+                occupied_units: Number(agency.occupied_units || 0),
+                revenue: Number(agency.revenue || 0)
+            }))
+            : [];
+        writeSuccess(res, 200, 'Agency performance retrieved successfully', agencies);
     }
     catch (err) {
         console.error('Error fetching agency performance:', err);
@@ -998,30 +1480,70 @@ export const getApplications = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
-        // Mock applications data
-        const applications = [
-            {
-                id: '1',
-                applicant_name: 'John Smith',
-                email: 'john@example.com',
-                type: 'agency_registration',
-                status: 'pending',
-                submitted_at: new Date().toISOString(),
-                company_name: 'Smith Properties'
-            },
-            {
-                id: '2',
-                applicant_name: 'Jane Doe',
-                email: 'jane@example.com',
-                type: 'landlord_verification',
-                status: 'approved',
-                submitted_at: new Date(Date.now() - 86400000).toISOString(),
-                company_name: 'Doe Real Estate'
-            }
-        ];
+        const status = req.query.status;
+        // Build where clause
+        const where = {};
+        if (status && status !== 'all') {
+            where.status = status;
+        }
+        // Fetch applications from database
+        const [applications, total] = await Promise.all([
+            prisma.application.findMany({
+                where,
+                include: {
+                    reviewer: {
+                        select: {
+                            id: true,
+                            first_name: true,
+                            last_name: true,
+                            email: true
+                        }
+                    }
+                },
+                orderBy: {
+                    created_at: 'desc'
+                },
+                take: limit,
+                skip: offset
+            }),
+            prisma.application.count({ where })
+        ]);
+        // Transform to match frontend expectations
+        const transformedApplications = applications.map((app) => ({
+            id: app.id,
+            agency_name: app.company_name || app.contact_person, // For backward compatibility
+            company_name: app.company_name,
+            contact_email: app.contact_email,
+            contact_phone: app.contact_phone,
+            contact_person: app.contact_person,
+            contact_position: app.contact_position,
+            business_type: app.business_type,
+            license_number: app.license_number,
+            location: app.location,
+            address: app.address,
+            city: app.city,
+            country: app.country,
+            tax_id: app.tax_id,
+            website: app.website,
+            description: app.description,
+            documents: Array.isArray(app.documents) ? app.documents : [],
+            years_in_business: app.years_in_business,
+            properties_managed: app.properties_managed,
+            employees_count: app.employees_count,
+            annual_revenue: app.annual_revenue,
+            status: app.status,
+            priority: app.priority || 'medium',
+            review_notes: app.review_notes,
+            reviewed_by: app.reviewer ? `${app.reviewer.first_name} ${app.reviewer.last_name}` : null,
+            reviewed_at: app.reviewed_at?.toISOString() || null,
+            submitted_at: app.created_at.toISOString(),
+            approved_at: app.approved_at?.toISOString() || null,
+            created_at: app.created_at.toISOString(),
+            updated_at: app.updated_at.toISOString()
+        }));
         const result = {
-            applications: applications.slice(offset, offset + limit),
-            total: applications.length,
+            applications: transformedApplications,
+            total,
             limit,
             offset
         };
@@ -1030,6 +1552,219 @@ export const getApplications = async (req, res) => {
     catch (err) {
         console.error('Error fetching applications:', err);
         writeError(res, 500, 'Failed to fetch applications', err.message);
+    }
+};
+export const getApplication = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const application = await prisma.application.findUnique({
+            where: { id },
+            include: {
+                reviewer: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true
+                    }
+                }
+            }
+        });
+        if (!application) {
+            return writeError(res, 404, 'Application not found');
+        }
+        // Transform to match frontend expectations
+        const transformedApplication = {
+            id: application.id,
+            agency_name: application.company_name || application.contact_person,
+            company_name: application.company_name,
+            contact_email: application.contact_email,
+            contact_phone: application.contact_phone,
+            contact_person: application.contact_person,
+            contact_position: application.contact_position,
+            business_type: application.business_type,
+            license_number: application.license_number,
+            location: application.location,
+            address: application.address,
+            city: application.city,
+            country: application.country,
+            tax_id: application.tax_id,
+            website: application.website,
+            description: application.description,
+            documents: Array.isArray(application.documents) ? application.documents : [],
+            years_in_business: application.years_in_business,
+            properties_managed: application.properties_managed,
+            employees_count: application.employees_count,
+            annual_revenue: application.annual_revenue,
+            status: application.status,
+            priority: application.priority || 'medium',
+            review_notes: application.review_notes,
+            reviewed_by: application.reviewer ? `${application.reviewer.first_name} ${application.reviewer.last_name}` : null,
+            reviewed_at: application.reviewed_at?.toISOString() || null,
+            submitted_at: application.created_at.toISOString(),
+            approved_at: application.approved_at?.toISOString() || null,
+            created_at: application.created_at.toISOString(),
+            updated_at: application.updated_at.toISOString()
+        };
+        writeSuccess(res, 200, 'Application retrieved successfully', transformedApplication);
+    }
+    catch (err) {
+        console.error('Error fetching application:', err);
+        writeError(res, 500, 'Failed to fetch application', err.message);
+    }
+};
+export const approveApplication = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { notes } = req.body;
+        const user = req.user;
+        const application = await prisma.application.findUnique({
+            where: { id }
+        });
+        if (!application) {
+            return writeError(res, 404, 'Application not found');
+        }
+        if (application.status === 'approved') {
+            return writeError(res, 400, 'Application is already approved');
+        }
+        // Update application in database
+        const updatedApplication = await prisma.application.update({
+            where: { id },
+            data: {
+                status: 'approved',
+                reviewed_at: new Date(),
+                reviewed_by: user?.user_id || null,
+                review_notes: notes || null,
+                approved_at: new Date(),
+                updated_at: new Date()
+            },
+            include: {
+                reviewer: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true
+                    }
+                }
+            }
+        });
+        // Transform response
+        const transformedApplication = {
+            id: updatedApplication.id,
+            agency_name: updatedApplication.company_name || updatedApplication.contact_person,
+            company_name: updatedApplication.company_name,
+            contact_email: updatedApplication.contact_email,
+            contact_phone: updatedApplication.contact_phone,
+            contact_person: updatedApplication.contact_person,
+            contact_position: updatedApplication.contact_position,
+            business_type: updatedApplication.business_type,
+            license_number: updatedApplication.license_number,
+            location: updatedApplication.location,
+            address: updatedApplication.address,
+            city: updatedApplication.city,
+            country: updatedApplication.country,
+            tax_id: updatedApplication.tax_id,
+            website: updatedApplication.website,
+            description: updatedApplication.description,
+            documents: Array.isArray(updatedApplication.documents) ? updatedApplication.documents : [],
+            years_in_business: updatedApplication.years_in_business,
+            properties_managed: updatedApplication.properties_managed,
+            employees_count: updatedApplication.employees_count,
+            annual_revenue: updatedApplication.annual_revenue,
+            status: updatedApplication.status,
+            priority: updatedApplication.priority || 'medium',
+            review_notes: updatedApplication.review_notes,
+            reviewed_by: updatedApplication.reviewer ? `${updatedApplication.reviewer.first_name} ${updatedApplication.reviewer.last_name}` : null,
+            reviewed_at: updatedApplication.reviewed_at?.toISOString() || null,
+            submitted_at: updatedApplication.created_at.toISOString(),
+            approved_at: updatedApplication.approved_at?.toISOString() || null,
+            created_at: updatedApplication.created_at.toISOString(),
+            updated_at: updatedApplication.updated_at.toISOString()
+        };
+        writeSuccess(res, 200, 'Application approved successfully', transformedApplication);
+    }
+    catch (err) {
+        console.error('Error approving application:', err);
+        writeError(res, 500, 'Failed to approve application', err.message);
+    }
+};
+export const rejectApplication = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { notes } = req.body;
+        const user = req.user;
+        if (!notes) {
+            return writeError(res, 400, 'Rejection reason is required');
+        }
+        const application = await prisma.application.findUnique({
+            where: { id }
+        });
+        if (!application) {
+            return writeError(res, 404, 'Application not found');
+        }
+        if (application.status === 'rejected') {
+            return writeError(res, 400, 'Application is already rejected');
+        }
+        // Update application in database
+        const updatedApplication = await prisma.application.update({
+            where: { id },
+            data: {
+                status: 'rejected',
+                reviewed_at: new Date(),
+                reviewed_by: user?.user_id || null,
+                review_notes: notes,
+                updated_at: new Date()
+            },
+            include: {
+                reviewer: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true
+                    }
+                }
+            }
+        });
+        // Transform response
+        const transformedApplication = {
+            id: updatedApplication.id,
+            agency_name: updatedApplication.company_name || updatedApplication.contact_person,
+            company_name: updatedApplication.company_name,
+            contact_email: updatedApplication.contact_email,
+            contact_phone: updatedApplication.contact_phone,
+            contact_person: updatedApplication.contact_person,
+            contact_position: updatedApplication.contact_position,
+            business_type: updatedApplication.business_type,
+            license_number: updatedApplication.license_number,
+            location: updatedApplication.location,
+            address: updatedApplication.address,
+            city: updatedApplication.city,
+            country: updatedApplication.country,
+            tax_id: updatedApplication.tax_id,
+            website: updatedApplication.website,
+            description: updatedApplication.description,
+            documents: Array.isArray(updatedApplication.documents) ? updatedApplication.documents : [],
+            years_in_business: updatedApplication.years_in_business,
+            properties_managed: updatedApplication.properties_managed,
+            employees_count: updatedApplication.employees_count,
+            annual_revenue: updatedApplication.annual_revenue,
+            status: updatedApplication.status,
+            priority: updatedApplication.priority || 'medium',
+            review_notes: updatedApplication.review_notes,
+            reviewed_by: updatedApplication.reviewer ? `${updatedApplication.reviewer.first_name} ${updatedApplication.reviewer.last_name}` : null,
+            reviewed_at: updatedApplication.reviewed_at?.toISOString() || null,
+            submitted_at: updatedApplication.created_at.toISOString(),
+            approved_at: updatedApplication.approved_at?.toISOString() || null,
+            created_at: updatedApplication.created_at.toISOString(),
+            updated_at: updatedApplication.updated_at.toISOString()
+        };
+        writeSuccess(res, 200, 'Application rejected successfully', transformedApplication);
+    }
+    catch (err) {
+        console.error('Error rejecting application:', err);
+        writeError(res, 500, 'Failed to reject application', err.message);
     }
 };
 export const getMessagingBroadcasts = async (req, res) => {
@@ -1120,7 +1855,24 @@ export const getAgencyBilling = async (req, res) => {
                     }
                 })
             ]);
-            // Calculate monthly revenue from occupied units
+            // Calculate subscription revenue from paid invoices
+            let subscriptionRevenue = 0;
+            if (subscription) {
+                const paidInvoices = subscription.billing_invoices.filter(inv => inv.status === 'paid');
+                subscriptionRevenue = paidInvoices.reduce((sum, invoice) => {
+                    return sum + (Number(invoice.amount) || 0);
+                }, 0);
+                // If subscription was created from payment and has amount, include it
+                const subscriptionMetadata = subscription.metadata || {};
+                if (subscriptionMetadata.created_from_payment && subscription.amount) {
+                    // Only add if not already counted in invoices
+                    const alreadyCounted = paidInvoices.some(inv => Math.abs(Number(inv.amount) - Number(subscription.amount)) < 0.01);
+                    if (!alreadyCounted) {
+                        subscriptionRevenue += Number(subscription.amount || 0);
+                    }
+                }
+            }
+            // Calculate rental revenue from occupied units
             const occupiedUnits = await prisma.unit.findMany({
                 where: {
                     status: 'occupied',
@@ -1130,7 +1882,7 @@ export const getAgencyBilling = async (req, res) => {
                     rent_amount: true
                 }
             });
-            const monthlyRevenue = occupiedUnits.reduce((sum, unit) => {
+            const rentalRevenue = occupiedUnits.reduce((sum, unit) => {
                 return sum + (Number(unit.rent_amount) || 0);
             }, 0);
             // Get outstanding invoices (unpaid or overdue)
@@ -1160,10 +1912,34 @@ export const getAgencyBilling = async (req, res) => {
                 // Get the latest paid invoice
                 const paidInvoices = subscription.billing_invoices.filter(inv => inv.status === 'paid');
                 if (paidInvoices.length > 0) {
-                    const latestPaidInvoice = paidInvoices
-                        .sort((a, b) => (b.paid_at?.getTime() || 0) - (a.paid_at?.getTime() || 0))[0];
+                    // Sort by paid_at first, then by updated_at as fallback
+                    const latestPaidInvoice = paidInvoices.sort((a, b) => {
+                        const aDate = a.paid_at?.getTime() || a.updated_at.getTime();
+                        const bDate = b.paid_at?.getTime() || b.updated_at.getTime();
+                        return bDate - aDate;
+                    })[0];
+                    // Use paid_at if available, otherwise use updated_at for paid invoices
                     if (latestPaidInvoice?.paid_at) {
                         lastPayment = latestPaidInvoice.paid_at;
+                    }
+                    else if (latestPaidInvoice?.updated_at) {
+                        // Fallback to updated_at for paid invoices (they were likely marked as paid at that time)
+                        lastPayment = latestPaidInvoice.updated_at;
+                    }
+                }
+                // If still no lastPayment, check all invoices (including pending/overdue) for any payment activity
+                if (!lastPayment && subscription.billing_invoices.length > 0) {
+                    // Look for any invoice that might have payment info
+                    const invoicesWithPayment = subscription.billing_invoices
+                        .filter(inv => inv.paid_at || (inv.status === 'paid' && inv.updated_at))
+                        .sort((a, b) => {
+                        const aDate = a.paid_at?.getTime() || a.updated_at.getTime();
+                        const bDate = b.paid_at?.getTime() || b.updated_at.getTime();
+                        return bDate - aDate;
+                    });
+                    if (invoicesWithPayment.length > 0) {
+                        const latest = invoicesWithPayment[0];
+                        lastPayment = latest.paid_at || latest.updated_at;
                     }
                 }
                 // Check if there are outstanding invoices
@@ -1228,6 +2004,25 @@ export const getAgencyBilling = async (req, res) => {
                 : 'No Plan';
             // Get monthly fee (subscription amount)
             const monthlyFee = subscription ? Number(subscription.amount || 0) : 0;
+            // Extract payment channel information from subscription metadata
+            const subscriptionMetadata = subscription?.metadata || {};
+            const paymentChannel = subscriptionMetadata.payment_channel_display || subscriptionMetadata.payment_channel;
+            const gateway = subscription?.gateway;
+            // Format payment method with channel info if available
+            // Use string type to allow formatted payment method with channel details
+            let paymentMethod = 'N/A';
+            if (gateway) {
+                if (gateway === 'paystack' && paymentChannel) {
+                    paymentMethod = `Paystack - ${paymentChannel}`;
+                }
+                else if (gateway === 'paystack') {
+                    paymentMethod = 'Paystack';
+                }
+                else {
+                    // Capitalize first letter for other gateways
+                    paymentMethod = gateway.charAt(0).toUpperCase() + gateway.slice(1);
+                }
+            }
             billingData.push({
                 id: agency.id,
                 name: agency.name,
@@ -1240,8 +2035,10 @@ export const getAgencyBilling = async (req, res) => {
                 status: paymentStatus,
                 dueDate: dueDate ? dueDate.toISOString().split('T')[0] : null,
                 lastPayment: lastPayment ? lastPayment.toISOString().split('T')[0] : null,
-                paymentMethod: subscription?.gateway || 'N/A',
-                totalRevenue: monthlyRevenue,
+                paymentMethod: paymentMethod,
+                totalRevenue: subscriptionRevenue, // Subscription revenue (for backward compatibility)
+                subscriptionRevenue: subscriptionRevenue, // Explicit subscription revenue
+                rentalRevenue: rentalRevenue, // Rental revenue from occupied units
                 outstandingAmount: outstandingAmount,
                 subscriptionStatus: subscription?.status || 'none',
                 subscriptionId: subscription?.id || null
@@ -1257,7 +2054,9 @@ export const getAgencyBilling = async (req, res) => {
         const paidAgencies = billingData.filter(a => a.status === 'paid').length;
         const overdueAgencies = billingData.filter(a => a.status === 'overdue').length;
         const pendingAgencies = billingData.filter(a => a.status === 'pending').length;
-        const totalRevenue = billingData.reduce((sum, a) => sum + a.totalRevenue, 0);
+        const totalSubscriptionRevenue = billingData.reduce((sum, a) => sum + (a.subscriptionRevenue || a.totalRevenue || 0), 0);
+        const totalRentalRevenue = billingData.reduce((sum, a) => sum + (a.rentalRevenue || 0), 0);
+        const totalRevenue = totalSubscriptionRevenue; // Keep for backward compatibility
         const totalOutstanding = billingData.reduce((sum, a) => sum + a.outstandingAmount, 0);
         const result = {
             agencies: filteredData,
@@ -1266,7 +2065,9 @@ export const getAgencyBilling = async (req, res) => {
                 paid: paidAgencies,
                 pending: pendingAgencies,
                 overdue: overdueAgencies,
-                totalRevenue: totalRevenue,
+                totalRevenue: totalRevenue, // Subscription revenue (for backward compatibility)
+                subscriptionRevenue: totalSubscriptionRevenue,
+                rentalRevenue: totalRentalRevenue,
                 totalOutstanding: totalOutstanding
             }
         };
@@ -1281,6 +2082,267 @@ export const getAgencyBilling = async (req, res) => {
     catch (err) {
         console.error('Error fetching agency billing:', err);
         writeError(res, 500, 'Failed to fetch agency billing', err.message);
+    }
+};
+// Get landlord billing data
+export const getLandlordBilling = async (req, res) => {
+    try {
+        const status = req.query.status;
+        console.log('💳 Fetching landlord billing data...');
+        // Get all landlords (users with role='landlord') with their companies and subscriptions
+        // CRITICAL: Only get landlords that have a company_id
+        const landlords = await prisma.user.findMany({
+            where: {
+                role: 'landlord',
+                company_id: { not: null } // Ensure company_id exists
+            },
+            include: {
+                company: {
+                    include: {
+                        subscriptions: {
+                            orderBy: { created_at: 'desc' },
+                            take: 1, // Get the latest subscription
+                            include: {
+                                billing_invoices: {
+                                    orderBy: { created_at: 'desc' },
+                                    take: 10, // Get recent invoices
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        const now = new Date();
+        const billingData = [];
+        for (const landlord of landlords) {
+            const subscription = landlord.company?.subscriptions?.[0] || null;
+            const company = landlord.company;
+            if (!company) {
+                console.warn(`⚠️ Landlord ${landlord.id} has no company, skipping...`);
+                continue;
+            }
+            // Get properties and units counts for this landlord's company
+            const [propertiesCount, unitsCount] = await Promise.all([
+                prisma.property.count({ where: { company_id: company.id } }),
+                prisma.unit.count({
+                    where: {
+                        property: { company_id: company.id }
+                    }
+                })
+            ]);
+            // Calculate subscription revenue from paid invoices
+            let subscriptionRevenue = 0;
+            if (subscription) {
+                const paidInvoices = subscription.billing_invoices.filter(inv => inv.status === 'paid');
+                subscriptionRevenue = paidInvoices.reduce((sum, invoice) => {
+                    return sum + (Number(invoice.amount) || 0);
+                }, 0);
+                // If subscription was created from payment and has amount, include it
+                const subscriptionMetadata = subscription.metadata || {};
+                if (subscriptionMetadata.created_from_payment && subscription.amount) {
+                    // Only add if not already counted in invoices
+                    const alreadyCounted = paidInvoices.some(inv => Math.abs(Number(inv.amount) - Number(subscription.amount)) < 0.01);
+                    if (!alreadyCounted) {
+                        subscriptionRevenue += Number(subscription.amount || 0);
+                    }
+                }
+            }
+            // Calculate rental revenue from occupied units
+            const occupiedUnits = await prisma.unit.findMany({
+                where: {
+                    status: 'occupied',
+                    property: { company_id: company.id }
+                },
+                select: {
+                    rent_amount: true
+                }
+            });
+            const rentalRevenue = occupiedUnits.reduce((sum, unit) => {
+                return sum + (Number(unit.rent_amount) || 0);
+            }, 0);
+            // Get outstanding invoices (unpaid or overdue)
+            const allUnpaidInvoices = subscription
+                ? await prisma.billingInvoice.findMany({
+                    where: {
+                        subscription_id: subscription.id,
+                        status: { not: 'paid' }
+                    }
+                })
+                : [];
+            // Determine which invoices are overdue (due_date has passed)
+            const outstandingInvoices = allUnpaidInvoices.filter(invoice => {
+                const invoiceDueDate = new Date(invoice.due_date);
+                return invoice.status === 'overdue' || invoiceDueDate < now;
+            });
+            const outstandingAmount = outstandingInvoices.reduce((sum, invoice) => {
+                return sum + Number(invoice.amount || 0);
+            }, 0);
+            // Determine payment status
+            let paymentStatus = 'pending';
+            let dueDate = null;
+            let lastPayment = null;
+            let currentPeriod = null;
+            if (subscription) {
+                // Get the latest paid invoice
+                const paidInvoices = subscription.billing_invoices.filter(inv => inv.status === 'paid');
+                if (paidInvoices.length > 0) {
+                    const latestPaidInvoice = paidInvoices.sort((a, b) => {
+                        const aDate = a.paid_at?.getTime() || a.updated_at.getTime();
+                        const bDate = b.paid_at?.getTime() || b.updated_at.getTime();
+                        return bDate - aDate;
+                    })[0];
+                    if (latestPaidInvoice?.paid_at) {
+                        lastPayment = latestPaidInvoice.paid_at;
+                    }
+                    else if (latestPaidInvoice?.updated_at) {
+                        lastPayment = latestPaidInvoice.updated_at;
+                    }
+                }
+                if (!lastPayment && subscription.billing_invoices.length > 0) {
+                    const invoicesWithPayment = subscription.billing_invoices
+                        .filter(inv => inv.paid_at || (inv.status === 'paid' && inv.updated_at))
+                        .sort((a, b) => {
+                        const aDate = a.paid_at?.getTime() || a.updated_at.getTime();
+                        const bDate = b.paid_at?.getTime() || b.updated_at.getTime();
+                        return bDate - aDate;
+                    });
+                    if (invoicesWithPayment.length > 0) {
+                        const latest = invoicesWithPayment[0];
+                        lastPayment = latest.paid_at || latest.updated_at;
+                    }
+                }
+                // Check if there are outstanding invoices
+                if (outstandingInvoices.length > 0) {
+                    const latestOutstanding = outstandingInvoices
+                        .sort((a, b) => new Date(b.due_date).getTime() - new Date(a.due_date).getTime())[0];
+                    dueDate = new Date(latestOutstanding.due_date);
+                    const periodStart = new Date(latestOutstanding.billing_period_start);
+                    const periodEnd = new Date(latestOutstanding.billing_period_end);
+                    currentPeriod = `${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]}`;
+                    if (latestOutstanding.status === 'overdue' || dueDate < now) {
+                        paymentStatus = 'overdue';
+                    }
+                    else {
+                        paymentStatus = 'pending';
+                    }
+                }
+                else if (subscription.next_billing_date) {
+                    dueDate = new Date(subscription.next_billing_date);
+                    const cycleDays = subscription.billing_cycle === 'monthly' ? 30 : 365;
+                    const periodStart = new Date(subscription.next_billing_date);
+                    periodStart.setDate(periodStart.getDate() - cycleDays);
+                    const periodEnd = new Date(subscription.next_billing_date);
+                    currentPeriod = `${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]}`;
+                    if (subscription.status === 'active') {
+                        if (subscription.next_billing_date > now && outstandingAmount === 0) {
+                            paymentStatus = 'paid';
+                        }
+                        else if (subscription.next_billing_date <= now) {
+                            paymentStatus = 'pending';
+                        }
+                    }
+                    else if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
+                        paymentStatus = 'overdue';
+                    }
+                    else if (subscription.status === 'canceled') {
+                        paymentStatus = 'pending';
+                    }
+                }
+                else {
+                    if (subscription.status === 'trial') {
+                        paymentStatus = 'paid';
+                    }
+                    else if (subscription.status === 'active' && outstandingAmount === 0) {
+                        paymentStatus = 'paid';
+                    }
+                }
+            }
+            else {
+                paymentStatus = 'pending';
+            }
+            // Determine plan name from subscription
+            const planName = subscription?.plan
+                ? subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)
+                : 'No Plan';
+            // Get monthly fee (subscription amount)
+            const monthlyFee = subscription ? Number(subscription.amount || 0) : 0;
+            // Extract payment channel information from subscription metadata
+            const subscriptionMetadata = subscription?.metadata || {};
+            const paymentChannel = subscriptionMetadata.payment_channel_display || subscriptionMetadata.payment_channel;
+            const gateway = subscription?.gateway;
+            let paymentMethod = 'N/A';
+            if (gateway) {
+                if (gateway === 'paystack' && paymentChannel) {
+                    paymentMethod = `Paystack - ${paymentChannel}`;
+                }
+                else if (gateway === 'paystack') {
+                    paymentMethod = 'Paystack';
+                }
+                else {
+                    paymentMethod = gateway.charAt(0).toUpperCase() + gateway.slice(1);
+                }
+            }
+            billingData.push({
+                id: landlord.id,
+                name: `${landlord.first_name} ${landlord.last_name}`.trim() || landlord.email,
+                email: landlord.email,
+                plan: planName,
+                monthlyFee: monthlyFee,
+                propertiesCount: propertiesCount,
+                unitsCount: unitsCount,
+                currentPeriod: currentPeriod,
+                status: paymentStatus,
+                dueDate: dueDate ? dueDate.toISOString().split('T')[0] : null,
+                lastPayment: lastPayment ? lastPayment.toISOString().split('T')[0] : null,
+                paymentMethod: paymentMethod,
+                totalRevenue: subscriptionRevenue, // Subscription revenue (for backward compatibility)
+                subscriptionRevenue: subscriptionRevenue, // Explicit subscription revenue
+                rentalRevenue: rentalRevenue, // Rental revenue from occupied units
+                outstandingAmount: outstandingAmount,
+                subscriptionStatus: subscription?.status || 'none',
+                subscriptionId: subscription?.id || null,
+                companyId: company.id
+            });
+        }
+        // Filter by status if provided
+        let filteredData = billingData;
+        if (status && status !== 'all') {
+            filteredData = billingData.filter(item => item.status === status);
+        }
+        // Calculate summary statistics
+        const totalLandlords = billingData.length;
+        const paidLandlords = billingData.filter(l => l.status === 'paid').length;
+        const overdueLandlords = billingData.filter(l => l.status === 'overdue').length;
+        const pendingLandlords = billingData.filter(l => l.status === 'pending').length;
+        const totalSubscriptionRevenue = billingData.reduce((sum, l) => sum + (l.subscriptionRevenue || l.totalRevenue || 0), 0);
+        const totalRentalRevenue = billingData.reduce((sum, l) => sum + (l.rentalRevenue || 0), 0);
+        const totalRevenue = totalSubscriptionRevenue; // Keep for backward compatibility
+        const totalOutstanding = billingData.reduce((sum, l) => sum + l.outstandingAmount, 0);
+        const result = {
+            landlords: filteredData,
+            summary: {
+                total: totalLandlords,
+                paid: paidLandlords,
+                pending: pendingLandlords,
+                overdue: overdueLandlords,
+                totalRevenue: totalRevenue, // Subscription revenue (for backward compatibility)
+                subscriptionRevenue: totalSubscriptionRevenue,
+                rentalRevenue: totalRentalRevenue,
+                totalOutstanding: totalOutstanding
+            }
+        };
+        console.log('✅ Landlord billing data retrieved:', {
+            total: totalLandlords,
+            paid: paidLandlords,
+            pending: pendingLandlords,
+            overdue: overdueLandlords
+        });
+        writeSuccess(res, 200, 'Landlord billing data retrieved successfully', result);
+    }
+    catch (err) {
+        console.error('Error fetching landlord billing:', err);
+        writeError(res, 500, 'Failed to fetch landlord billing', err.message);
     }
 };
 // Billing Subscriptions and Invoices
@@ -2023,17 +3085,31 @@ export const getEntitySubscription = async (req, res) => {
             companyId = user.company_id;
         }
         else if (entityType === 'agency') {
-            // Agencies might have their own subscription or use company subscription
-            // For now, we'll get the agency's company_id
-            const agency = await prisma.agency.findUnique({ where: { id: entityId } });
-            if (!agency) {
-                return writeError(res, 404, 'Agency not found');
+            // Agencies belong to companies, so get the agency's company_id
+            const agency = await prisma.agency.findUnique({
+                where: { id: entityId },
+                select: { company_id: true }
+            });
+            if (!agency || !agency.company_id) {
+                return writeError(res, 404, 'Agency not found or has no associated company');
             }
-            companyId = entityId; // Agencies might be their own billing entity
+            companyId = agency.company_id; // Use the agency's company_id for subscription lookup
         }
-        // Get subscription
+        // Get subscription with related data
         const subscription = await prisma.subscription.findFirst({
             where: { company_id: companyId },
+            include: {
+                company: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                billing_invoices: {
+                    orderBy: { created_at: 'desc' },
+                    take: 10,
+                },
+            },
             orderBy: { created_at: 'desc' }
         });
         if (!subscription) {
@@ -2127,5 +3203,110 @@ export const updateEntitySubscription = async (req, res) => {
     catch (err) {
         console.error('Error updating subscription:', err);
         writeError(res, 500, 'Failed to update subscription', err.message);
+    }
+};
+/**
+ * Get subscription history for an entity
+ */
+export const getEntitySubscriptionHistory = async (req, res) => {
+    try {
+        const { entityType, entityId } = req.params;
+        console.log(`📜 Fetching subscription history for ${entityType} ${entityId}`);
+        // Get company_id based on entity type
+        let companyId = entityId;
+        if (entityType === 'user') {
+            const user = await prisma.user.findUnique({ where: { id: entityId } });
+            if (!user || !user.company_id) {
+                return writeError(res, 404, 'User or company not found');
+            }
+            companyId = user.company_id;
+        }
+        else if (entityType === 'agency') {
+            const agency = await prisma.agency.findUnique({
+                where: { id: entityId },
+                select: { company_id: true }
+            });
+            if (!agency || !agency.company_id) {
+                return writeError(res, 404, 'Agency not found or has no associated company');
+            }
+            companyId = agency.company_id; // Use the agency's company_id
+        }
+        // Get all subscriptions for this company
+        const subscriptions = await prisma.subscription.findMany({
+            where: { company_id: companyId },
+            orderBy: { created_at: 'desc' },
+            select: {
+                id: true,
+                plan: true,
+                status: true,
+                amount: true,
+                start_date: true,
+                end_date: true,
+                created_at: true,
+            },
+        });
+        writeSuccess(res, 200, 'Subscription history retrieved successfully', {
+            history: subscriptions,
+        });
+    }
+    catch (err) {
+        console.error('Error fetching subscription history:', err);
+        writeError(res, 500, 'Failed to fetch subscription history', err.message);
+    }
+};
+/**
+ * Get billing invoices for an entity's subscription
+ */
+export const getEntitySubscriptionInvoices = async (req, res) => {
+    try {
+        const { entityType, entityId } = req.params;
+        const subscriptionId = req.query.subscription_id;
+        console.log(`🧾 Fetching invoices for ${entityType} ${entityId}`);
+        // Get company_id based on entity type
+        let companyId = entityId;
+        if (entityType === 'user') {
+            const user = await prisma.user.findUnique({ where: { id: entityId } });
+            if (!user || !user.company_id) {
+                return writeError(res, 404, 'User or company not found');
+            }
+            companyId = user.company_id;
+        }
+        else if (entityType === 'agency') {
+            const agency = await prisma.agency.findUnique({ where: { id: entityId } });
+            if (!agency) {
+                return writeError(res, 404, 'Agency not found');
+            }
+            companyId = entityId;
+        }
+        // Build where clause
+        const where = { company_id: companyId };
+        if (subscriptionId) {
+            where.subscription_id = subscriptionId;
+        }
+        // Get invoices
+        const invoices = await prisma.billingInvoice.findMany({
+            where,
+            orderBy: { created_at: 'desc' },
+            select: {
+                id: true,
+                invoice_number: true,
+                amount: true,
+                currency: true,
+                status: true,
+                billing_period_start: true,
+                billing_period_end: true,
+                due_date: true,
+                paid_at: true,
+                gateway_reference: true,
+                created_at: true,
+            },
+        });
+        writeSuccess(res, 200, 'Invoices retrieved successfully', {
+            invoices,
+        });
+    }
+    catch (err) {
+        console.error('Error fetching invoices:', err);
+        writeError(res, 500, 'Failed to fetch invoices', err.message);
     }
 };

@@ -884,15 +884,70 @@ export const careteakersService = {
       allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
     }
     
+    // Extract property_ids from filters if provided
+    const propertyIds = filters?.property_ids;
+    delete filters?.property_ids; // Remove from filters to avoid conflicts
+    
+    // Extract company_id from filters if provided (for super_admin filtering by specific company)
+    const filterCompanyId = filters?.company_id;
+    delete filters?.company_id; // Remove from filters to avoid conflicts
+    
     // Build where clause with company/agency scoping and role filtering
-    const whereClause = buildWhereClause(user, {
+    let whereClause = buildWhereClause(user, {
       role: { in: allowedStaffRoles },
       ...filters,
     }, 'user');
     
+    // If company_id filter is provided (e.g., when assigning caretaker to property),
+    // use it instead of user's company_id (especially for super_admin)
+    if (filterCompanyId && user.role === 'super_admin') {
+      // Super admin can filter by any company_id
+      whereClause.company_id = filterCompanyId;
+    } else if (filterCompanyId && user.company_id) {
+      // For non-super-admin users, only allow filtering by their own company_id
+      if (filterCompanyId === user.company_id) {
+        // User is filtering by their own company_id, which is allowed
+        whereClause.company_id = filterCompanyId;
+      } else {
+        // User attempted to filter by a different company_id - prevent unauthorized access
+        console.warn(`User ${user.user_id} attempted to filter by company_id ${filterCompanyId} but their company_id is ${user.company_id}`);
+        // Don't override the whereClause - buildWhereClause already filtered by user.company_id
+      }
+    } else if (filterCompanyId && !user.company_id) {
+      // If user has no company_id but filterCompanyId is provided, use it
+      whereClause.company_id = filterCompanyId;
+    }
+    
+    // If property_ids are provided, filter staff by their property assignments
+    if (propertyIds && Array.isArray(propertyIds) && propertyIds.length > 0) {
+      // Find all staff IDs that have assignments to the specified properties
+      const staffWithAssignments = await prisma.staffPropertyAssignment.findMany({
+        where: {
+          property_id: { in: propertyIds },
+          status: 'active'
+        },
+        select: {
+          staff_id: true
+        },
+        distinct: ['staff_id']
+      });
+      
+      const staffIds = staffWithAssignments.map((a: { staff_id: string }) => a.staff_id);
+      
+      // If no staff found for these properties, return empty array
+      if (staffIds.length === 0) {
+        console.log(`🔍 No staff found for property_ids: ${propertyIds.join(',')}`);
+        return [];
+      }
+      
+      // Add staff_id filter to whereClause
+      whereClause.id = { in: staffIds };
+    }
+    
     console.log(`🔍 getCaretakers for ${user.role}:`, {
       allowedRoles: allowedStaffRoles,
       user_id: user.user_id,
+      propertyIds: propertyIds,
     });
     
     const staffMembers = await prisma.user.findMany({

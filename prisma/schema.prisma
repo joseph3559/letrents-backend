@@ -37,6 +37,7 @@ model Company {
   billing_invoices     BillingInvoice[]
   checklist_templates  ChecklistTemplate[]
   conversations        Conversation[]
+  emergency_contacts   EmergencyContact[]
   inspections          Inspection[]
   invoices             Invoice[]
   leases               Lease[]
@@ -72,6 +73,7 @@ model Agency {
   updated_at   DateTime   @default(now()) @db.Timestamptz(6)
   company      Company    @relation(fields: [company_id], references: [id], onDelete: Cascade)
   creator      User       @relation("AgencyCreator", fields: [created_by], references: [id])
+  emergency_contacts EmergencyContact[]
   properties   Property[]
   users        User[]     @relation("AgencyUsers")
 
@@ -122,6 +124,8 @@ model User {
   conducted_inspections       Inspection[]              @relation("InspectionInspector")
   tenant_inspections          Inspection[]              @relation("InspectionTenant")
   issued_invoices             Invoice[]                 @relation("InvoiceIssuer")
+  created_emergency_contacts  EmergencyContact[]        @relation("EmergencyContactCreator")
+  assigned_emergency_contacts EmergencyContact[]        @relation("EmergencyContactAgent")
   received_invoices           Invoice[]                 @relation("InvoiceRecipient")
   created_leases              Lease[]                   @relation("LeaseCreator")
   tenant_leases               Lease[]                   @relation("LeaseTenant")
@@ -164,6 +168,7 @@ model User {
   security_sessions           SecuritySession[]         @relation("SecuritySessionUser")
   security_activity_logs      SecurityActivityLog[]     @relation("SecurityActivityLogUser")
   two_factor_auth             TwoFactorAuth[]           @relation("TwoFactorAuthUser")
+  reviewed_applications       Application[]             @relation("ApplicationReviewer")
 
   @@map("users")
 }
@@ -1399,6 +1404,35 @@ enum PaymentGateway {
   @@map("payment_gateway")
 }
 
+model EmergencyContact {
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id      String    @db.Uuid
+  agency_id       String?   @db.Uuid
+  name            String    @db.VarChar(200)
+  role            String    @db.VarChar(200)
+  phone           String    @db.VarChar(20)
+  email           String?   @db.VarChar(255)
+  available24_7   Boolean   @default(false)
+  response_time   String?   @db.VarChar(50)
+  specialties     String[]  @default([])
+  property_ids    String[]  @default([])
+  is_local        Boolean   @default(true)
+  verified        Boolean   @default(false)
+  agent_assigned  String?   @db.Uuid
+  created_by      String    @db.Uuid
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
+  
+  company         Company   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  agency          Agency?   @relation(fields: [agency_id], references: [id], onDelete: SetNull)
+  creator         User      @relation("EmergencyContactCreator", fields: [created_by], references: [id])
+  assigned_agent  User?     @relation("EmergencyContactAgent", fields: [agent_assigned], references: [id], onDelete: SetNull)
+  
+  @@index([company_id])
+  @@index([agency_id])
+  @@map("emergency_contacts")
+}
+
 enum InspectionType {
   move_in
   move_out
@@ -1457,4 +1491,42 @@ enum TaskPriority {
   urgent
 
   @@map("task_priority")
+}
+
+model Application {
+  id                String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  application_type  String    @default("agency") @db.VarChar(20) // 'agency' or 'landlord'
+  company_name      String?   @db.VarChar(255)
+  contact_email     String    @db.VarChar(255)
+  contact_phone     String    @db.VarChar(20)
+  contact_person    String    @db.VarChar(255)
+  contact_position  String?   @db.VarChar(100)
+  business_type     String    @db.VarChar(100)
+  license_number    String?   @db.VarChar(100)
+  location          String?   @db.VarChar(255)
+  address           String    @db.VarChar(500)
+  city              String?   @db.VarChar(100)
+  country           String?   @db.VarChar(100)
+  tax_id           String?   @db.VarChar(50)
+  website           String?   @db.VarChar(255)
+  description       String?
+  documents         Json      @default("[]")
+  years_in_business String?   @db.VarChar(50)
+  properties_managed String?  @db.VarChar(50)
+  employees_count   String?   @db.VarChar(50)
+  annual_revenue    String?   @db.VarChar(100)
+  status            String    @default("pending") @db.VarChar(50)
+  priority          String?   @default("medium") @db.VarChar(20)
+  review_notes      String?
+  reviewed_by       String?   @db.Uuid
+  reviewed_at       DateTime? @db.Timestamptz(6)
+  approved_at       DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+  reviewer          User?     @relation("ApplicationReviewer", fields: [reviewed_by], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([application_type])
+  @@index([contact_email])
+  @@map("applications")
 }

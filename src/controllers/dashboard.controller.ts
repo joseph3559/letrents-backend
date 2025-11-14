@@ -9,7 +9,10 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;
     
-    const stats = await service.getDashboardStats(user);
+    // Extract owner_id from query params (for super_admin viewing specific landlord)
+    const ownerId = req.query.owner_id as string | undefined;
+    
+    const stats = await service.getDashboardStats(user, ownerId);
     writeSuccess(res, 200, 'Dashboard stats retrieved successfully', stats);
   } catch (error: any) {
     const message = error.message || 'Failed to get dashboard stats';

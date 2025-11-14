@@ -31,7 +31,17 @@ import {
   sendInvitation,
   getEntitySubscription,
   updateEntitySubscription,
-  getAgencyBilling
+  getEntitySubscriptionHistory,
+  getEntitySubscriptionInvoices,
+  getAgencyBilling,
+  getLandlordBilling,
+  getAgencyPerformance,
+  getBillingPlans,
+  getBillingSubscriptions,
+  getBillingInvoices,
+  getPlatformAnalytics,
+  getRevenueDashboard,
+  checkCompanyIntegrity
 } from '../controllers/super-admin.controller.js';
 
 const router = Router();
@@ -60,9 +70,12 @@ router.use(requireSuperAdmin);
 router.get('/dashboard', getDashboardData);
 router.get('/kpis', getKPIMetrics);
 router.get('/analytics/:chartType', getAnalyticsChart);
+router.get('/platform-analytics', getPlatformAnalytics);
+router.get('/revenue-dashboard', getRevenueDashboard);
 
 // System Management
 router.get('/system/health', getSystemHealth);
+router.get('/system/company-integrity', checkCompanyIntegrity);
 router.get('/system/settings', getSystemSettings);
 router.put('/system/settings/:id', updateSystemSettings);
 
@@ -85,6 +98,7 @@ router.delete('/companies/:id', deleteCompany);
 
 // Agency Management
 router.get('/agencies', getAgencyManagement);
+router.get('/agencies/performance', getAgencyPerformance);
 router.get('/agencies/:id', getAgencyById);
 router.get('/agencies/:id/properties', getAgencyProperties);
 router.get('/agencies/:id/units', getAgencyUnits);
@@ -103,8 +117,14 @@ router.post('/entities/:entityType/:entityId/invite', sendInvitation);
 // Subscription Management
 router.get('/entities/:entityType/:entityId/subscription', getEntitySubscription);
 router.put('/entities/:entityType/:entityId/subscription', updateEntitySubscription);
+router.get('/entities/:entityType/:entityId/subscription/history', getEntitySubscriptionHistory);
+router.get('/entities/:entityType/:entityId/subscription/invoices', getEntitySubscriptionInvoices);
 
 // Billing Management
 router.get('/billing/agencies', getAgencyBilling);
+router.get('/billing/landlords', getLandlordBilling);
+router.get('/billing/plans', getBillingPlans);
+router.get('/billing/subscriptions', getBillingSubscriptions);
+router.get('/billing/invoices', getBillingInvoices);
 
 export default router;

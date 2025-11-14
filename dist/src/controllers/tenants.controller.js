@@ -96,8 +96,15 @@ export const listTenants = async (req, res) => {
     try {
         const user = req.user;
         // Parse query parameters
+        // Handle property_ids (comma-separated) for super-admin filtering
+        let propertyIds = undefined;
+        if (req.query.property_ids) {
+            const propertyIdsParam = req.query.property_ids;
+            propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        }
         const filters = {
             property_id: req.query.property_id,
+            property_ids: propertyIds, // Add property_ids array
             unit_id: req.query.unit_id,
             status: req.query.status,
             search_query: req.query.search,

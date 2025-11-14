@@ -1,7 +1,7 @@
 import { getPrisma } from '../config/prisma.js';
 export class DashboardService {
     prisma = getPrisma();
-    async getDashboardStats(user) {
+    async getDashboardStats(user, ownerId) {
         // Initialize default stats
         let stats = {
             total_properties: 0,
@@ -28,6 +28,12 @@ export class DashboardService {
                 // For landlords, only show their own properties
                 if (user.role === 'landlord') {
                     whereClause.owner_id = user.user_id;
+                }
+            }
+            else {
+                // For super_admin, filter by owner_id if provided
+                if (ownerId) {
+                    whereClause.owner_id = ownerId;
                 }
             }
             // Count properties

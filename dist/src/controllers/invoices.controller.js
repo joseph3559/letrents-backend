@@ -75,10 +75,21 @@ export const getInvoice = async (req, res) => {
 export const listInvoices = async (req, res) => {
     try {
         const user = req.user;
+        // Parse property_ids (comma-separated) for super-admin filtering
+        let propertyIds = undefined;
+        if (req.query.property_ids) {
+            const propertyIdsParam = req.query.property_ids;
+            propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+            console.log('🔍 Parsed property_ids from query:', propertyIds);
+        }
+        else {
+            console.log('⚠️ No property_ids in query params. Query:', req.query);
+        }
         // Parse query parameters
         const filters = {
             tenant_id: req.query.tenant_id,
             property_id: req.query.property_id,
+            property_ids: propertyIds, // Add property_ids array
             unit_id: req.query.unit_id,
             status: req.query.status,
             invoice_type: req.query.invoice_type,

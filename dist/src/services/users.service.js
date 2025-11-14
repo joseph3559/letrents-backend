@@ -81,6 +81,14 @@ export class UsersService {
                         last_name: true,
                     },
                 },
+                company: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone_number: true,
+                    },
+                },
+                id_number: true,
             },
         });
         if (!targetUser) {
@@ -123,6 +131,7 @@ export class UsersService {
                 ...(req.email && { email: req.email }),
                 ...(req.role && { role: req.role }),
                 ...(req.status && { status: req.status }),
+                ...(req.id_number !== undefined && { id_number: req.id_number }),
                 updated_at: new Date(),
             },
             select: {
@@ -248,11 +257,13 @@ export class UsersService {
     }
     async updateCurrentUser(req, user) {
         // Users can update their own profile (excluding role and status)
+        // Note: profile_picture_url is handled separately via upload endpoint
         const allowedFields = {
             first_name: req.first_name,
             last_name: req.last_name,
             phone_number: req.phone_number,
             email: req.email,
+            id_number: req.id_number,
         };
         return this.updateUser(user.user_id, allowedFields, user);
     }

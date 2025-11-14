@@ -45,6 +45,7 @@ export interface CreatePropertyRequest {
   access_control?: string;
   maintenance_schedule?: string;
   year_built?: number;
+  images?: any[];
 }
 
 export interface UpdatePropertyRequest {
@@ -96,6 +97,32 @@ export class PropertiesService {
       console.log('✅ Agency admin creating property - using agency_id from JWT:', user.agency_id);
     }
 
+    // Normalize images format - handle both string URLs and object format
+    let normalizedImages: any[] = [];
+    if (req.images && Array.isArray(req.images)) {
+      normalizedImages = req.images.map((img: any, index: number) => {
+        // If it's already an object with url, use it
+        if (typeof img === 'object' && img.url) {
+          return {
+            url: img.url,
+            fileId: img.fileId || '',
+            name: img.name || `image-${index}`,
+            isPrimary: img.isPrimary !== undefined ? img.isPrimary : index === 0,
+          };
+        }
+        // If it's a string URL, convert to object format
+        if (typeof img === 'string') {
+          return {
+            url: img,
+            fileId: '', // Will be empty for direct ImageKit uploads
+            name: `image-${index}`,
+            isPrimary: index === 0,
+          };
+        }
+        return img;
+      });
+    }
+
     // Create property
     const property = await this.prisma.property.create({
       data: {
@@ -122,6 +149,7 @@ export class PropertiesService {
         access_control: req.access_control,
         maintenance_schedule: req.maintenance_schedule,
         year_built: req.year_built,
+        images: normalizedImages,
         status: 'active',
         created_by: user.user_id,
       },

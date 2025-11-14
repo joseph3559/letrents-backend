@@ -4,6 +4,7 @@ import { LeasesService, CreateLeaseRequest } from './leases.service.js';
 
 export interface UnitFilters {
   property_id?: string;
+  property_ids?: string[]; // For filtering by multiple property IDs (super-admin)
   unit_type?: string;
   status?: string;
   condition?: string;
@@ -91,6 +92,7 @@ export interface UpdateUnitRequest {
   utility_billing_type?: string;
   in_unit_amenities?: string[];
   appliances?: string[];
+  images?: any[];
 }
 
 export interface AssignTenantRequest {
@@ -504,6 +506,7 @@ export class UnitsService {
         ...(req.utility_billing_type && { utility_billing_type: mapUtilityBillingType(req.utility_billing_type) as any }),
         ...(req.in_unit_amenities && { in_unit_amenities: req.in_unit_amenities }),
         ...(req.appliances && { appliances: req.appliances }),
+        ...(req.images !== undefined && { images: req.images }),
         updated_at: new Date(),
       },
       include: {
@@ -567,7 +570,7 @@ export class UnitsService {
   }
 
   async listUnits(filters: UnitFilters, user: JWTClaims): Promise<any> {
-    const limit = Math.min(filters.limit || 20, 100);
+    const limit = Math.min(filters.limit || 1000, 1000);
     const offset = filters.offset || 0;
 
     // Build where clause with company scoping
@@ -579,7 +582,12 @@ export class UnitsService {
     }
 
     // Apply filters
-    if (filters.property_id) where.property_id = filters.property_id;
+    if (filters.property_ids && filters.property_ids.length > 0) {
+      // Filter by multiple property IDs (for super-admin)
+      where.property_id = { in: filters.property_ids };
+    } else if (filters.property_id) {
+      where.property_id = filters.property_id;
+    }
     if (filters.unit_type) where.unit_type = filters.unit_type;
     if (filters.status) where.status = filters.status;
     if (filters.condition) where.condition = filters.condition;
@@ -833,7 +841,12 @@ export class UnitsService {
     };
 
     // Apply other filters (reuse the same logic from listUnits but simplified)
-    if (filters.property_id) where.property_id = filters.property_id;
+    if (filters.property_ids && filters.property_ids.length > 0) {
+      // Filter by multiple property IDs (for super-admin)
+      where.property_id = { in: filters.property_ids };
+    } else if (filters.property_id) {
+      where.property_id = filters.property_id;
+    }
     if (filters.unit_type) where.unit_type = filters.unit_type;
     if (filters.min_rent || filters.max_rent) {
       where.rent_amount = {};

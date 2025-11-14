@@ -95,10 +95,21 @@ export const listInvoices = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;
     
+    // Parse property_ids (comma-separated) for super-admin filtering
+    let propertyIds: string[] | undefined = undefined;
+    if (req.query.property_ids) {
+      const propertyIdsParam = req.query.property_ids as string;
+      propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+      console.log('🔍 Parsed property_ids from query:', propertyIds);
+    } else {
+      console.log('⚠️ No property_ids in query params. Query:', req.query);
+    }
+    
     // Parse query parameters
     const filters: InvoiceFilters = {
       tenant_id: req.query.tenant_id as string,
       property_id: req.query.property_id as string,
+      property_ids: propertyIds, // Add property_ids array
       unit_id: req.query.unit_id as string,
       status: req.query.status as string,
       invoice_type: req.query.invoice_type as string,

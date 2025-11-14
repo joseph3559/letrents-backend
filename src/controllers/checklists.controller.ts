@@ -41,6 +41,7 @@ export class ChecklistsController {
         inspection_type: req.query.inspection_type as any,
         property_id: req.query.property_id as string,
         is_active: req.query.is_active === 'true' ? true : req.query.is_active === 'false' ? false : undefined,
+        agencyId: req.query.agencyId as string, // For super-admin viewing as specific agency
       };
       const templates = await checklistsService.getTemplates(user, filters);
       writeSuccess(res, 200, 'Templates retrieved successfully', templates);
@@ -131,6 +132,7 @@ export class ChecklistsController {
         tenant_id: req.query.tenant_id as string,
         inspection_type: req.query.inspection_type as any,
         status: req.query.status as any,
+        agencyId: req.query.agencyId as string, // For super-admin viewing as specific agency
       };
       const inspections = await checklistsService.getInspections(user, filters);
       writeSuccess(res, 200, 'Inspections retrieved successfully', inspections);

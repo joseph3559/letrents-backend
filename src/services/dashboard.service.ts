@@ -33,7 +33,7 @@ export interface OnboardingStatus {
 export class DashboardService {
   private prisma = getPrisma();
 
-  async getDashboardStats(user: JWTClaims): Promise<DashboardStats> {
+  async getDashboardStats(user: JWTClaims, ownerId?: string): Promise<DashboardStats> {
     // Initialize default stats
     let stats: DashboardStats = {
       total_properties: 0,
@@ -63,6 +63,11 @@ export class DashboardService {
         // For landlords, only show their own properties
         if (user.role === 'landlord') {
           whereClause.owner_id = user.user_id;
+        }
+      } else {
+        // For super_admin, filter by owner_id if provided
+        if (ownerId) {
+          whereClause.owner_id = ownerId;
         }
       }
 

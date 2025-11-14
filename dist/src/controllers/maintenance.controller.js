@@ -36,9 +36,16 @@ export const getMaintenanceRequest = async (req, res) => {
 export const listMaintenanceRequests = async (req, res) => {
     try {
         const user = req.user;
+        // Parse property_ids (comma-separated) for super-admin filtering
+        let propertyIds = undefined;
+        if (req.query.property_ids) {
+            const propertyIdsParam = req.query.property_ids;
+            propertyIds = propertyIdsParam.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        }
         // Parse query parameters
         const filters = {
             property_id: req.query.property_id,
+            property_ids: propertyIds, // Add property_ids array
             unit_id: req.query.unit_id,
             tenant_id: req.query.tenant_id,
             category: req.query.category,
