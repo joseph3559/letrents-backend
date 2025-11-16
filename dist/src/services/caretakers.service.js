@@ -291,16 +291,10 @@ export const careteakersService = {
         return updatedCaretaker;
     },
     async deleteCaretaker(user, caretakerId) {
-        // Check if caretaker exists and user has access
-        const existingCaretaker = await this.getCaretaker(user, caretakerId);
-        if (!existingCaretaker) {
-            throw new Error('Caretaker not found or access denied');
-        }
-        // Permanent delete - remove from database
-        await prisma.user.delete({
-            where: { id: caretakerId }
-        });
-        return { success: true };
+        // Delegate to staffService.deleteStaffMember for consistent behavior
+        // This maintains backward compatibility while using the unified implementation
+        const { staffService } = await import('./staff.service.js');
+        return staffService.deleteStaffMember(user, caretakerId);
     },
     async inviteCaretaker(user, caretakerId) {
         // Check if caretaker exists and user has access
@@ -340,21 +334,19 @@ export const careteakersService = {
         if (!caretaker.email) {
             throw new Error('Caretaker email not found');
         }
-        // Generate temporary password for new caretaker
-        const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-        // Update caretaker with temporary password and verify email
+        // Generate invitation link (no password - user will set it via link)
+        const invitationLink = `${process.env.APP_URL || 'http://localhost:3000'}/account/setup?token=invitation-${caretakerId}&email=${encodeURIComponent(caretaker.email)}&first_name=${encodeURIComponent(caretaker.first_name || '')}&last_name=${encodeURIComponent(caretaker.last_name || '')}`;
+        // Update caretaker status - no password set, they'll set it via invitation link
         // Email is auto-verified for invited users since the invitation was sent to their email
         await prisma.user.update({
             where: { id: caretakerId },
             data: {
-                password_hash: hashedPassword,
-                status: 'pending_setup',
+                status: 'pending', // User needs to set up their account via link
                 email_verified: true, // Auto-verify email for invited users
                 updated_at: new Date(),
             }
         });
-        // Send invitation email with credentials
+        // Send invitation email with setup link
         try {
             const { emailService } = await import('./email.service.js');
             const invitationHtml = `
@@ -369,10 +361,9 @@ export const careteakersService = {
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
             .content { padding: 30px 20px; }
-            .credentials { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
             .button { display: inline-block; background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
-            .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .info { background: #e7f3ff; border: 1px solid #b3d9ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
           </style>
         </head>
         <body>
@@ -384,34 +375,21 @@ export const careteakersService = {
             <div class="content">
               <h2>You've been invited as a Caretaker</h2>
               <p>Hello ${caretaker.first_name} ${caretaker.last_name},</p>
-              <p>You have been invited to join LetRents as a caretaker. Your account has been created and you can now access the platform using the credentials below:</p>
+              <p>You have been invited to join LetRents as a caretaker. Your account has been created and you can now set up your account to access the platform.</p>
               
-              <div class="credentials">
-                <h3 style="margin-top: 0; color: #2563eb;">Your Login Credentials</h3>
-                <p><strong>Email:</strong> ${caretaker.email}</p>
-                <p><strong>Temporary Password:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 4px;">${tempPassword}</code></p>
-                <p><strong>Login URL:</strong> <a href="${process.env.APP_URL || 'http://localhost:3000'}/login">${process.env.APP_URL || 'http://localhost:3000'}/login</a></p>
-              </div>
-
-              <div class="warning">
-                <strong>Important Security Notice:</strong>
-                <ul>
-                  <li>This is a temporary password for your first login</li>
-                  <li>You will be required to change your password after logging in</li>
-                  <li>Please keep these credentials secure and do not share them</li>
-                  <li>If you didn't expect this invitation, please contact support</li>
-                </ul>
+              <div class="info">
+                <strong>Account Setup Required:</strong>
+                <p>Click the button below to complete your account setup and create your secure password.</p>
               </div>
 
               <div style="text-align: center;">
-                <a href="${process.env.APP_URL || 'http://localhost:3000'}/login" class="button">Login to LetRents</a>
+                <a href="${invitationLink}" class="button">Complete Account Setup</a>
               </div>
 
               <h3>What's Next?</h3>
               <ol>
-                <li>Click the login button above or visit the login URL</li>
-                <li>Enter your email and temporary password</li>
-                <li>Set up your new secure password</li>
+                <li>Click the "Complete Account Setup" button above</li>
+                <li>Create your secure password</li>
                 <li>Complete your profile setup</li>
                 <li>Start managing properties!</li>
               </ol>
@@ -431,41 +409,38 @@ export const careteakersService = {
       `;
             const emailResult = await emailService.sendEmail({
                 to: caretaker.email,
-                subject: `Welcome to LetRents - Caretaker Account Created`,
+                subject: `Welcome to LetRents - Complete Your Caretaker Account Setup`,
                 html: invitationHtml,
                 text: `Welcome to LetRents!
 
-You've been invited as a caretaker. Here are your login credentials:
+You've been invited as a caretaker. Please complete your account setup:
 
-Email: ${caretaker.email}
-Temporary Password: ${tempPassword}
-Login URL: ${process.env.APP_URL || 'http://localhost:3000'}/login
+Setup Link: ${invitationLink}
 
-Please log in and change your password immediately.
+Click the link above to create your password and activate your account.
 
 Best regards,
 The LetRents Team`,
             });
             if (!emailResult.success) {
                 console.error('Failed to send caretaker invitation email:', emailResult.error);
-                // Log credentials to console as fallback
+                // Log invitation link to console as fallback
                 console.log('\n📧 CARETAKER INVITATION (email service failed):');
                 console.log(`👤 Name: ${caretaker.first_name} ${caretaker.last_name}`);
                 console.log(`📧 Email: ${caretaker.email}`);
-                console.log(`🔑 Temporary Password: ${tempPassword}`);
-                console.log(`🔗 Login URL: ${process.env.APP_URL || 'http://localhost:3000'}/login\n`);
+                console.log(`🔗 Setup Link: ${invitationLink}\n`);
                 throw new Error('Failed to send invitation email');
             }
             else {
                 console.log(`✅ Caretaker invitation sent successfully to ${caretaker.email}`);
-                console.log(`🔑 Temporary password generated: ${tempPassword}`);
+                console.log(`🔗 Setup link generated (no password - user will set it via link)`);
             }
             return {
                 caretakerId,
                 invitationSent: true,
                 email: caretaker.email,
-                temporaryPassword: tempPassword, // Include in response for testing
-                message: 'Invitation sent successfully with login credentials'
+                setupLink: invitationLink, // Include setup link in response
+                message: 'Invitation sent successfully with account setup link'
             };
         }
         catch (error) {

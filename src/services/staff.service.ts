@@ -187,8 +187,12 @@ export const staffService = {
       throw new Error('A user with this email already exists');
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(staffData.password || 'TempPassword123!', 10);
+    // Don't create password - user will set it via invitation link (like tenants)
+    // Only hash password if explicitly provided (for backward compatibility)
+    let passwordHash = null;
+    if (staffData.password) {
+      passwordHash = await bcrypt.hash(staffData.password, 10);
+    }
 
     // Determine company_id for staff number generation
     let companyIdForStaffNumber = user.company_id;
@@ -207,10 +211,10 @@ export const staffService = {
       last_name: staffData.last_name,
       email: staffData.email,
       phone_number: staffData.phone_number,
-      password_hash: hashedPassword,
+      ...(passwordHash ? { password_hash: passwordHash } : {}), // Only set password if provided
       role: role as any,
-      status: 'active' as any,
-      email_verified: false,
+      status: passwordHash ? ('active' as any) : ('pending' as any), // Set to pending if no password
+      email_verified: false, // Will be verified when they click invitation link
       created_by: user.user_id,
       // Add auto-generated staff number
       staff_number: staffNumber,
@@ -595,23 +599,324 @@ export const staffService = {
     }
   },
 
+
   /**
-   * Delete a staff member (permanent)
+   * Delete a staff member (permanent deletion)
+   * 
+   * This function handles cascading deletion of all related records to maintain data integrity.
+   * It does not filter by role - it finds the staff member by ID regardless of their role.
+   * 
+   * @param user - The authenticated user making the deletion request
+   * @param staffId - The ID of the staff member to delete
+   * @param role - Optional role parameter (deprecated, kept for backward compatibility)
+   * @returns Success object if deletion succeeds
+   * @throws Error if staff member not found or user lacks permission
    */
   async deleteStaffMember(user: JWTClaims, staffId: string, role?: StaffRole) {
-    // Check if staff member exists and user has access
-    const existingStaff = await this.getStaffMember(user, staffId, role);
-    if (!existingStaff) {
-      throw new Error('Staff member not found or access denied');
-    }
-
-    // Permanent delete - remove from database
-    await prisma.user.delete({
-      where: { id: staffId }
+    // Find staff member by ID only (no role filtering for deletion)
+    const existingStaff = await prisma.user.findFirst({
+      where: {
+        id: staffId,
+      },
+      select: {
+        id: true,
+        role: true,
+        company_id: true,
+        agency_id: true,
+      }
     });
 
-    console.log(`🗑️ ${role || 'Staff'} deleted: ${staffId}`);
-    return { success: true };
+    if (!existingStaff) {
+      throw new Error(`Staff member with ID ${staffId} not found`);
+    }
+
+    // Verify user has permission to delete this staff member
+    // Super admin can delete anyone
+    if (user.role === 'super_admin') {
+      // Allow deletion
+    }
+    // Agency admin can delete staff in their company/agency
+    else if (user.role === 'agency_admin') {
+      if (user.company_id && existingStaff.company_id && existingStaff.company_id !== user.company_id) {
+        throw new Error('Access denied: Cannot delete staff member from different company');
+      }
+      if (user.agency_id && existingStaff.agency_id && existingStaff.agency_id !== user.agency_id) {
+        throw new Error('Access denied: Cannot delete staff member from different agency');
+      }
+    }
+    // Landlord can delete staff in their company
+    else if (user.role === 'landlord') {
+      if (user.company_id && existingStaff.company_id && existingStaff.company_id !== user.company_id) {
+        throw new Error('Access denied: Cannot delete staff member from different company');
+      }
+    }
+    // Agent can delete staff in their company
+    else if (user.role === 'agent') {
+      if (user.company_id && existingStaff.company_id && existingStaff.company_id !== user.company_id) {
+        throw new Error('Access denied: Cannot delete staff member from different company');
+      }
+    }
+    // Other roles cannot delete staff
+    else {
+      throw new Error('Access denied: Insufficient permissions to delete staff member');
+    }
+
+    // Use transaction to handle all related records and avoid foreign key constraint errors
+    try {
+      await prisma.$transaction(async (tx) => {
+      // 1. Delete staff property assignments (has cascade, but delete explicitly for clarity)
+      await tx.staffPropertyAssignment.deleteMany({
+        where: { staff_id: staffId }
+      });
+
+      // 2. Delete tasks assigned to this staff member
+      await tx.task.deleteMany({
+        where: { assigned_to: staffId }
+      });
+
+      // 3. Delete tasks assigned by this staff member (assigned_by is not nullable)
+      await tx.task.deleteMany({
+        where: { assigned_by: staffId }
+      });
+
+      // 4. Delete maintenance requests assigned to this staff member
+      await tx.maintenanceRequest.deleteMany({
+        where: { assigned_to: staffId }
+      });
+
+      // 5. Delete maintenance requests requested by this staff member (requested_by is not nullable)
+      await tx.maintenanceRequest.deleteMany({
+        where: { requested_by: staffId }
+      });
+
+      // 6. Delete inspections where this staff member is the inspector
+      await tx.inspection.deleteMany({
+        where: { inspector_id: staffId }
+      });
+
+      // 7. Delete emergency contacts assigned to this staff member
+      await tx.emergencyContact.updateMany({
+        where: { agent_assigned: staffId },
+        data: { agent_assigned: null }
+      });
+
+      // 8. Delete emergency contacts created by this staff member
+      await tx.emergencyContact.deleteMany({
+        where: { created_by: staffId }
+      });
+
+      // 9. Delete conversation participants
+      await tx.conversationParticipant.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      // 10. Delete conversations created by this staff member
+      await tx.conversation.deleteMany({
+        where: { created_by: staffId }
+      });
+
+      // 11. Delete message recipients
+      await tx.messageRecipient.deleteMany({
+        where: { recipient_id: staffId }
+      });
+
+      // 12. Delete messages sent by this staff member
+      await tx.message.deleteMany({
+        where: { sender_id: staffId }
+      });
+
+      // 13. Delete notifications
+      await tx.notification.deleteMany({
+        where: {
+          OR: [
+            { recipient_id: staffId },
+            { sender_id: staffId }
+          ]
+        }
+      });
+
+      // 14. Get units and properties created by this staff member before deleting
+      const unitsToDelete = await tx.unit.findMany({
+        where: { created_by: staffId },
+        select: { id: true }
+      });
+      const unitIds = unitsToDelete.map(u => u.id);
+
+      const propertiesToDelete = await tx.property.findMany({
+        where: { created_by: staffId },
+        select: { id: true }
+      });
+      const propertyIds = propertiesToDelete.map(p => p.id);
+
+      // 14a. Delete child records of units (leases, maintenance requests, invoices, tasks, inspections, tenant profiles, payments)
+      if (unitIds.length > 0) {
+        // Delete leases for these units
+        await tx.lease.deleteMany({
+          where: { unit_id: { in: unitIds } }
+        });
+
+        // Delete maintenance requests for these units
+        await tx.maintenanceRequest.deleteMany({
+          where: { unit_id: { in: unitIds } }
+        });
+
+        // Delete invoices for these units
+        await tx.invoice.deleteMany({
+          where: { unit_id: { in: unitIds } }
+        });
+
+        // Delete tasks for these units
+        await tx.task.deleteMany({
+          where: { unit_id: { in: unitIds } }
+        });
+
+        // Delete inspections for these units
+        await tx.inspection.deleteMany({
+          where: { unit_id: { in: unitIds } }
+        });
+
+        // Update tenant profiles that reference these units
+        await tx.tenantProfile.updateMany({
+          where: { current_unit_id: { in: unitIds } },
+          data: { current_unit_id: null }
+        });
+
+        // Delete payments for these units
+        await tx.payment.deleteMany({
+          where: { unit_id: { in: unitIds } }
+        });
+      }
+
+      // 14b. Delete child records of properties (leases, maintenance requests, invoices, tasks, inspections, tenant profiles, payments, units)
+      if (propertyIds.length > 0) {
+        // Delete leases for these properties
+        await tx.lease.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+
+        // Delete maintenance requests for these properties
+        await tx.maintenanceRequest.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+
+        // Delete invoices for these properties
+        await tx.invoice.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+
+        // Delete tasks for these properties
+        await tx.task.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+
+        // Delete inspections for these properties
+        await tx.inspection.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+
+        // Update tenant profiles that reference these properties
+        await tx.tenantProfile.updateMany({
+          where: { current_property_id: { in: propertyIds } },
+          data: { current_property_id: null }
+        });
+
+        // Delete payments for these properties
+        await tx.payment.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+
+        // Delete units for these properties (they cascade, but delete explicitly for clarity)
+        await tx.unit.deleteMany({
+          where: { property_id: { in: propertyIds } }
+        });
+      }
+
+      // 15. Now delete units created by this staff member (created_by is not nullable)
+      await tx.unit.deleteMany({
+        where: { created_by: staffId }
+      });
+
+      // 16. Now delete properties created by this staff member (created_by is not nullable)
+      await tx.property.deleteMany({
+        where: { created_by: staffId }
+      });
+
+      // 17. Update applications reviewed by this staff member
+      await tx.application.updateMany({
+        where: { reviewed_by: staffId },
+        data: { reviewed_by: null }
+      });
+
+      // 18. Delete invoices issued by this staff member (issued_by is not nullable)
+      // Note: InvoiceLineItems cascade delete, so we don't need to delete them explicitly
+      await tx.invoice.deleteMany({
+        where: { issued_by: staffId }
+      });
+
+      // 19. Delete lease modifications modified by this staff member (modified_by is not nullable)
+      await tx.leaseModification.deleteMany({
+        where: { modified_by: staffId }
+      });
+
+      // 20. Update payments processed by this staff member
+      await tx.payment.updateMany({
+        where: { processed_by: staffId },
+        data: { processed_by: null }
+      });
+
+      // 21. Delete inspection photos uploaded by this staff member
+      await tx.inspectionPhoto.deleteMany({
+        where: { uploaded_by: staffId }
+      });
+
+      // 22. Delete user preferences and settings (cascade should handle, but explicit for safety)
+      await tx.userPreferences.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      await tx.tenantPreferences.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      await tx.tenantNotificationSettings.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      await tx.securitySession.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      await tx.securityActivityLog.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      await tx.twoFactorAuth.deleteMany({
+        where: { user_id: staffId }
+      });
+
+      // 23. Finally, delete the user
+      await tx.user.delete({
+        where: { id: staffId }
+      });
+    }, {
+      timeout: 30000, // 30 second timeout for large deletions
+    });
+
+      console.log(`🗑️ ${role || 'Staff'} deleted successfully: ${staffId}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error(`❌ Error deleting ${role || 'staff'} member ${staffId}:`, error);
+      // Provide more specific error messages
+      if (error.code === 'P2003') {
+        throw new Error('Cannot delete staff member: There are still records referencing this staff member that cannot be deleted.');
+      } else if (error.code === 'P2025') {
+        throw new Error('Staff member not found');
+      } else if (error.message) {
+        throw new Error(`Failed to delete staff member: ${error.message}`);
+      } else {
+        throw new Error('Failed to delete staff member due to database constraint');
+      }
+    }
   },
 
   /**
@@ -666,16 +971,14 @@ export const staffService = {
       throw new Error('Staff member email not found');
     }
 
-    // Generate temporary password
-    const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    // Generate invitation link (no password - user will set it via link)
+    const invitationLink = `${process.env.APP_URL || 'http://localhost:3000'}/account/setup?token=invitation-${staffId}&email=${encodeURIComponent(staffMember.email)}&first_name=${encodeURIComponent(staffMember.first_name || '')}&last_name=${encodeURIComponent(staffMember.last_name || '')}`;
 
-    // Update staff member with temporary password and verify email
+    // Update staff member status - no password set, they'll set it via invitation link
     await prisma.user.update({
       where: { id: staffId },
       data: {
-        password_hash: hashedPassword,
-        status: 'pending_setup',
+        status: 'pending', // User needs to set up their account via link
         email_verified: true, // Auto-verify email for invited users
         updated_at: new Date(),
       }
@@ -684,7 +987,7 @@ export const staffService = {
     // Get role display name
     const roleDisplayName = staffMember.role.charAt(0).toUpperCase() + staffMember.role.slice(1);
 
-    // Send invitation email with credentials
+    // Send invitation email with setup link
     try {
       const { emailService } = await import('./email.service.js');
       
@@ -700,10 +1003,9 @@ export const staffService = {
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
             .content { padding: 30px 20px; }
-            .credentials { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
             .button { display: inline-block; background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 14px; color: #666; }
-            .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .info { background: #e7f3ff; border: 1px solid #b3d9ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
           </style>
         </head>
         <body>
@@ -715,34 +1017,21 @@ export const staffService = {
             <div class="content">
               <h2>You've been invited as a ${roleDisplayName}</h2>
               <p>Hello ${staffMember.first_name} ${staffMember.last_name},</p>
-              <p>You have been invited to join LetRents as a ${roleDisplayName.toLowerCase()}. Your account has been created and you can now access the platform using the credentials below:</p>
+              <p>You have been invited to join LetRents as a ${roleDisplayName.toLowerCase()}. Your account has been created and you can now set up your account to access the platform.</p>
               
-              <div class="credentials">
-                <h3 style="margin-top: 0; color: #2563eb;">Your Login Credentials</h3>
-                <p><strong>Email:</strong> ${staffMember.email}</p>
-                <p><strong>Temporary Password:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 4px;">${tempPassword}</code></p>
-                <p><strong>Login URL:</strong> <a href="${process.env.APP_URL || 'http://localhost:3000'}/login">${process.env.APP_URL || 'http://localhost:3000'}/login</a></p>
-              </div>
-
-              <div class="warning">
-                <strong>Important Security Notice:</strong>
-                <ul>
-                  <li>This is a temporary password for your first login</li>
-                  <li>You will be required to change your password after logging in</li>
-                  <li>Please keep these credentials secure and do not share them</li>
-                  <li>If you didn't expect this invitation, please contact support</li>
-                </ul>
+              <div class="info">
+                <strong>Account Setup Required:</strong>
+                <p>Click the button below to complete your account setup and create your secure password.</p>
               </div>
 
               <div style="text-align: center;">
-                <a href="${process.env.APP_URL || 'http://localhost:3000'}/login" class="button">Login to LetRents</a>
+                <a href="${invitationLink}" class="button">Complete Account Setup</a>
               </div>
 
               <h3>What's Next?</h3>
               <ol>
-                <li>Click the login button above or visit the login URL</li>
-                <li>Enter your email and temporary password</li>
-                <li>Set up your new secure password</li>
+                <li>Click the "Complete Account Setup" button above</li>
+                <li>Create your secure password</li>
                 <li>Complete your profile setup</li>
                 <li>Start working!</li>
               </ol>
@@ -763,17 +1052,15 @@ export const staffService = {
 
       const emailResult = await emailService.sendEmail({
         to: staffMember.email,
-        subject: `Welcome to LetRents - ${roleDisplayName} Account Created`,
+        subject: `Welcome to LetRents - Complete Your ${roleDisplayName} Account Setup`,
         html: invitationHtml,
         text: `Welcome to LetRents!
 
-You've been invited as a ${roleDisplayName.toLowerCase()}. Here are your login credentials:
+You've been invited as a ${roleDisplayName.toLowerCase()}. Please complete your account setup:
 
-Email: ${staffMember.email}
-Temporary Password: ${tempPassword}
-Login URL: ${process.env.APP_URL || 'http://localhost:3000'}/login
+Setup Link: ${invitationLink}
 
-Please log in and change your password immediately.
+Click the link above to create your password and activate your account.
 
 Best regards,
 The LetRents Team`,
@@ -781,17 +1068,16 @@ The LetRents Team`,
 
       if (!emailResult.success) {
         console.error(`Failed to send ${roleDisplayName} invitation email:`, emailResult.error);
-        // Log credentials to console as fallback
+        // Log invitation link to console as fallback
         console.log(`\n📧 ${roleDisplayName.toUpperCase()} INVITATION (email service failed):`);
         console.log(`👤 Name: ${staffMember.first_name} ${staffMember.last_name}`);
         console.log(`📧 Email: ${staffMember.email}`);
-        console.log(`🔑 Temporary Password: ${tempPassword}`);
-        console.log(`🔗 Login URL: ${process.env.APP_URL || 'http://localhost:3000'}/login\n`);
+        console.log(`🔗 Setup Link: ${invitationLink}\n`);
         
         throw new Error('Failed to send invitation email');
       } else {
         console.log(`✅ ${roleDisplayName} invitation sent successfully to ${staffMember.email}`);
-        console.log(`🔑 Temporary password generated: ${tempPassword}`);
+        console.log(`🔗 Setup link generated (no password - user will set it via link)`);
       }
 
       return {
@@ -799,8 +1085,8 @@ The LetRents Team`,
         role: staffMember.role,
         invitationSent: true,
         email: staffMember.email,
-        temporaryPassword: tempPassword, // Include in response for testing
-        message: 'Invitation sent successfully with login credentials'
+        setupLink: invitationLink, // Include setup link in response
+        message: 'Invitation sent successfully with account setup link'
       };
 
     } catch (error) {
@@ -1015,7 +1301,7 @@ export const careteakersService = {
     staffService.updateStaffMember(user, id, data, 'caretaker'),
   
   deleteCaretaker: (user: JWTClaims, id: string) => 
-    staffService.deleteStaffMember(user, id, 'caretaker'),
+    staffService.deleteStaffMember(user, id), // Don't pass role - find by ID only
   
   inviteCaretaker: (user: JWTClaims, id: string) => 
     staffService.inviteStaffMember(user, id), // Don't pass role - let it auto-detect

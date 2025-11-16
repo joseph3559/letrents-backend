@@ -13,7 +13,15 @@ import { routeAliasMiddleware, deprecationWarningMiddleware } from './middleware
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+// CORS configuration - allow all origins in development, restrict in production
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.ALLOWED_ORIGINS?.split(',') || []
+    : true, // Allow all origins in development
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
@@ -98,11 +106,13 @@ try {
 	}
 } catch (_) {}
 
-// Debug logging
-app.use('/api/v1', (req, res, next) => {
-	console.log(`🌍 App.ts /api/v1: ${req.method} ${req.path}`);
-	next();
-});
+// API request logging (development only)
+if (process.env.NODE_ENV === 'development') {
+	app.use('/api/v1', (req, res, next) => {
+		console.log(`🌍 ${req.method} ${req.path}`);
+		next();
+	});
+}
 
 // API routes
 app.use('/api/v1', routes);

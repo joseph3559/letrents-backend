@@ -8,6 +8,8 @@ import {
   getAnalyticsChart,
   getSystemSettings,
   updateSystemSettings,
+  bulkUpdateSystemSettings,
+  initializeSystemSettings,
   getSecurityLogs,
   getUserManagement,
   getUserById,
@@ -41,7 +43,13 @@ import {
   getBillingInvoices,
   getPlatformAnalytics,
   getRevenueDashboard,
-  checkCompanyIntegrity
+  checkCompanyIntegrity,
+  getPaymentGateways,
+  getPaymentGateway,
+  createPaymentGateway,
+  updatePaymentGateway,
+  togglePaymentGatewayStatus,
+  getUserMetrics
 } from '../controllers/super-admin.controller.js';
 
 const router = Router();
@@ -77,7 +85,9 @@ router.get('/revenue-dashboard', getRevenueDashboard);
 router.get('/system/health', getSystemHealth);
 router.get('/system/company-integrity', checkCompanyIntegrity);
 router.get('/system/settings', getSystemSettings);
-router.put('/system/settings/:id', updateSystemSettings);
+router.post('/system/settings/initialize', initializeSystemSettings);
+router.put('/system/settings/:key', updateSystemSettings);
+router.post('/system/settings/bulk', bulkUpdateSystemSettings);
 
 // Audit and Security
 router.get('/audit-logs', getAuditLogs);
@@ -85,6 +95,8 @@ router.get('/security-logs', getSecurityLogs);
 
 // User Management
 router.get('/users', getUserManagement);
+router.get('/users/metrics', getUserMetrics);
+router.get('/users/search', getUserManagement); // Reuse getUserManagement for search
 router.get('/users/:id', getUserById);
 router.post('/users', createUser);
 router.put('/users/:id', updateUser);
@@ -113,6 +125,12 @@ router.post('/entities/:entityType/:entityId/suspend', suspendEntity);
 
 // Invitation Management
 router.post('/entities/:entityType/:entityId/invite', sendInvitation);
+// Direct user invitation route (convenience)
+router.post('/users/:id/invite', (req, res) => {
+  (req.params as any).entityType = 'user';
+  (req.params as any).entityId = req.params.id;
+  sendInvitation(req, res);
+});
 
 // Subscription Management
 router.get('/entities/:entityType/:entityId/subscription', getEntitySubscription);
@@ -126,5 +144,12 @@ router.get('/billing/landlords', getLandlordBilling);
 router.get('/billing/plans', getBillingPlans);
 router.get('/billing/subscriptions', getBillingSubscriptions);
 router.get('/billing/invoices', getBillingInvoices);
+
+// Payment Gateway Management
+router.get('/billing/gateways', getPaymentGateways);
+router.get('/billing/gateways/:id', getPaymentGateway);
+router.post('/billing/gateways', createPaymentGateway);
+router.put('/billing/gateways/:id', updatePaymentGateway);
+router.patch('/billing/gateways/:id/toggle', togglePaymentGatewayStatus);
 
 export default router;

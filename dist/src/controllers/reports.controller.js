@@ -44,8 +44,18 @@ export const reportsController = {
     getFinancialReport: async (req, res) => {
         try {
             const user = req.user;
-            const { type, period = 'monthly' } = req.query;
-            const report = await reportsService.getFinancialReport(user, type, period);
+            const { type, period = 'monthly', property_ids } = req.query;
+            // Convert property_ids query param to string array
+            let propertyIdsArray = undefined;
+            if (property_ids) {
+                if (typeof property_ids === 'string') {
+                    propertyIdsArray = property_ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+                }
+                else if (Array.isArray(property_ids)) {
+                    propertyIdsArray = property_ids.map(id => String(id)).filter(id => id.length > 0);
+                }
+            }
+            const report = await reportsService.getFinancialReport(user, type, period, propertyIdsArray);
             writeSuccess(res, 200, 'Financial report generated successfully', report);
         }
         catch (error) {
@@ -55,8 +65,18 @@ export const reportsController = {
     getOccupancyReport: async (req, res) => {
         try {
             const user = req.user;
-            const { period = 'monthly' } = req.query;
-            const report = await reportsService.getOccupancyReport(user, period);
+            const { period = 'monthly', property_ids } = req.query;
+            // Convert property_ids query param to string array
+            let propertyIdsArray = undefined;
+            if (property_ids) {
+                if (typeof property_ids === 'string') {
+                    propertyIdsArray = property_ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+                }
+                else if (Array.isArray(property_ids)) {
+                    propertyIdsArray = property_ids.map(id => String(id)).filter(id => id.length > 0);
+                }
+            }
+            const report = await reportsService.getOccupancyReport(user, period, propertyIdsArray);
             writeSuccess(res, 200, 'Occupancy report generated successfully', report);
         }
         catch (error) {
@@ -77,12 +97,23 @@ export const reportsController = {
     getMaintenanceReport: async (req, res) => {
         try {
             const user = req.user;
-            const { period = 'monthly', status, priority } = req.query;
+            const { period = 'monthly', status, priority, property_ids } = req.query;
+            // Convert property_ids query param to string array
+            let propertyIdsArray = undefined;
+            if (property_ids) {
+                if (typeof property_ids === 'string') {
+                    propertyIdsArray = property_ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+                }
+                else if (Array.isArray(property_ids)) {
+                    propertyIdsArray = property_ids.map(id => String(id)).filter(id => id.length > 0);
+                }
+            }
             const filters = {
                 ...(status && { status: status }),
                 ...(priority && { priority: priority }),
+                ...(propertyIdsArray && propertyIdsArray.length > 0 && { property_ids: propertyIdsArray }),
             };
-            const report = await reportsService.getMaintenanceReport(user, period, filters);
+            const report = await reportsService.getMaintenanceReport(user, period, filters, propertyIdsArray);
             writeSuccess(res, 200, 'Maintenance report generated successfully', report);
         }
         catch (error) {

@@ -810,6 +810,7 @@ export const createMaintenanceRequest = async (req, res) => {
             });
         }
         const { title, description, category, priority, unit_id, property_id, images, preferred_time } = req.body;
+        // Note: preferred_time is not stored in the database schema, but can be included in notes if needed
         if (!title || !description || !category) {
             return res.status(400).json({
                 success: false,
@@ -842,20 +843,38 @@ export const createMaintenanceRequest = async (req, res) => {
                 message: 'Property ID is required'
             });
         }
+        // Fetch property and user info for notifications
+        const [property, requesterUser] = await Promise.all([
+            prisma.property.findUnique({
+                where: { id: targetPropertyId },
+                select: { id: true, name: true, owner_id: true }
+            }),
+            prisma.user.findUnique({
+                where: { id: user.user_id },
+                select: { id: true, first_name: true, last_name: true, email: true }
+            })
+        ]);
+        const unit = targetUnitId ? await prisma.unit.findUnique({
+            where: { id: targetUnitId },
+            select: { id: true, unit_number: true }
+        }) : null;
+        // Include preferred_time in description if provided (since there's no dedicated field in schema)
+        const fullDescription = preferred_time
+            ? `${description}\n\nPreferred time: ${preferred_time}`
+            : description;
         const maintenanceRequest = await prisma.maintenanceRequest.create({
             data: {
                 company_id: user.company_id,
                 property_id: targetPropertyId,
                 unit_id: targetUnitId,
                 title,
-                description,
+                description: fullDescription,
                 category,
                 priority: priority || 'medium',
                 status: 'pending',
                 requested_by: user.user_id,
                 requested_date: new Date(),
-                images: normalizedImages.length > 0 ? normalizedImages : null,
-                preferred_time: preferred_time || null,
+                images: normalizedImages.length > 0 ? normalizedImages : undefined,
             },
             include: {
                 property: {
@@ -883,11 +902,14 @@ export const createMaintenanceRequest = async (req, res) => {
         });
         // ✅ Create notification for landlord/property owner
         try {
-            const notificationMessage = `New maintenance request from ${maintenanceRequest.requester?.first_name} ${maintenanceRequest.requester?.last_name}\n\nProperty: ${maintenanceRequest.property?.name}\nUnit: ${maintenanceRequest.unit?.unit_number}\nCategory: ${category}\nPriority: ${priority || 'medium'}\n\nTitle: ${title}\n\nDescription: ${description}`;
+            const requesterName = requesterUser ? `${requesterUser.first_name} ${requesterUser.last_name}` : 'Tenant';
+            const propertyName = property?.name || 'Property';
+            const unitNumber = unit?.unit_number || 'N/A';
+            const notificationMessage = `New maintenance request from ${requesterName}\n\nProperty: ${propertyName}\nUnit: ${unitNumber}\nCategory: ${category}\nPriority: ${priority || 'medium'}\n\nTitle: ${title}\n\nDescription: ${description}`;
             await notificationsService.createNotification(user, {
                 company_id: user.company_id,
                 sender_id: user.user_id,
-                recipient_id: maintenanceRequest.property?.owner_id,
+                recipient_id: property?.owner_id,
                 notification_type: 'maintenance_request',
                 title: `New Maintenance Request - ${category}`,
                 message: notificationMessage,
@@ -902,7 +924,7 @@ export const createMaintenanceRequest = async (req, res) => {
                     category,
                     priority: priority || 'medium',
                     tenant_id: user.user_id,
-                    tenant_name: `${maintenanceRequest.requester?.first_name} ${maintenanceRequest.requester?.last_name}`,
+                    tenant_name: requesterName,
                     property_id: targetPropertyId,
                     unit_id: targetUnitId
                 }
@@ -943,6 +965,105 @@ export const createMaintenanceRequest = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to create maintenance request',
+            error: error.message
+        });
+    }
+};
+// Update maintenance request (tenant can only update their own requests)
+export const updateTenantMaintenanceRequest = async (req, res) => {
+    try {
+        const user = req.user;
+        if (user.role !== 'tenant') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Tenant role required.'
+            });
+        }
+        const { id } = req.params;
+        const { status, notes, completed_date } = req.body;
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Maintenance request ID is required'
+            });
+        }
+        // Check if the request exists and belongs to this tenant
+        const existingRequest = await prisma.maintenanceRequest.findUnique({
+            where: { id }
+        });
+        if (!existingRequest) {
+            return res.status(404).json({
+                success: false,
+                message: 'Maintenance request not found'
+            });
+        }
+        // Verify the tenant owns this request
+        if (existingRequest.requested_by !== user.user_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only update your own maintenance requests'
+            });
+        }
+        // Build update data - tenants can only update status (to cancelled or completed) and notes
+        const updateData = {
+            updated_at: new Date(),
+        };
+        // Only allow status changes to 'cancelled' or 'completed'
+        if (status !== undefined) {
+            if (status === 'cancelled' || status === 'completed') {
+                updateData.status = status;
+            }
+            else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Tenants can only cancel or mark requests as completed'
+                });
+            }
+        }
+        if (notes !== undefined) {
+            updateData.notes = notes;
+        }
+        if (completed_date !== undefined && status === 'completed') {
+            updateData.completed_date = completed_date ? new Date(completed_date) : new Date();
+        }
+        // Update the request
+        const updatedRequest = await prisma.maintenanceRequest.update({
+            where: { id },
+            data: updateData,
+            include: {
+                property: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
+                unit: {
+                    select: {
+                        id: true,
+                        unit_number: true,
+                    }
+                },
+                requester: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    }
+                }
+            }
+        });
+        res.json({
+            success: true,
+            message: 'Maintenance request updated successfully',
+            data: updatedRequest
+        });
+    }
+    catch (error) {
+        console.error('Error updating tenant maintenance request:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update maintenance request',
             error: error.message
         });
     }

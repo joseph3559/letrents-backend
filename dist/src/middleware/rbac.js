@@ -122,18 +122,144 @@ const permissions = {
         maintenance: ['create', 'read'],
         invoices: ['read'],
         payments: ['read', 'create'], // Allow tenants to read and create (cancel) their own payments
-        notifications: ['create', 'read', 'update'],
+        notifications: ['create', 'read', 'update', 'delete'], // Allow tenants to delete their own notifications
         communications: ['create', 'read'],
         checklists: ['read', 'update'],
+    },
+    admin: {
+        properties: ['read', 'update'],
+        units: ['read', 'update'],
+        tenants: ['read', 'update'],
+        dashboard: ['read', 'kpis', 'charts'],
+        financial: ['read', 'overview'],
+        invoices: ['read', 'update'],
+        maintenance: ['read', 'update'],
+        inspections: ['read', 'update'],
+        communications: ['create', 'read', 'update'],
+        notifications: ['create', 'read', 'update'],
+        reports: ['read', 'generate'],
+        leases: ['read', 'update'],
+        payments: ['read', 'update'],
+        tasks: ['create', 'read', 'update'],
+        users: ['read', 'update'],
+        checklists: ['read', 'update'],
+    },
+    manager: {
+        properties: ['read', 'update'],
+        units: ['read', 'update'],
+        tenants: ['read', 'update'],
+        dashboard: ['read', 'kpis', 'charts'],
+        financial: ['read', 'overview'],
+        invoices: ['read', 'update'],
+        maintenance: ['read', 'update', 'overview'],
+        inspections: ['read', 'update', 'schedule'],
+        communications: ['create', 'read', 'update'],
+        notifications: ['create', 'read', 'update'],
+        reports: ['read', 'generate'],
+        leases: ['read', 'update'],
+        payments: ['read', 'update'],
+        tasks: ['create', 'read', 'update'],
+        users: ['read', 'update'],
+        checklists: ['read', 'update'],
+    },
+    team_lead: {
+        properties: ['read'],
+        units: ['read'],
+        tenants: ['read', 'update'],
+        dashboard: ['read'],
+        invoices: ['read'],
+        maintenance: ['read', 'update'],
+        inspections: ['read', 'update'],
+        communications: ['create', 'read', 'update'],
+        notifications: ['create', 'read', 'update'],
+        reports: ['read'],
+        leases: ['read'],
+        payments: ['read'],
+        tasks: ['create', 'read', 'update'],
+        checklists: ['read', 'update'],
+    },
+    staff: {
+        properties: ['read'],
+        units: ['read'],
+        tenants: ['read'],
+        dashboard: ['read'],
+        maintenance: ['read', 'update'],
+        communications: ['read'],
+        notifications: ['read'],
+        tasks: ['read', 'update'],
+        checklists: ['read'],
+    },
+    finance: {
+        properties: ['read'], // Read-only, no creation
+        units: ['read'],
+        tenants: ['read'], // Read-only, no editing
+        dashboard: ['read'],
+        financial: ['read', 'overview', 'payments', 'rent-collection'],
+        invoices: ['read', 'update', 'export', 'stats'],
+        payments: ['read', 'update', 'approve'],
+        reports: ['read', 'generate'],
+        leases: ['read'],
+    },
+    sales: {
+        tenants: ['create', 'read', 'update'], // Can manage tenants
+        dashboard: ['read'],
+        communications: ['create', 'read', 'update'], // Follow-ups
+        notifications: ['create', 'read', 'update'],
+        leases: ['read'],
+        tasks: ['create', 'read', 'update'], // Follow-up tasks
+        // No system settings, no finance data
+    },
+    marketing: {
+        properties: ['read'],
+        units: ['read'],
+        tenants: ['read'],
+        dashboard: ['read', 'charts'],
+        communications: ['create', 'read', 'update', 'templates'],
+        notifications: ['create', 'read', 'update', 'bulk'],
+        reports: ['read', 'generate'],
+    },
+    support: {
+        properties: ['read'],
+        units: ['read'],
+        tenants: ['read', 'update'],
+        dashboard: ['read'],
+        maintenance: ['read', 'update'],
+        communications: ['create', 'read', 'update'],
+        notifications: ['create', 'read', 'update'],
+        tasks: ['read', 'update'],
+        checklists: ['read'],
+    },
+    hr: {
+        users: ['create', 'read', 'update', 'delete'],
+        staff: ['create', 'read', 'update', 'delete', 'invite'],
+        dashboard: ['read'],
+        reports: ['read', 'generate'],
+        communications: ['read'],
+        notifications: ['read'],
+    },
+    auditor: {
+        properties: ['read'],
+        units: ['read'],
+        tenants: ['read'],
+        dashboard: ['read'],
+        financial: ['read'],
+        invoices: ['read'],
+        payments: ['read'],
+        reports: ['read', 'generate'],
+        leases: ['read'],
+        users: ['read'],
+        // Read-only access to everything for auditing
     },
 };
 export const rbacResource = (resource, action) => (req, res, next) => {
     const user = req.user;
-    if (!user)
+    if (!user) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     const allowed = permissions[user.role]?.[resource];
-    if (!allowed)
+    if (!allowed) {
         return res.status(403).json({ success: false, message: `Role '${user.role}' does not have permission to '${action}' on '${resource}'` });
+    }
     if (!(allowed.includes('*') || allowed.includes(action))) {
         return res.status(403).json({ success: false, message: `Role '${user.role}' does not have permission to '${action}' on '${resource}'` });
     }

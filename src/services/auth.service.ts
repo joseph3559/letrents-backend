@@ -57,24 +57,36 @@ export class AuthService {
 	async register(payload: { email: string; password: string; first_name: string; last_name: string; role?: UserRole; phone_number?: string; company_name?: string; business_type?: string; invitation_token?: string }): Promise<{ user: any; requires_mfa?: boolean; mfa_methods?: string[] } | { token: string; refresh_token: string; user: any; expires_at: Date }>{
 		const role: UserRole = (payload.role || 'tenant') as UserRole;
 		// Uniqueness checks
-		// Handle invitation tokens for existing users
+		// Handle invitation tokens for existing users (tenants and team members)
 		if (payload.invitation_token && payload.invitation_token.startsWith('invitation-')) {
-			const tenantId = payload.invitation_token.replace('invitation-', '');
-			const existingTenant = await this.prisma.user.findUnique({ 
-				where: { id: tenantId } 
+			const userId = payload.invitation_token.replace('invitation-', '');
+			const existingUser = await this.prisma.user.findUnique({ 
+				where: { id: userId } 
 			});
 			
-			// Verify the tenant exists, has the correct email, role, and is pending
-			if (existingTenant && 
-				existingTenant.email === payload.email && 
-				existingTenant.role === 'tenant' && 
-				existingTenant.status === 'pending') {
+			// Define roles that can use invitations
+			// Team member roles (SaaS team)
+			const TEAM_MEMBER_ROLES = ['admin', 'manager', 'team_lead', 'staff', 'finance', 'sales', 'marketing', 'support', 'hr', 'auditor'];
+			// Customer-facing staff roles that can receive invitations
+			const STAFF_ROLES = ['agency_admin', 'landlord', 'agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
+			// Tenant role
+			const TENANT_ROLE = 'tenant';
+			
+			const isTeamMember = existingUser && TEAM_MEMBER_ROLES.includes(existingUser.role);
+			const isStaffMember = existingUser && STAFF_ROLES.includes(existingUser.role);
+			const isTenant = existingUser && existingUser.role === TENANT_ROLE;
+			
+			// Verify the user exists, has the correct email, and is pending
+			if (existingUser && 
+				existingUser.email === payload.email && 
+				(isTenant || isTeamMember || isStaffMember) && 
+				(existingUser.status === 'pending' || existingUser.status === 'pending_setup')) {
 				
-				// Update existing tenant with password and activate account
+				// Update existing user with password and activate account
 				const password_hash = payload.password ? await bcrypt.hash(payload.password, 10) : null;
 				
 				const updatedUser = await this.prisma.user.update({
-					where: { id: tenantId },
+					where: { id: userId },
 					data: {
 						password_hash,
 						status: 'active',
@@ -93,19 +105,19 @@ export class AuthService {
 				const { token, expiresAt } = this.generateJwt(userWithAgency || updatedUser, sessionId);
 				const refresh = await this.createRefreshToken((userWithAgency || updatedUser).id, undefined, undefined, undefined, env.security.sessionTimeoutHours);
 				return { token, refresh_token: refresh.token, user: userWithAgency || updatedUser, expires_at: expiresAt };
-			} else if (existingTenant) {
-				// Tenant exists but doesn't match criteria
-				if (existingTenant.email !== payload.email) {
+			} else if (existingUser) {
+				// User exists but doesn't match criteria
+				if (existingUser.email !== payload.email) {
 					throw new Error('invitation token does not match the provided email address');
 				}
-				if (existingTenant.role !== 'tenant') {
-					throw new Error('invalid invitation token for tenant registration');
+				if (!isTenant && !isTeamMember && !isStaffMember) {
+					throw new Error('invalid invitation token for registration');
 				}
-				if (existingTenant.status !== 'pending') {
+				if (existingUser.status !== 'pending' && existingUser.status !== 'pending_setup') {
 					throw new Error('this invitation has already been used or the account is already active');
 				}
 			} else {
-				// Tenant not found
+				// User not found
 				throw new Error('invalid or expired invitation token');
 			}
 		}
@@ -186,7 +198,7 @@ export class AuthService {
 				first_name: payload.first_name,
 				last_name: payload.last_name,
 				phone_number: payload.phone_number || undefined,
-				role,
+				role: role as any, // Cast to any to match Prisma's generated enum type
 				status: env.security.requireEmailVerification ? 'pending' : 'active',
 				email_verified: !env.security.requireEmailVerification,
 				company_id: company_id || undefined,

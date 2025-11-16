@@ -12,9 +12,11 @@ export interface DashboardStats {
   monthly_revenue: number;
   annual_revenue: number;
   pending_maintenance: number;
+  urgent_maintenance: number;
   pending_inspections: number;
   overdue_payments: number;
   expiring_leases: number;
+  collection_rate?: number;
 }
 
 export interface OnboardingStatus {
@@ -46,6 +48,7 @@ export class DashboardService {
       monthly_revenue: 0,
       annual_revenue: 0,
       pending_maintenance: 0,
+      urgent_maintenance: 0,
       pending_inspections: 0,
       overdue_payments: 0,
       expiring_leases: 0,
@@ -114,6 +117,79 @@ export class DashboardService {
         },
       });
 
+      // Count pending maintenance requests
+      // Filter by properties that match the whereClause and status is pending or in_progress
+      const maintenanceWhereClause: any = {
+        status: { in: ['pending', 'in_progress'] },
+      };
+      
+      // Filter by company_id if available (for agent/agency-admin)
+      if (user.company_id) {
+        maintenanceWhereClause.company_id = user.company_id;
+      }
+      
+      // Filter by properties that match the whereClause
+      // This ensures we only count maintenance for properties the user has access to
+      if (Object.keys(whereClause).length > 0) {
+        maintenanceWhereClause.property = whereClause;
+      }
+
+      const pendingMaintenance = await this.prisma.maintenanceRequest.count({
+        where: maintenanceWhereClause,
+      });
+
+      // Count urgent maintenance requests (high or urgent priority, pending or in_progress)
+      const urgentMaintenanceWhereClause: any = {
+        ...maintenanceWhereClause,
+        priority: { in: ['high', 'urgent'] },
+      };
+
+      const urgentMaintenance = await this.prisma.maintenanceRequest.count({
+        where: urgentMaintenanceWhereClause,
+      });
+
+      // Calculate collection rate (based on invoices)
+      let collectionRate = 0;
+      try {
+        const invoiceWhereClause: any = {};
+        if (user.company_id) {
+          invoiceWhereClause.company_id = user.company_id;
+        }
+        if (Object.keys(whereClause).length > 0) {
+          invoiceWhereClause.unit = {
+            property: whereClause,
+          };
+        }
+
+        const [totalInvoiced, totalPaid] = await Promise.all([
+          this.prisma.invoice.aggregate({
+            where: invoiceWhereClause,
+            _sum: {
+              total_amount: true,
+            },
+          }),
+          this.prisma.invoice.aggregate({
+            where: {
+              ...invoiceWhereClause,
+              status: 'paid',
+            },
+            _sum: {
+              total_amount: true,
+            },
+          }),
+        ]);
+
+        const totalInvoicedAmount = Number(totalInvoiced._sum.total_amount || 0);
+        const totalPaidAmount = Number(totalPaid._sum.total_amount || 0);
+        
+        if (totalInvoicedAmount > 0) {
+          collectionRate = (totalPaidAmount / totalInvoicedAmount) * 100;
+        }
+      } catch (error) {
+        console.error('Error calculating collection rate:', error);
+        // Default to 0 if calculation fails
+      }
+
       // Calculate stats
       const totalUnits = unitsStats._count?.id || 0;
       const occupiedUnits = occupiedUnitsCount || 0;
@@ -132,10 +208,12 @@ export class DashboardService {
         active_tenants: activeTenants,
         monthly_revenue: monthlyRevenue,
         annual_revenue: annualRevenue,
-        pending_maintenance: 0, // TODO: Implement when maintenance table exists
+        pending_maintenance: pendingMaintenance,
+        urgent_maintenance: urgentMaintenance,
         pending_inspections: 0, // TODO: Implement when inspections table exists
         overdue_payments: 0, // TODO: Implement when payments table exists
         expiring_leases: 0, // TODO: Implement lease expiration logic
+        collection_rate: Math.round(collectionRate * 100) / 100, // Round to 2 decimal places
       };
 
     } catch (error) {

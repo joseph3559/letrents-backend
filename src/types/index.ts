@@ -15,7 +15,17 @@ export enum UserRole {
   LANDLORD = 'landlord',
   AGENT = 'agent',
   CARETAKER = 'caretaker',
-  TENANT = 'tenant'
+  TENANT = 'tenant',
+  ADMIN = 'admin',
+  MANAGER = 'manager',
+  TEAM_LEAD = 'team_lead',
+  STAFF = 'staff',
+  FINANCE = 'finance',
+  SALES = 'sales',
+  MARKETING = 'marketing',
+  SUPPORT = 'support',
+  HR = 'hr',
+  AUDITOR = 'auditor'
 }
 
 export enum UserStatus {

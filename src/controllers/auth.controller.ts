@@ -127,3 +127,144 @@ export const resendVerificationEmail = async (req: Request, res: Response) => {
 		return res.status(500).json({ success: false, message: msg });
 	}
 };
+
+export const verifyInvitation = async (req: Request, res: Response) => {
+	try {
+		const token = req.query.token as string;
+		if (!token) {
+			return res.status(400).json({ success: false, message: 'Invitation token is required' });
+		}
+
+		// Extract user ID from invitation token (format: invitation-{userId})
+		if (!token.startsWith('invitation-')) {
+			return res.status(400).json({ success: false, message: 'Invalid invitation token format' });
+		}
+
+		const userId = token.replace('invitation-', '');
+		const { PrismaClient } = await import('@prisma/client');
+		const prisma = new PrismaClient();
+
+		// Define roles that can use invitations
+		// Team member roles (SaaS team)
+		const TEAM_MEMBER_ROLES = ['admin', 'manager', 'team_lead', 'staff', 'finance', 'sales', 'marketing', 'support', 'hr', 'auditor'];
+		// Customer-facing staff roles that can receive invitations
+		const STAFF_ROLES = ['agency_admin', 'landlord', 'agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
+		// Tenant role
+		const TENANT_ROLE = 'tenant';
+
+		const user = await prisma.user.findUnique({
+			where: { id: userId },
+			select: {
+				id: true,
+				email: true,
+				first_name: true,
+				last_name: true,
+				role: true,
+				status: true,
+				email_verified: true,
+			}
+		});
+
+		if (!user) {
+			return res.status(404).json({ success: false, message: 'Invalid invitation token' });
+		}
+
+		const isTeamMember = TEAM_MEMBER_ROLES.includes(user.role);
+		const isStaffMember = STAFF_ROLES.includes(user.role);
+		const isTenant = user.role === TENANT_ROLE;
+
+		// Check if invitation is valid - allow tenants, team members, and staff members
+		if (!isTenant && !isTeamMember && !isStaffMember) {
+			return res.status(400).json({ success: false, message: 'Invalid invitation token for this user type' });
+		}
+
+		if (user.status !== 'pending' && user.status !== 'pending_setup') {
+			return res.status(410).json({ success: false, message: 'This invitation has already been used or the account is already active' });
+		}
+
+		// Return user info for the setup page
+		return res.status(200).json({
+			success: true,
+			user: {
+				email: user.email,
+				first_name: user.first_name,
+				last_name: user.last_name,
+				role: user.role,
+			}
+		});
+	} catch (err: any) {
+		console.error('Error verifying invitation:', err);
+		return res.status(500).json({ success: false, message: 'An error occurred while verifying invitation' });
+	}
+};
+
+export const setupPassword = async (req: Request, res: Response) => {
+	try {
+		const { token, password } = req.body || {};
+		if (!token || !password) {
+			return res.status(400).json({ success: false, message: 'Token and password are required' });
+		}
+
+		// Extract user ID from invitation token
+		if (!token.startsWith('invitation-')) {
+			return res.status(400).json({ success: false, message: 'Invalid invitation token format' });
+		}
+
+		const userId = token.replace('invitation-', '');
+		const { PrismaClient } = await import('@prisma/client');
+		const prisma = new PrismaClient();
+
+		// Get user info from database to verify and get email
+		const user = await prisma.user.findUnique({
+			where: { id: userId },
+			select: {
+				id: true,
+				email: true,
+				first_name: true,
+				last_name: true,
+				role: true,
+				status: true,
+			}
+		});
+
+		if (!user) {
+			return res.status(404).json({ success: false, message: 'Invalid invitation token' });
+		}
+
+		// Use the register method with invitation_token to handle password setup
+		const result = await service.register({
+			email: user.email!,
+			password,
+			first_name: user.first_name || '',
+			last_name: user.last_name || '',
+			invitation_token: token
+		});
+
+		if ('requires_mfa' in result) {
+			return res.status(201).json({ success: true, message: 'Password setup successful', data: result });
+		}
+
+		// Check if result has token (successful registration with tokens)
+		if ('token' in result && 'refresh_token' in result) {
+			// Return tokens for auto-login
+			return res.status(200).json({
+				success: true,
+				message: 'Password setup successful',
+				access_token: result.token,
+				refresh_token: result.refresh_token,
+				user: result.user
+			});
+		}
+
+		// Fallback if result structure is unexpected
+		return res.status(200).json({
+			success: true,
+			message: 'Password setup successful',
+			user: result.user
+		});
+	} catch (err: any) {
+		const msg = err?.message || 'An error occurred while setting up password';
+		const status = msg.includes('invalid') || msg.includes('expired') ? 400 : msg.includes('already') ? 409 : 500;
+		return res.status(status).json({ success: false, message: msg });
+	}
+};

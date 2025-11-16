@@ -36,10 +36,31 @@ import { rbacResource } from '../middleware/rbac.js';
 
 const router = Router();
 
+// Super Admin middleware - only allow super_admin role
+const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
+	const user = (req as any).user;
+	if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+	if (user.role !== 'super_admin') {
+		return res.status(403).json({ success: false, message: 'Super admin access required' });
+	}
+	return next();
+};
+
 // Webhook endpoints (NO AUTH - verified via signature)
 router.use('/webhooks', webhooks);
 
 router.use('/auth', auth);
+
+// Invitations endpoints (public - for invitation verification and setup)
+router.get('/invitations/verify', async (req, res) => {
+	const { verifyInvitation } = await import('../controllers/auth.controller.js');
+	return verifyInvitation(req, res);
+});
+
+router.post('/invitations/setup-password', async (req, res) => {
+	const { setupPassword } = await import('../controllers/auth.controller.js');
+	return setupPassword(req, res);
+});
 
 router.use('/properties', requireAuth, properties);
 router.use('/units', requireAuth, units);
@@ -56,6 +77,23 @@ router.use('/caretakers', requireAuth, caretakers); // Legacy alias for backward
   router.use('/properties', requireAuth, propertyFinancials);
   router.use('/properties', requireAuth, propertyStaff);
 router.use('/leases', requireAuth, leases);
+
+// Notification templates routes (must be before /notifications router)
+router.get('/notifications/templates', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { getNotificationTemplates } = await import('../controllers/super-admin.controller.js');
+	await getNotificationTemplates(req, res);
+});
+
+router.post('/notifications/templates', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { createNotificationTemplate } = await import('../controllers/super-admin.controller.js');
+	await createNotificationTemplate(req, res);
+});
+
+router.put('/notifications/templates/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { updateNotificationTemplate } = await import('../controllers/super-admin.controller.js');
+	await updateNotificationTemplate(req, res);
+});
+
 router.use('/notifications', requireAuth, notifications);
 router.use('/reports', requireAuth, reports);
 router.use('/payments', requireAuth, payments);
@@ -105,16 +143,6 @@ router.use('/test-email', testEmail);
 router.use('/checklists', requireAuth, checklists);
 router.use('/cleanup', requireAuth, cleanup);
 router.use('/emergency-contacts', requireAuth, emergencyContacts);
-
-// Super Admin middleware - only allow super_admin role
-const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
-	const user = (req as any).user;
-	if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
-	if (user.role !== 'super_admin') {
-		return res.status(403).json({ success: false, message: 'Super admin access required' });
-	}
-	return next();
-};
 
 // Super Admin specific endpoints that frontend calls directly
 router.get('/kpis', requireAuth, requireSuperAdmin, async (req, res) => {
@@ -301,14 +329,29 @@ router.post('/applications/:id/reject', requireAuth, requireSuperAdmin, async (r
 	await rejectApplication(req, res);
 });
 
+router.get('/messaging/broadcasts/estimate', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { estimateBroadcastRecipients } = await import('../controllers/super-admin.controller.js');
+	await estimateBroadcastRecipients(req, res);
+});
+
 router.get('/messaging/broadcasts', requireAuth, requireSuperAdmin, async (req, res) => {
 	const { getMessagingBroadcasts } = await import('../controllers/super-admin.controller.js');
 	await getMessagingBroadcasts(req, res);
 });
 
-router.get('/system/settings', requireAuth, requireSuperAdmin, async (req, res) => {
-	const { getSystemSettings } = await import('../controllers/super-admin.controller.js');
-	await getSystemSettings(req, res);
+router.post('/messaging/broadcasts', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { createBroadcastMessage } = await import('../controllers/super-admin.controller.js');
+	await createBroadcastMessage(req, res);
+});
+
+router.post('/messaging/broadcasts/:id/send', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { sendBroadcastMessage } = await import('../controllers/super-admin.controller.js');
+	await sendBroadcastMessage(req, res);
+});
+
+router.post('/messaging/broadcasts/:id/schedule', requireAuth, requireSuperAdmin, async (req, res) => {
+	const { scheduleBroadcastMessage } = await import('../controllers/super-admin.controller.js');
+	await scheduleBroadcastMessage(req, res);
 });
 
 // Debug logging for super-admin routes

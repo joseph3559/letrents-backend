@@ -763,22 +763,32 @@ export const reportsService = {
   async exportReport(user: JWTClaims, reportType: string, format: string = 'csv', filters: any = {}) {
     let reportData: any;
 
+    // Parse property_ids if provided
+    let propertyIds: string[] | undefined = undefined;
+    if (filters.property_ids) {
+      if (typeof filters.property_ids === 'string') {
+        propertyIds = filters.property_ids.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
+      } else if (Array.isArray(filters.property_ids)) {
+        propertyIds = filters.property_ids.map((id: any) => String(id)).filter((id: string) => id.length > 0);
+      }
+    }
+
     // Generate the appropriate report
     switch (reportType) {
       case 'property':
         reportData = await this.getPropertyReport(user, filters);
         break;
       case 'financial':
-        reportData = await this.getFinancialReport(user, 'revenue', filters.period || 'monthly');
+        reportData = await this.getFinancialReport(user, 'revenue', filters.period || 'monthly', propertyIds);
         break;
       case 'occupancy':
-        reportData = await this.getOccupancyReport(user, filters.period || 'monthly');
+        reportData = await this.getOccupancyReport(user, filters.period || 'monthly', propertyIds);
         break;
       case 'rent-collection':
         reportData = await this.getRentCollectionReport(user, filters);
         break;
       case 'maintenance':
-        reportData = await this.getMaintenanceReport(user, filters.period || 'monthly', filters);
+        reportData = await this.getMaintenanceReport(user, filters.period || 'monthly', filters, propertyIds);
         break;
       default:
         throw new Error('Invalid report type for export');

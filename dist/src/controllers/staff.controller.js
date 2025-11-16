@@ -74,11 +74,17 @@ export const staffController = {
         try {
             const user = req.user;
             const { id } = req.params;
+            if (!user) {
+                return writeError(res, 401, 'Unauthorized');
+            }
             await careteakersService.deleteCaretaker(user, id);
             writeSuccess(res, 200, 'Staff member deleted successfully');
         }
         catch (error) {
-            writeError(res, 500, error.message);
+            // Determine appropriate status code based on error type
+            const statusCode = error.message?.includes('Access denied') ? 403 :
+                error.message?.includes('not found') ? 404 : 500;
+            writeError(res, statusCode, error.message);
         }
     },
     inviteStaff: async (req, res) => {

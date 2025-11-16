@@ -627,30 +627,17 @@ export const getAnalyticsChart = async (req, res) => {
 // System Settings
 export const getSystemSettings = async (req, res) => {
     try {
-        // Mock system settings for now
-        const settings = [
-            {
-                id: '1',
-                category: 'general',
-                key: 'site_name',
-                value: 'LetRents Property Management',
-                description: 'The name of the application'
-            },
-            {
-                id: '2',
-                category: 'general',
-                key: 'maintenance_mode',
-                value: 'false',
-                description: 'Enable maintenance mode'
-            },
-            {
-                id: '3',
-                category: 'email',
-                key: 'smtp_host',
-                value: 'smtp.gmail.com',
-                description: 'SMTP server host'
-            }
-        ];
+        const { SystemSettingsService } = await import('../services/system-settings.service.js');
+        const service = new SystemSettingsService();
+        const user = req.user;
+        const category = req.query.category;
+        let settings = await service.getSystemSettings(category);
+        // If no settings exist, initialize default settings
+        if (settings.length === 0 && !category) {
+            console.log('No system settings found. Initializing default settings...');
+            await service.initializeDefaultSettings(user);
+            settings = await service.getSystemSettings();
+        }
         writeSuccess(res, 200, 'System settings retrieved successfully', settings);
     }
     catch (err) {
@@ -660,19 +647,54 @@ export const getSystemSettings = async (req, res) => {
 };
 export const updateSystemSettings = async (req, res) => {
     try {
-        const { id } = req.params;
+        const { SystemSettingsService } = await import('../services/system-settings.service.js');
+        const service = new SystemSettingsService();
+        const user = req.user;
+        const { key } = req.params;
         const { value } = req.body;
-        // Mock update for now
-        const updatedSetting = {
-            id,
-            value,
-            updated_at: new Date().toISOString()
-        };
+        if (!key) {
+            return writeError(res, 400, 'Setting key is required');
+        }
+        if (value === undefined) {
+            return writeError(res, 400, 'Setting value is required');
+        }
+        const updatedSetting = await service.updateSystemSetting(user, key, String(value));
         writeSuccess(res, 200, 'System setting updated successfully', updatedSetting);
     }
     catch (err) {
         console.error('Error updating system setting:', err);
         writeError(res, 500, 'Failed to update system setting', err.message);
+    }
+};
+export const bulkUpdateSystemSettings = async (req, res) => {
+    try {
+        const { SystemSettingsService } = await import('../services/system-settings.service.js');
+        const service = new SystemSettingsService();
+        const user = req.user;
+        const settings = req.body;
+        if (!settings || typeof settings !== 'object') {
+            return writeError(res, 400, 'Settings object is required');
+        }
+        const updatedSettings = await service.bulkUpdateSystemSettings(user, settings);
+        writeSuccess(res, 200, 'System settings updated successfully', updatedSettings);
+    }
+    catch (err) {
+        console.error('Error bulk updating system settings:', err);
+        writeError(res, 500, 'Failed to update system settings', err.message);
+    }
+};
+export const initializeSystemSettings = async (req, res) => {
+    try {
+        const { SystemSettingsService } = await import('../services/system-settings.service.js');
+        const service = new SystemSettingsService();
+        const user = req.user;
+        await service.initializeDefaultSettings(user);
+        const settings = await service.getSystemSettings();
+        writeSuccess(res, 200, 'System settings initialized successfully', settings);
+    }
+    catch (err) {
+        console.error('Error initializing system settings:', err);
+        writeError(res, 500, 'Failed to initialize system settings', err.message);
     }
 };
 // Security Logs
@@ -712,16 +734,98 @@ export const getUserManagement = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
         const offset = (page - 1) * limit;
-        const users = await prisma.$queryRaw `
-      SELECT 
-        id, email, first_name, last_name, role, status, 
-        created_at, updated_at, last_login_at, company_id
-      FROM users 
-      ORDER BY created_at DESC 
-      LIMIT ${limit} OFFSET ${offset}
-    `;
-        const totalResult = await prisma.$queryRaw `SELECT COUNT(*)::int as count FROM users`;
-        const total = Array.isArray(totalResult) ? Number(totalResult[0]?.count || 0) : 0;
+        const role = req.query.role;
+        const search = req.query.search;
+        // Build where clause
+        const where = {};
+        // Apply role filter
+        if (role && role !== 'all') {
+            where.role = role;
+        }
+        // Apply search filter
+        if (search) {
+            // UUID regex pattern
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const searchConditions = [
+                { first_name: { contains: search, mode: 'insensitive' } },
+                { last_name: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+                { phone_number: { contains: search, mode: 'insensitive' } },
+            ];
+            // Only add ID search if search term looks like a valid UUID
+            if (uuidRegex.test(search)) {
+                searchConditions.push({ id: { equals: search } });
+            }
+            // If role filter is also applied, combine with AND
+            if (role && role !== 'all') {
+                where.AND = [
+                    { role: role },
+                    { OR: searchConditions }
+                ];
+                // Remove role from top level since it's now in AND
+                delete where.role;
+            }
+            else {
+                where.OR = searchConditions;
+            }
+        }
+        // Get users with pagination
+        const [users, total] = await Promise.all([
+            prisma.user.findMany({
+                where,
+                select: {
+                    id: true,
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    phone_number: true,
+                    role: true,
+                    status: true,
+                    email_verified: true,
+                    company_id: true,
+                    agency_id: true,
+                    landlord_id: true,
+                    created_at: true,
+                    updated_at: true,
+                    last_login_at: true,
+                    company: {
+                        select: {
+                            id: true,
+                            name: true,
+                        }
+                    },
+                    agency: {
+                        select: {
+                            id: true,
+                            name: true,
+                        }
+                    },
+                    owned_properties: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                        take: 1,
+                    },
+                    tenant_profile: {
+                        select: {
+                            profile_picture: true,
+                        },
+                    },
+                    preferences: {
+                        select: {
+                            signature: true, // Profile picture stored here as workaround
+                        },
+                    },
+                },
+                orderBy: {
+                    created_at: 'desc'
+                },
+                take: limit,
+                skip: offset,
+            }),
+            prisma.user.count({ where }),
+        ]);
         const userData = {
             users: users,
             total: total,
@@ -738,14 +842,103 @@ export const getUserManagement = async (req, res) => {
 };
 export const createUser = async (req, res) => {
     try {
-        const { email, password, first_name, last_name, role, company_id } = req.body;
-        const hashedPassword = await bcrypt.hash(password, 12);
-        const newUser = await prisma.$queryRaw `
-      INSERT INTO users (email, password_hash, first_name, last_name, role, company_id, status)
-      VALUES (${email}, ${hashedPassword}, ${first_name}, ${last_name}, ${role}, ${company_id}::uuid, 'active')
-      RETURNING id, email, first_name, last_name, role, status, created_at
-    `;
-        writeSuccess(res, 201, 'User created successfully', newUser);
+        const { email, password, first_name, last_name, role, company_id, phone_number, send_invitation } = req.body;
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+            where: { email }
+        });
+        if (existingUser) {
+            return writeError(res, 400, 'User with this email already exists');
+        }
+        // For invitation flow, create user without password
+        // For direct creation, require password
+        let hashedPassword = null;
+        if (send_invitation || !password) {
+            // Invitation flow - user will set password during registration
+            // Don't set status here - let it be handled by the invitation process
+        }
+        else {
+            // Direct creation - hash the provided password
+            hashedPassword = await bcrypt.hash(password, 12);
+        }
+        // Get or create a default company for team members if not provided
+        let finalCompanyId = company_id;
+        if (!finalCompanyId) {
+            // Find or create a default system company for team members
+            const defaultCompany = await prisma.company.findFirst({
+                where: { name: 'LetRents System' }
+            });
+            if (defaultCompany) {
+                finalCompanyId = defaultCompany.id;
+            }
+            else {
+                const newCompany = await prisma.company.create({
+                    data: {
+                        name: 'LetRents System',
+                        email: 'system@letrents.com',
+                        country: 'Kenya',
+                        status: 'active',
+                        subscription_plan: 'enterprise',
+                    }
+                });
+                finalCompanyId = newCompany.id;
+            }
+        }
+        const newUser = await prisma.user.create({
+            data: {
+                email,
+                password_hash: hashedPassword,
+                first_name,
+                last_name,
+                phone_number: phone_number || undefined,
+                role: role,
+                company_id: finalCompanyId,
+                // Don't set status here - let it be handled by the invitation process or database default
+                email_verified: false,
+            },
+            select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+                phone_number: true,
+                role: true,
+                status: true,
+                company_id: true,
+                created_at: true,
+            }
+        });
+        // If send_invitation is true, send invitation email
+        if (send_invitation) {
+            try {
+                // Create a proper request object for sendInvitation
+                const inviteReq = {
+                    ...req,
+                    params: { entityType: 'user', entityId: newUser.id },
+                    query: {}
+                };
+                // Create a response wrapper that won't interfere with the main response
+                let invitationSent = false;
+                let invitationError = null;
+                const inviteRes = {
+                    status: (code) => inviteRes,
+                    json: (data) => {
+                        invitationSent = true;
+                        return inviteRes;
+                    }
+                };
+                // Call sendInvitation - don't wait for it to complete
+                sendInvitation(inviteReq, inviteRes).catch(err => {
+                    console.error('Error sending invitation email:', err);
+                    invitationError = err;
+                });
+            }
+            catch (inviteError) {
+                console.error('Error sending invitation:', inviteError);
+                // Don't fail the user creation if invitation fails
+            }
+        }
+        writeSuccess(res, 201, send_invitation ? 'User created and invitation will be sent' : 'User created successfully', newUser);
     }
     catch (err) {
         console.error('Error creating user:', err);
@@ -757,11 +950,75 @@ export const getUserById = async (req, res) => {
         const { id } = req.params;
         const user = await prisma.user.findUnique({
             where: { id },
-            include: {
+            select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+                phone_number: true,
+                role: true,
+                status: true,
+                email_verified: true,
+                company_id: true,
+                agency_id: true,
+                landlord_id: true,
+                created_at: true,
+                updated_at: true,
+                last_login_at: true,
+                id_number: true,
+                address: true,
                 company: {
                     select: {
                         id: true,
-                        name: true
+                        name: true,
+                        email: true,
+                        phone_number: true,
+                        address: true,
+                        status: true,
+                        properties: {
+                            select: {
+                                street: true,
+                                city: true,
+                                region: true,
+                                country: true,
+                                postal_code: true,
+                            },
+                            take: 1,
+                            orderBy: {
+                                created_at: 'asc'
+                            }
+                        }
+                    }
+                },
+                agency: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phone_number: true,
+                        address: true,
+                        status: true
+                    }
+                },
+                landlord: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                        phone_number: true,
+                        address: true,
+                        status: true
+                    }
+                },
+                tenant_profile: {
+                    select: {
+                        profile_picture: true,
+                    }
+                },
+                preferences: {
+                    select: {
+                        signature: true, // Profile picture stored here as workaround
                     }
                 }
             }
@@ -769,7 +1026,39 @@ export const getUserById = async (req, res) => {
         if (!user) {
             return writeError(res, 404, 'User not found');
         }
-        writeSuccess(res, 200, 'User retrieved successfully', user);
+        // Process company data: if company address is null, use first property's address
+        let processedCompany = user.company;
+        if (processedCompany && !processedCompany.address && processedCompany.properties && processedCompany.properties.length > 0) {
+            const firstProperty = processedCompany.properties[0];
+            // Build address from property fields
+            const propertyAddressParts = [
+                firstProperty.street,
+                firstProperty.city,
+                firstProperty.region,
+                firstProperty.postal_code,
+                firstProperty.country
+            ].filter(Boolean);
+            if (propertyAddressParts.length > 0) {
+                processedCompany = {
+                    ...processedCompany,
+                    address: propertyAddressParts.join(', ')
+                };
+            }
+        }
+        // Remove properties array from company (we only needed it for address fallback)
+        if (processedCompany && processedCompany.properties) {
+            const { properties, ...companyWithoutProperties } = processedCompany;
+            processedCompany = companyWithoutProperties;
+        }
+        // Ensure tenant_profile and preferences are always included (even if null)
+        // This prevents them from being undefined in the response
+        const userResponse = {
+            ...user,
+            company: processedCompany,
+            tenant_profile: user.tenant_profile || null,
+            preferences: user.preferences || null,
+        };
+        writeSuccess(res, 200, 'User retrieved successfully', userResponse);
     }
     catch (err) {
         console.error('Error fetching user:', err);
@@ -839,7 +1128,7 @@ export const createCompany = async (req, res) => {
 export const updateCompany = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, business_type, email, phone_number, subscription_plan, status } = req.body;
+        const { name, business_type, email, phone_number, address, subscription_plan, status } = req.body;
         // Build update object with only provided fields
         const updateData = {};
         if (name !== undefined)
@@ -850,6 +1139,8 @@ export const updateCompany = async (req, res) => {
             updateData.email = email;
         if (phone_number !== undefined)
             updateData.phone_number = phone_number;
+        if (address !== undefined)
+            updateData.address = address;
         if (subscription_plan !== undefined)
             updateData.subscription_plan = subscription_plan;
         if (status !== undefined)
@@ -864,6 +1155,7 @@ export const updateCompany = async (req, res) => {
                 business_type: true,
                 email: true,
                 phone_number: true,
+                address: true,
                 subscription_plan: true,
                 status: true,
                 updated_at: true,
@@ -1322,47 +1614,102 @@ export const getAgencyPerformance = async (req, res) => {
 // Additional missing endpoints
 export const getUserMetrics = async (req, res) => {
     try {
-        // Return static metrics to avoid database/authentication issues
         const role = req.query.role;
-        let metrics;
-        if (role === 'landlord') {
-            metrics = {
-                total_users: 1,
-                active_users: 1,
-                inactive_users: 0,
-                users_by_role: [
-                    { role: 'landlord', count: 1 }
-                ],
-                growth_rate: 0
-            };
+        // Build where clause
+        const where = {};
+        if (role && role !== 'all') {
+            where.role = role;
         }
-        else if (role === 'tenant') {
-            metrics = {
-                total_users: 3,
-                active_users: 3,
-                inactive_users: 0,
-                users_by_role: [
-                    { role: 'tenant', count: 3 }
-                ],
-                growth_rate: 15.2
-            };
-        }
-        else {
-            // All users
-            metrics = {
-                total_users: 6,
-                active_users: 6,
-                inactive_users: 0,
-                users_by_role: [
-                    { role: 'super_admin', count: 1 },
-                    { role: 'landlord', count: 1 },
-                    { role: 'tenant', count: 3 },
-                    { role: 'caretaker', count: 1 },
-                    { role: 'agent', count: 1 }
-                ],
-                growth_rate: 8.5
-            };
-        }
+        // Get total users count
+        const totalUsers = await prisma.user.count({ where });
+        // Get active users count
+        const activeUsers = await prisma.user.count({
+            where: {
+                ...where,
+                status: 'active'
+            }
+        });
+        // Get inactive users count
+        const inactiveUsers = await prisma.user.count({
+            where: {
+                ...where,
+                status: 'inactive'
+            }
+        });
+        // Get suspended users count
+        const suspendedUsers = await prisma.user.count({
+            where: {
+                ...where,
+                status: 'suspended'
+            }
+        });
+        // Get pending users count
+        const pendingUsers = await prisma.user.count({
+            where: {
+                ...where,
+                status: 'pending'
+            }
+        });
+        // Get users by role
+        const usersByRole = await prisma.user.groupBy({
+            by: ['role'],
+            where,
+            _count: {
+                role: true
+            }
+        });
+        // Get new users today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const newToday = await prisma.user.count({
+            where: {
+                ...where,
+                created_at: {
+                    gte: today
+                }
+            }
+        });
+        // Calculate growth rate (users created in last 30 days vs previous 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        const usersLast30Days = await prisma.user.count({
+            where: {
+                ...where,
+                created_at: {
+                    gte: thirtyDaysAgo
+                }
+            }
+        });
+        const usersPrevious30Days = await prisma.user.count({
+            where: {
+                ...where,
+                created_at: {
+                    gte: sixtyDaysAgo,
+                    lt: thirtyDaysAgo
+                }
+            }
+        });
+        const growthRate = usersPrevious30Days > 0
+            ? ((usersLast30Days - usersPrevious30Days) / usersPrevious30Days) * 100
+            : usersLast30Days > 0 ? 100 : 0;
+        // Get total agencies count (if applicable)
+        const agencies = await prisma.agency.count().catch(() => 0);
+        const metrics = {
+            total_users: totalUsers,
+            active_users: activeUsers,
+            inactive_users: inactiveUsers,
+            suspended_users: suspendedUsers,
+            pending_users: pendingUsers,
+            new_today: newToday,
+            agencies: agencies,
+            users_by_role: usersByRole.map(item => ({
+                role: item.role,
+                count: item._count.role
+            })),
+            growth_rate: Math.round(growthRate * 100) / 100
+        };
         writeSuccess(res, 200, 'User metrics retrieved successfully', metrics);
     }
     catch (err) {
@@ -1767,40 +2114,129 @@ export const rejectApplication = async (req, res) => {
         writeError(res, 500, 'Failed to reject application', err.message);
     }
 };
+// Estimate recipients count for a broadcast based on target audience
+export const estimateBroadcastRecipients = async (req, res) => {
+    try {
+        const { target_audience } = req.query;
+        if (!target_audience) {
+            return writeError(res, 400, 'target_audience is required');
+        }
+        // Parse target audience (can be string or comma-separated)
+        const targetAudiences = typeof target_audience === 'string'
+            ? target_audience.split(',').map((a) => a.trim())
+            : Array.isArray(target_audience)
+                ? target_audience
+                : ['all_users'];
+        // Build role filter - include all user roles when "all_users" is selected
+        const roles = [];
+        if (targetAudiences.includes('all_users')) {
+            // Include all user roles
+            roles.push('agency_admin', 'agent', 'landlord', 'tenant', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager');
+        }
+        else {
+            if (targetAudiences.includes('agency_admins'))
+                roles.push('agency_admin');
+            if (targetAudiences.includes('agents'))
+                roles.push('agent');
+            if (targetAudiences.includes('landlords'))
+                roles.push('landlord');
+            if (targetAudiences.includes('tenants'))
+                roles.push('tenant');
+            if (targetAudiences.includes('caretakers'))
+                roles.push('caretaker');
+            // Add support for staff roles
+            if (targetAudiences.includes('staff') || targetAudiences.includes('cleaners'))
+                roles.push('cleaner');
+            if (targetAudiences.includes('security'))
+                roles.push('security');
+            if (targetAudiences.includes('maintenance'))
+                roles.push('maintenance');
+            if (targetAudiences.includes('receptionists'))
+                roles.push('receptionist');
+            if (targetAudiences.includes('accountants'))
+                roles.push('accountant');
+            if (targetAudiences.includes('managers'))
+                roles.push('manager');
+        }
+        // Count users based on target audience
+        const count = await prisma.user.count({
+            where: {
+                role: { in: roles }, // Cast to any to handle enum types
+                status: 'active', // Only count active users
+                company_id: { not: null }, // Only count users with company_id
+            },
+        });
+        writeSuccess(res, 200, 'Recipient count estimated successfully', {
+            estimated_count: count,
+            target_audience: targetAudiences,
+            roles: roles,
+        });
+    }
+    catch (err) {
+        console.error('Error estimating broadcast recipients:', err);
+        writeError(res, 500, 'Failed to estimate recipients', err.message);
+    }
+};
 export const getMessagingBroadcasts = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
-        // Mock broadcast messages for demo
-        const messages = [
-            {
-                id: '1',
-                content: 'Welcome to our LetRents System, Feel at home',
-                type: 'system',
-                created_at: new Date('2025-09-21T10:00:00Z'),
-                first_name: 'System',
-                last_name: 'Admin',
-                email: 'admin@letrents.com',
-                status: 'sent',
-                recipients_count: 6,
-                subject: 'Welcome Message'
-            },
-            {
-                id: '2',
-                content: 'Hello members, we\'ll have a meet today at 11:00 AM, at the rooftop',
-                type: 'announcement',
-                created_at: new Date('2025-09-21T09:00:00Z'),
-                first_name: 'Landlord',
-                last_name: 'User',
-                email: 'landlord@letrents.com',
-                status: 'sent',
-                recipients_count: 4,
-                subject: 'Meeting Announcement'
-            }
-        ];
-        const total = messages.length;
+        const status = req.query.status;
+        // Build where clause
+        const where = {};
+        if (status && status !== 'all') {
+            where.status = status;
+        }
+        // Get broadcasts from database
+        const [messages, total] = await Promise.all([
+            prisma.broadcastMessage.findMany({
+                where,
+                include: {
+                    creator: {
+                        select: {
+                            id: true,
+                            first_name: true,
+                            last_name: true,
+                            email: true,
+                        },
+                    },
+                },
+                orderBy: {
+                    created_at: 'desc',
+                },
+                take: limit,
+                skip: offset,
+            }),
+            prisma.broadcastMessage.count({ where }),
+        ]);
+        // Transform to match frontend expectations
+        const transformedMessages = messages.map((msg) => ({
+            id: msg.id,
+            title: msg.title,
+            message: msg.message,
+            type: msg.type,
+            target_audience: msg.target_audience,
+            target_filters: msg.target_filters,
+            scheduled_for: msg.scheduled_for?.toISOString(),
+            sent_at: msg.sent_at?.toISOString(),
+            status: msg.status,
+            recipients_count: msg.recipients_count,
+            delivered_count: msg.delivered_count,
+            opened_count: msg.opened_count,
+            send_email: msg.send_email,
+            send_sms: msg.send_sms,
+            send_push: msg.send_push,
+            created_by: msg.created_by,
+            created_at: msg.created_at.toISOString(),
+            updated_at: msg.updated_at.toISOString(),
+            creator: msg.creator ? {
+                id: msg.creator.id,
+                name: `${msg.creator.first_name} ${msg.creator.last_name}`,
+                email: msg.creator.email,
+            } : null,
+        }));
         const result = {
-            broadcasts: messages,
+            messages: transformedMessages,
             total,
             limit,
             offset
@@ -1810,6 +2246,514 @@ export const getMessagingBroadcasts = async (req, res) => {
     catch (err) {
         console.error('Error fetching messaging broadcasts:', err);
         writeError(res, 500, 'Failed to fetch messaging broadcasts', err.message);
+    }
+};
+// Get notification templates
+export const getNotificationTemplates = async (req, res) => {
+    try {
+        const category = req.query.category;
+        // Mock notification templates for demo
+        let templates = [
+            {
+                id: '1',
+                name: 'Welcome Email',
+                subject: 'Welcome to LetRents!',
+                email_body: 'Hello {{user_name}},\n\nWelcome to LetRents! We\'re excited to have you on board.\n\nBest regards,\nThe LetRents Team',
+                sms_body: 'Welcome to LetRents, {{user_name}}! We\'re excited to have you.',
+                variables: ['user_name', 'agency_name'],
+                category: 'notification',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '2',
+                name: 'Payment Reminder',
+                subject: 'Payment Reminder - {{invoice_amount}}',
+                email_body: 'Dear {{user_name}},\n\nThis is a reminder that your payment of {{invoice_amount}} is due on {{due_date}}.\n\nPlease make your payment to avoid any late fees.\n\nThank you!',
+                sms_body: 'Reminder: Payment of {{invoice_amount}} due on {{due_date}}. Please pay to avoid late fees.',
+                variables: ['user_name', 'invoice_amount', 'due_date'],
+                category: 'reminder',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '3',
+                name: 'Maintenance Request Update',
+                subject: 'Update on Your Maintenance Request',
+                email_body: 'Hello {{user_name}},\n\nYour maintenance request #{{request_id}} has been updated to {{status}}.\n\n{{additional_notes}}\n\nThank you for your patience.',
+                sms_body: 'Maintenance request #{{request_id}} updated to {{status}}.',
+                variables: ['user_name', 'request_id', 'status', 'additional_notes'],
+                category: 'notification',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '4',
+                name: 'Promotional Offer',
+                subject: 'Special Offer Just for You!',
+                email_body: 'Hi {{user_name}},\n\nWe have a special promotional offer: {{offer_details}}\n\nDon\'t miss out on this amazing deal!\n\n{{call_to_action}}',
+                sms_body: 'Special offer: {{offer_details}}. {{call_to_action}}',
+                variables: ['user_name', 'offer_details', 'call_to_action'],
+                category: 'promotional',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '5',
+                name: 'System Maintenance Notice',
+                subject: 'LetRents System Maintenance - {{maintenance_date}}',
+                email_body: 'Dear {{user_name}},\n\nWe would like to inform you that LetRents will be undergoing scheduled system maintenance.\n\nMaintenance Details:\n- Date: {{maintenance_date}}\n- Time: {{maintenance_time}}\n- Duration: {{duration}}\n- Impact: {{impact_description}}\n\nDuring this time, you may experience temporary service interruptions. We apologize for any inconvenience and appreciate your patience.\n\nIf you have any urgent matters, please contact our support team.\n\nThank you for your understanding.\n\nThe LetRents Team',
+                sms_body: 'LetRents maintenance on {{maintenance_date}} at {{maintenance_time}}. Duration: {{duration}}. {{impact_description}}',
+                variables: ['user_name', 'maintenance_date', 'maintenance_time', 'duration', 'impact_description'],
+                category: 'system',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '6',
+                name: 'System Downtime Alert',
+                subject: '⚠️ LetRents System Downtime - {{downtime_date}}',
+                email_body: 'URGENT: System Downtime Notice\n\nDear {{user_name}},\n\nThis is an important notification regarding scheduled system downtime for LetRents.\n\nDowntime Information:\n- Start: {{downtime_start}}\n- End: {{downtime_end}}\n- Reason: {{downtime_reason}}\n- Affected Services: {{affected_services}}\n\nPlease plan accordingly as the system will be unavailable during this period. We recommend completing any urgent tasks before the downtime begins.\n\nWe apologize for any inconvenience and thank you for your patience.\n\nFor updates, please visit our status page or contact support.\n\nBest regards,\nThe LetRents Team',
+                sms_body: 'URGENT: LetRents downtime {{downtime_start}} to {{downtime_end}}. Reason: {{downtime_reason}}. Plan accordingly.',
+                variables: ['user_name', 'downtime_start', 'downtime_end', 'downtime_reason', 'affected_services'],
+                category: 'alert',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '7',
+                name: 'New Feature Update',
+                subject: '🎉 New Feature Available: {{feature_name}}',
+                email_body: 'Hello {{user_name}},\n\nWe\'re excited to announce a new feature on LetRents!\n\n✨ New Feature: {{feature_name}}\n\n{{feature_description}}\n\nKey Benefits:\n{{feature_benefits}}\n\nHow to Access:\n{{access_instructions}}\n\nWe hope this enhancement improves your experience with LetRents. If you have any questions or feedback, please don\'t hesitate to reach out.\n\nHappy using!\n\nThe LetRents Team',
+                sms_body: 'New LetRents feature: {{feature_name}}. {{feature_description}}. Check it out now!',
+                variables: ['user_name', 'feature_name', 'feature_description', 'feature_benefits', 'access_instructions'],
+                category: 'promotional',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '8',
+                name: 'Risk Alert',
+                subject: '🚨 Security Alert: {{alert_title}}',
+                email_body: 'SECURITY ALERT\n\nDear {{user_name}},\n\nThis is an important security notification from LetRents.\n\nAlert Type: {{alert_type}}\nSeverity: {{severity_level}}\nIssue: {{alert_description}}\n\nAction Required:\n{{action_required}}\n\nRecommended Steps:\n{{recommended_steps}}\n\nIf you did not initiate this action or notice any suspicious activity, please contact our security team immediately at {{security_contact}}.\n\nYour account security is our top priority.\n\nStay safe,\nThe LetRents Security Team',
+                sms_body: 'SECURITY ALERT: {{alert_type}}. {{alert_description}}. Action required: {{action_required}}. Contact: {{security_contact}}',
+                variables: ['user_name', 'alert_title', 'alert_type', 'severity_level', 'alert_description', 'action_required', 'recommended_steps', 'security_contact'],
+                category: 'alert',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '9',
+                name: 'System Update Complete',
+                subject: '✅ LetRents System Update Completed',
+                email_body: 'Hello {{user_name}},\n\nWe\'re pleased to inform you that the system update has been completed successfully.\n\nUpdate Details:\n- Update Date: {{update_date}}\n- Version: {{version_number}}\n- New Features: {{new_features}}\n- Improvements: {{improvements}}\n- Bug Fixes: {{bug_fixes}}\n\nWhat\'s Changed:\n{{change_summary}}\n\nYou can now enjoy improved performance and new features. If you encounter any issues, please contact our support team.\n\nThank you for your patience during the update.\n\nBest regards,\nThe LetRents Team',
+                sms_body: 'LetRents update completed. Version {{version_number}}. New features: {{new_features}}. Check it out!',
+                variables: ['user_name', 'update_date', 'version_number', 'new_features', 'improvements', 'bug_fixes', 'change_summary'],
+                category: 'system',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '10',
+                name: 'Emergency System Alert',
+                subject: '🚨 EMERGENCY: {{emergency_title}}',
+                email_body: 'EMERGENCY ALERT\n\nDear {{user_name}},\n\nThis is an emergency notification from LetRents.\n\nEmergency Type: {{emergency_type}}\nStatus: {{emergency_status}}\nDescription: {{emergency_description}}\n\nImmediate Actions:\n{{immediate_actions}}\n\nWhat to Do:\n{{what_to_do}}\n\nFor Assistance:\n{{assistance_contact}}\n\nPlease follow all instructions carefully. Your safety and data security are our priorities.\n\nStay informed,\nThe LetRents Emergency Response Team',
+                sms_body: 'EMERGENCY: {{emergency_type}}. {{emergency_description}}. Actions: {{immediate_actions}}. Contact: {{assistance_contact}}',
+                variables: ['user_name', 'emergency_title', 'emergency_type', 'emergency_status', 'emergency_description', 'immediate_actions', 'what_to_do', 'assistance_contact'],
+                category: 'alert',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+            {
+                id: '11',
+                name: 'Service Status Update',
+                subject: 'LetRents Service Status Update',
+                email_body: 'Hello {{user_name}},\n\nWe wanted to keep you informed about the current status of LetRents services.\n\nService Status: {{service_status}}\nStatus Date: {{status_date}}\nAffected Services: {{affected_services}}\n\nCurrent Status:\n{{status_description}}\n\nExpected Resolution:\n{{expected_resolution}}\n\nWe are working diligently to resolve any issues and restore full service. Thank you for your patience.\n\nFor real-time updates, please visit our status page.\n\nBest regards,\nThe LetRents Team',
+                sms_body: 'LetRents status update: {{service_status}}. {{status_description}}. Expected resolution: {{expected_resolution}}',
+                variables: ['user_name', 'service_status', 'status_date', 'affected_services', 'status_description', 'expected_resolution'],
+                category: 'system',
+                is_active: true,
+                created_by: 'system',
+                created_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+                updated_at: new Date('2025-01-01T00:00:00Z').toISOString(),
+            },
+        ];
+        // Filter by category if provided
+        if (category) {
+            templates = templates.filter(t => t.category === category);
+        }
+        writeSuccess(res, 200, 'Notification templates retrieved successfully', templates);
+    }
+    catch (err) {
+        console.error('Error fetching notification templates:', err);
+        writeError(res, 500, 'Failed to fetch notification templates', err.message);
+    }
+};
+// Create notification template
+export const createNotificationTemplate = async (req, res) => {
+    try {
+        const user = req.user;
+        const templateData = {
+            ...req.body,
+            id: `template_${Date.now()}`,
+            created_by: user?.id || 'system',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            variables: req.body.variables || [],
+        };
+        writeSuccess(res, 201, 'Notification template created successfully', templateData);
+    }
+    catch (err) {
+        console.error('Error creating notification template:', err);
+        writeError(res, 500, 'Failed to create notification template', err.message);
+    }
+};
+// Update notification template
+export const updateNotificationTemplate = async (req, res) => {
+    try {
+        const templateId = req.params.id;
+        const updates = {
+            ...req.body,
+            updated_at: new Date().toISOString(),
+        };
+        writeSuccess(res, 200, 'Notification template updated successfully', { id: templateId, ...updates });
+    }
+    catch (err) {
+        console.error('Error updating notification template:', err);
+        writeError(res, 500, 'Failed to update notification template', err.message);
+    }
+};
+// Send broadcast message
+export const sendBroadcastMessage = async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const user = req.user;
+        // Get broadcast from database
+        const broadcast = await prisma.broadcastMessage.findUnique({
+            where: { id: messageId },
+        });
+        if (!broadcast) {
+            return writeError(res, 404, 'Broadcast message not found');
+        }
+        if (broadcast.status === 'sent') {
+            return writeError(res, 400, 'Broadcast message has already been sent');
+        }
+        // Parse target audience (can be string or comma-separated)
+        const targetAudiences = typeof broadcast.target_audience === 'string'
+            ? broadcast.target_audience.split(',').map((a) => a.trim())
+            : Array.isArray(broadcast.target_audience)
+                ? broadcast.target_audience
+                : ['all_users'];
+        // Build role filter - include all user roles when "all_users" is selected
+        const roles = [];
+        if (targetAudiences.includes('all_users')) {
+            // Include all user roles: agency_admin, agent, landlord, tenant, caretaker, cleaner, security, maintenance, receptionist, accountant, manager
+            roles.push('agency_admin', 'agent', 'landlord', 'tenant', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager');
+        }
+        else {
+            if (targetAudiences.includes('agency_admins'))
+                roles.push('agency_admin');
+            if (targetAudiences.includes('agents'))
+                roles.push('agent');
+            if (targetAudiences.includes('landlords'))
+                roles.push('landlord');
+            if (targetAudiences.includes('tenants'))
+                roles.push('tenant');
+            if (targetAudiences.includes('caretakers'))
+                roles.push('caretaker');
+            // Add support for staff roles
+            if (targetAudiences.includes('staff') || targetAudiences.includes('cleaners'))
+                roles.push('cleaner');
+            if (targetAudiences.includes('security'))
+                roles.push('security');
+            if (targetAudiences.includes('maintenance'))
+                roles.push('maintenance');
+            if (targetAudiences.includes('receptionists'))
+                roles.push('receptionist');
+            if (targetAudiences.includes('accountants'))
+                roles.push('accountant');
+            if (targetAudiences.includes('managers'))
+                roles.push('manager');
+        }
+        // Get users based on target audience
+        const whereClause = {
+            role: { in: roles },
+            status: 'active', // Only send to active users
+        };
+        const recipients = await prisma.user.findMany({
+            where: {
+                ...whereClause,
+                company_id: { not: null }, // Only get users with company_id
+            },
+            select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+                role: true,
+                company_id: true,
+            },
+        });
+        console.log(`📢 Sending broadcast to ${recipients.length} recipients`);
+        // Helper function to escape HTML to prevent XSS
+        const escapeHtml = (text) => {
+            if (!text)
+                return text;
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+        // Helper function to replace template variables with user data
+        const replaceTemplateVariables = (text, recipient) => {
+            if (!text)
+                return text;
+            const userFullName = `${recipient.first_name} ${recipient.last_name}`.trim();
+            // Replace common template variables
+            let replaced = text
+                .replace(/\{\{user_name\}\}/gi, userFullName)
+                .replace(/\{\{user_first_name\}\}/gi, recipient.first_name || '')
+                .replace(/\{\{user_last_name\}\}/gi, recipient.last_name || '')
+                .replace(/\{\{first_name\}\}/gi, recipient.first_name || '')
+                .replace(/\{\{last_name\}\}/gi, recipient.last_name || '')
+                .replace(/\{\{name\}\}/gi, userFullName)
+                .replace(/\{\{email\}\}/gi, recipient.email || '')
+                .replace(/\{\{user_email\}\}/gi, recipient.email || '')
+                .replace(/\{\{role\}\}/gi, recipient.role || '');
+            return replaced;
+        };
+        // Import email service
+        const { emailService } = await import('../services/email.service.js');
+        let deliveredCount = 0;
+        let emailSentCount = 0;
+        let notificationCreatedCount = 0;
+        // Send to each recipient
+        for (const recipient of recipients) {
+            try {
+                // Replace template variables for this recipient
+                const personalizedTitle = replaceTemplateVariables(broadcast.title, recipient);
+                const personalizedMessage = replaceTemplateVariables(broadcast.message, recipient);
+                // Create in-app notification
+                if (broadcast.send_push !== false) {
+                    try {
+                        // Create notification directly using Prisma (bypass service for cross-company broadcasts)
+                        // Only create notification if recipient has a company_id
+                        if (recipient.company_id) {
+                            await prisma.notification.create({
+                                data: {
+                                    title: personalizedTitle,
+                                    message: personalizedMessage,
+                                    notification_type: broadcast.type || 'info',
+                                    category: broadcast.type || 'general',
+                                    priority: broadcast.type === 'alert' ? 'high' : 'medium',
+                                    sender_id: user?.user_id || null,
+                                    recipient_id: recipient.id,
+                                    company_id: recipient.company_id,
+                                    is_read: false,
+                                    status: 'unread',
+                                },
+                            });
+                            notificationCreatedCount++;
+                        }
+                    }
+                    catch (notifError) {
+                        console.error(`Failed to create notification for user ${recipient.id}:`, notifError);
+                    }
+                }
+                // Send email if requested
+                if (broadcast.send_email && recipient.email) {
+                    try {
+                        await emailService.sendEmail({
+                            to: recipient.email,
+                            subject: personalizedTitle,
+                            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #14b8a6;">${escapeHtml(personalizedTitle)}</h2>
+                  <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="color: #374151; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(personalizedMessage).replace(/\n/g, '<br>')}</p>
+                  </div>
+                  <p style="color: #6b7280; font-size: 12px; margin-top: 20px;">
+                    This is an automated message from LetRents System.
+                  </p>
+                </div>
+              `,
+                            text: personalizedMessage,
+                        });
+                        emailSentCount++;
+                    }
+                    catch (emailError) {
+                        console.error(`Failed to send email to ${recipient.email}:`, emailError);
+                    }
+                }
+                deliveredCount++;
+            }
+            catch (error) {
+                console.error(`Error sending to recipient ${recipient.id}:`, error);
+            }
+        }
+        // Update broadcast status in database
+        const updatedBroadcast = await prisma.broadcastMessage.update({
+            where: { id: messageId },
+            data: {
+                status: 'sent',
+                sent_at: new Date(),
+                recipients_count: recipients.length,
+                delivered_count: deliveredCount,
+                updated_at: new Date(),
+            },
+        });
+        console.log(`✅ Broadcast sent: ${notificationCreatedCount} notifications, ${emailSentCount} emails`);
+        writeSuccess(res, 200, 'Broadcast message sent successfully', {
+            id: messageId,
+            status: 'sent',
+            sent_at: updatedBroadcast.sent_at?.toISOString(),
+            recipients_count: recipients.length,
+            delivered_count: deliveredCount,
+            notifications_created: notificationCreatedCount,
+            emails_sent: emailSentCount,
+        });
+    }
+    catch (err) {
+        console.error('Error sending broadcast message:', err);
+        writeError(res, 500, 'Failed to send broadcast message', err.message);
+    }
+};
+// Schedule broadcast message
+export const scheduleBroadcastMessage = async (req, res) => {
+    try {
+        const messageId = req.params.id;
+        const { scheduled_for } = req.body;
+        if (!scheduled_for) {
+            return writeError(res, 400, 'scheduled_for is required');
+        }
+        // Get broadcast from database
+        const broadcast = await prisma.broadcastMessage.findUnique({
+            where: { id: messageId },
+        });
+        if (!broadcast) {
+            return writeError(res, 404, 'Broadcast message not found');
+        }
+        // Update broadcast with scheduled time
+        const updatedBroadcast = await prisma.broadcastMessage.update({
+            where: { id: messageId },
+            data: {
+                status: 'scheduled',
+                scheduled_for: new Date(scheduled_for),
+                updated_at: new Date(),
+            },
+        });
+        writeSuccess(res, 200, 'Broadcast message scheduled successfully', {
+            id: messageId,
+            status: 'scheduled',
+            scheduled_for: updatedBroadcast.scheduled_for?.toISOString(),
+        });
+    }
+    catch (err) {
+        console.error('Error scheduling broadcast message:', err);
+        writeError(res, 500, 'Failed to schedule broadcast message', err.message);
+    }
+};
+// Create broadcast message
+export const createBroadcastMessage = async (req, res) => {
+    try {
+        const user = req.user;
+        const userId = user?.user_id || user?.id;
+        if (!userId) {
+            return writeError(res, 401, 'User authentication required');
+        }
+        // Validate required fields
+        if (!req.body.title || !req.body.message) {
+            return writeError(res, 400, 'Title and message are required');
+        }
+        // Handle target_audience - convert array to comma-separated string if needed
+        let targetAudience = req.body.target_audience;
+        if (Array.isArray(targetAudience)) {
+            targetAudience = targetAudience.join(',');
+        }
+        else if (!targetAudience) {
+            targetAudience = 'all_users';
+        }
+        // Create broadcast in database
+        const broadcastData = await prisma.broadcastMessage.create({
+            data: {
+                title: req.body.title,
+                message: req.body.message,
+                type: req.body.type || 'notification',
+                target_audience: targetAudience,
+                target_filters: req.body.target_filters || null,
+                status: 'draft',
+                recipients_count: 0,
+                delivered_count: 0,
+                opened_count: 0,
+                send_email: req.body.send_email !== undefined ? req.body.send_email : true,
+                send_sms: req.body.send_sms !== undefined ? req.body.send_sms : false,
+                send_push: req.body.send_push !== undefined ? req.body.send_push : true,
+                created_by: userId,
+            },
+            include: {
+                creator: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    },
+                },
+            },
+        });
+        // Transform to match frontend expectations
+        const response = {
+            id: broadcastData.id,
+            title: broadcastData.title,
+            message: broadcastData.message,
+            type: broadcastData.type,
+            target_audience: broadcastData.target_audience,
+            target_filters: broadcastData.target_filters,
+            scheduled_for: broadcastData.scheduled_for?.toISOString(),
+            sent_at: broadcastData.sent_at?.toISOString(),
+            status: broadcastData.status,
+            recipients_count: broadcastData.recipients_count,
+            delivered_count: broadcastData.delivered_count,
+            opened_count: broadcastData.opened_count,
+            send_email: broadcastData.send_email,
+            send_sms: broadcastData.send_sms,
+            send_push: broadcastData.send_push,
+            created_by: broadcastData.created_by,
+            created_at: broadcastData.created_at.toISOString(),
+            updated_at: broadcastData.updated_at.toISOString(),
+            creator: broadcastData.creator ? {
+                id: broadcastData.creator.id,
+                name: `${broadcastData.creator.first_name} ${broadcastData.creator.last_name}`,
+                email: broadcastData.creator.email,
+            } : null,
+        };
+        writeSuccess(res, 201, 'Broadcast message created successfully', response);
+    }
+    catch (err) {
+        console.error('Error creating broadcast message:', err);
+        writeError(res, 500, 'Failed to create broadcast message', err.message);
     }
 };
 // Get agency billing data
@@ -2747,29 +3691,42 @@ export const sendInvitation = async (req, res) => {
         const bcrypt = await import('bcryptjs');
         const crypto = await import('crypto');
         const env = (await import('../config/env.js')).env;
+        // Define team member roles (SaaS team, not customers)
+        const TEAM_MEMBER_ROLES = ['admin', 'manager', 'team_lead', 'staff', 'finance', 'sales', 'marketing', 'support', 'hr', 'auditor'];
+        const isTeamMember = userData && TEAM_MEMBER_ROLES.includes(userRole);
         let tempPassword = null;
         let needsPasswordReset = false;
+        let needsSetupLink = false;
         // For users, check if they need a password or password reset
         if (userData) {
             const hasPassword = !!userData.password_hash;
-            const isPending = userData.status === 'pending';
+            const isPending = userData.status === 'pending' || userData.status === 'pending_setup';
             const isEmailVerified = userData.email_verified;
-            // If user doesn't have a password or is pending, generate a temporary password
-            if (!hasPassword || isPending) {
-                // Generate a secure temporary password
+            // For team members, send setup link instead of temporary password (like tenants)
+            if (isTeamMember && (!hasPassword || isPending)) {
+                // Don't generate password - user will set it via setup link
+                // Set status to pending and verify email (they'll set password via link)
+                await prisma.user.update({
+                    where: { id: userData.id },
+                    data: {
+                        status: 'pending', // User needs to set up their account via link
+                        email_verified: true, // Verify email since we're sending link to their email
+                        updated_at: new Date()
+                    }
+                });
+                needsSetupLink = true;
+                console.log(`📧 Sending setup link for team member ${userData.id} (no temporary password)`);
+            }
+            else if (!isTeamMember && (!hasPassword || isPending)) {
+                // For non-team members (customers), generate temporary password
                 tempPassword = crypto.randomBytes(12).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 12);
                 const passwordHash = await bcrypt.default.hash(tempPassword, 10);
-                // CRITICAL: When sending credentials via email, we MUST verify the email
-                // This allows the user to log in immediately without email verification step
-                // If we don't verify the email, login will fail with "user account is not verified"
-                // This is safe because we're sending the credentials to their email address,
-                // which proves they have access to that email.
                 await prisma.user.update({
                     where: { id: userData.id },
                     data: {
                         password_hash: passwordHash,
-                        status: 'pending_setup', // User needs to set up their account
-                        email_verified: true, // REQUIRED: Auto-verify email when sending credentials via email
+                        status: 'pending_setup',
+                        email_verified: true,
                         updated_at: new Date()
                     }
                 });
@@ -2778,7 +3735,6 @@ export const sendInvitation = async (req, res) => {
             }
             else if (!isEmailVerified && hasPassword) {
                 // User has password but email is not verified - send verification email instead
-                // Don't generate new password, just send verification link
                 console.log(`📧 User ${userData.id} has password but email not verified - sending verification email`);
             }
         }
@@ -2787,13 +3743,146 @@ export const sendInvitation = async (req, res) => {
         const isLandlord = userRole === 'landlord';
         const loginUrl = `${env.appUrl || process.env.APP_URL || 'http://localhost:3000'}/login`;
         const appName = 'LetRents';
+        // Map user roles to display names for team members
+        const getRoleDisplayName = (role) => {
+            const roleMap = {
+                'super_admin': 'Super Administrator',
+                'agency_admin': 'Agency Administrator',
+                'landlord': 'Landlord',
+                'agent': 'Agent',
+                'caretaker': 'Caretaker',
+                'team_lead': 'Team Lead',
+                'manager': 'Manager',
+                'staff': 'Staff Member',
+                'finance': 'Finance Team Member',
+                'sales': 'Sales Team Member',
+                'marketing': 'Marketing Team Member',
+                'support': 'Support Team Member',
+                'hr': 'HR Team Member',
+                'auditor': 'Auditor',
+                'admin': 'Administrator',
+                'tenant': 'Tenant'
+            };
+            return roleMap[role] || 'Team Member';
+        };
         let emailSubject = '';
         let emailHtml = '';
         let emailText = '';
-        if (needsPasswordReset && tempPassword) {
+        // For team members, send setup link email (like tenants)
+        if (needsSetupLink && isTeamMember) {
+            const roleDisplayName = getRoleDisplayName(userRole);
+            const setupLink = `${env.appUrl || process.env.APP_URL || 'http://localhost:3000'}/account/setup?token=invitation-${userData.id}&email=${encodeURIComponent(email)}&first_name=${encodeURIComponent(userData.first_name || '')}&last_name=${encodeURIComponent(userData.last_name || '')}`;
+            emailSubject = `Welcome to ${appName} - Complete Your Account Setup`;
+            emailHtml = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Welcome to ${appName}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f8fafc; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0; }
+            .content { padding: 40px 30px; background: white; }
+            .button { display: inline-block; background: #2563eb; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; margin: 25px 0; font-weight: 600; }
+            .footer { background: #f8f9fa; padding: 30px; text-align: center; font-size: 14px; color: #666; border-radius: 0 0 16px 16px; }
+            .info { background: #e7f3ff; border: 1px solid #b3d9ff; padding: 15px; border-radius: 8px; margin: 25px 0; }
+            .info strong { color: #0066cc; }
+            h1 { margin: 0; font-size: 28px; font-weight: 700; }
+            h2 { margin: 0 0 15px; color: #1e293b; font-size: 20px; font-weight: 600; }
+            p { margin: 0 0 15px; color: #475569; font-size: 16px; }
+            ul { margin: 15px 0; padding-left: 20px; }
+            li { margin: 8px 0; color: #475569; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Welcome to ${appName}!</h1>
+              <p style="margin: 10px 0 0; opacity: 0.9;">Your Account Setup</p>
+            </div>
+            <div class="content">
+              <h2>Hello ${name},</h2>
+              <p>🎉 Congratulations! Your ${roleDisplayName} account has been created on ${appName}. We're excited to have you on board!</p>
+              <p>To get started, please complete your account setup by creating a secure password using the link below.</p>
+              
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="${setupLink}" class="button">Complete Account Setup</a>
+              </div>
+
+              <div class="info">
+                <strong>📋 What to Expect:</strong>
+                <ul>
+                  <li>Click the button above to access your account setup page</li>
+                  <li>Create a secure password for your account</li>
+                  <li>You'll be automatically logged in after setup</li>
+                  <li>If you didn't expect this invitation, please contact our support team immediately</li>
+                </ul>
+              </div>
+
+              <p style="margin-top: 25px;"><strong>Setup Link:</strong> <a href="${setupLink}" style="color: #2563eb; word-break: break-all;">${setupLink}</a></p>
+
+              <h3 style="margin-top: 35px;">What's Next?</h3>
+              <ol style="color: #475569; padding-left: 20px;">
+                <li>Click the "Complete Account Setup" button above</li>
+                <li>Create a secure password for your account</li>
+                <li>You'll be automatically logged in</li>
+                <li>Complete your profile setup</li>
+                <li>Start using ${appName}!</li>
+              </ol>
+
+              <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+              
+              <p>Welcome to the ${appName} family!</p>
+              <p>Best regards,<br>The ${appName} Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
+              <p>This is an automated invitation email. Please do not reply to this email.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+            emailText = `Welcome to ${appName}!
+
+Hello ${name},
+
+Congratulations! Your ${roleDisplayName} account has been created on ${appName}. We're excited to have you on board!
+
+To get started, please complete your account setup by creating a secure password using the link below.
+
+Setup Link: ${setupLink}
+
+What to Expect:
+- Click the link above to access your account setup page
+- Create a secure password for your account
+- You'll be automatically logged in after setup
+- If you didn't expect this invitation, please contact our support team immediately
+
+What's Next?
+1. Click the setup link above
+2. Create a secure password for your account
+3. You'll be automatically logged in
+4. Complete your profile setup
+5. Start using ${appName}!
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Welcome to the ${appName} family!
+
+Best regards,
+The ${appName} Team
+
+---
+© ${new Date().getFullYear()} ${appName}. All rights reserved.
+This is an automated invitation email. Please do not reply to this email.`;
+        }
+        else if (needsPasswordReset && tempPassword) {
             // Send invitation email with temporary password
             emailSubject = `Welcome to ${appName} - Complete Your Account Setup`;
-            const roleDisplayName = isAgencyAdmin ? 'Agency Administrator' : isLandlord ? 'Landlord' : 'User';
+            const roleDisplayName = getRoleDisplayName(userRole);
             emailHtml = `
         <!DOCTYPE html>
         <html lang="en">
@@ -3058,7 +4147,7 @@ This is an automated email. Please do not reply to this email.`;
         writeSuccess(res, 200, `Invitation ${resend ? 'resent' : 'sent'} successfully`, {
             email,
             name,
-            type: tempPassword ? 'password_reset' : 'welcome',
+            type: needsSetupLink ? 'setup_link' : tempPassword ? 'password_reset' : 'welcome',
             sent_at: new Date(),
             ...(tempPassword && process.env.NODE_ENV === 'development' ? { temp_password: tempPassword } : {})
         });
@@ -3308,5 +4397,364 @@ export const getEntitySubscriptionInvoices = async (req, res) => {
     catch (err) {
         console.error('Error fetching invoices:', err);
         writeError(res, 500, 'Failed to fetch invoices', err.message);
+    }
+};
+/**
+ * Get all payment gateways
+ */
+export const getPaymentGateways = async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user || !user.user_id) {
+            return writeError(res, 401, 'Authentication required');
+        }
+        let gateways = await prisma.paymentGatewayConfig.findMany({
+            orderBy: { created_at: 'desc' },
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                provider: true,
+                gateway: true,
+                status: true,
+                transaction_fee: true,
+                currency: true,
+                description: true,
+                logo: true,
+                supported_countries: true,
+                features: true,
+                is_test_mode: true,
+                monthly_transactions: true,
+                monthly_volume: true,
+                success_rate: true,
+                created_at: true,
+                updated_at: true,
+            },
+        });
+        // If no gateways exist, seed default ones
+        if (gateways.length === 0) {
+            console.log('No payment gateways found, seeding default gateways...');
+            const defaultGateways = [
+                {
+                    name: 'M-Pesa',
+                    type: 'mobile_money',
+                    provider: 'Safaricom',
+                    gateway: 'mpesa',
+                    status: 'active',
+                    transaction_fee: 2.5,
+                    currency: 'KES',
+                    description: 'Kenya\'s leading mobile money service',
+                    logo: '📱',
+                    supported_countries: ['Kenya'],
+                    features: ['Instant payments', 'Mobile verification', 'SMS notifications'],
+                    is_test_mode: false,
+                },
+                {
+                    name: 'Paystack',
+                    type: 'card',
+                    provider: 'Paystack',
+                    gateway: 'paystack',
+                    status: 'active',
+                    transaction_fee: 3.0,
+                    currency: 'KES',
+                    description: 'Cards, Mobile Money, Bank Transfers (via Paystack)',
+                    logo: '💳',
+                    supported_countries: ['Kenya', 'Nigeria', 'Ghana', 'South Africa'],
+                    features: ['3D Secure', 'Fraud protection', 'Recurring payments', 'Multi-channel'],
+                    is_test_mode: true,
+                },
+                {
+                    name: 'Stripe',
+                    type: 'card',
+                    provider: 'Stripe',
+                    gateway: 'stripe',
+                    status: 'active',
+                    transaction_fee: 3.2,
+                    currency: 'KES',
+                    description: 'International credit and debit cards',
+                    logo: '💳',
+                    supported_countries: ['Global'],
+                    features: ['3D Secure', 'Fraud protection', 'Recurring payments', 'International'],
+                    is_test_mode: true,
+                },
+                {
+                    name: 'Flutterwave',
+                    type: 'card',
+                    provider: 'Flutterwave',
+                    gateway: 'flutterwave',
+                    status: 'inactive',
+                    transaction_fee: 2.9,
+                    currency: 'KES',
+                    description: 'Pan-African payment gateway',
+                    logo: '🌍',
+                    supported_countries: ['Kenya', 'Nigeria', 'Ghana', 'South Africa', 'Tanzania', 'Uganda'],
+                    features: ['Multi-currency', 'Mobile money', 'Bank transfers', 'Cards'],
+                    is_test_mode: true,
+                },
+            ];
+            // Create default gateways
+            const createdGateways = await Promise.all(defaultGateways.map(gateway => prisma.paymentGatewayConfig.create({
+                data: {
+                    ...gateway,
+                    created_by: user.user_id,
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    type: true,
+                    provider: true,
+                    gateway: true,
+                    status: true,
+                    transaction_fee: true,
+                    currency: true,
+                    description: true,
+                    logo: true,
+                    supported_countries: true,
+                    features: true,
+                    is_test_mode: true,
+                    monthly_transactions: true,
+                    monthly_volume: true,
+                    success_rate: true,
+                    created_at: true,
+                    updated_at: true,
+                },
+            })));
+            gateways = createdGateways;
+            console.log(`✅ Seeded ${createdGateways.length} default payment gateways`);
+        }
+        // Calculate statistics
+        const activeGateways = gateways.filter((g) => g.status === 'active').length;
+        const totalTransactions = gateways.reduce((sum, g) => sum + g.monthly_transactions, 0);
+        const totalVolume = gateways.reduce((sum, g) => sum + Number(g.monthly_volume), 0);
+        const activeGatewaysList = gateways.filter((g) => g.status === 'active');
+        const averageSuccessRate = activeGatewaysList.length > 0
+            ? activeGatewaysList.reduce((sum, g) => sum + Number(g.success_rate), 0) / activeGatewaysList.length
+            : 0;
+        writeSuccess(res, 200, 'Payment gateways retrieved successfully', {
+            gateways,
+            statistics: {
+                activeGateways,
+                totalTransactions,
+                totalVolume,
+                averageSuccessRate: Number(averageSuccessRate.toFixed(2)),
+            },
+        });
+    }
+    catch (err) {
+        console.error('Error fetching payment gateways:', err);
+        writeError(res, 500, 'Failed to fetch payment gateways', err.message);
+    }
+};
+/**
+ * Get a single payment gateway by ID
+ */
+export const getPaymentGateway = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const gateway = await prisma.paymentGatewayConfig.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                provider: true,
+                gateway: true,
+                status: true,
+                transaction_fee: true,
+                currency: true,
+                description: true,
+                logo: true,
+                supported_countries: true,
+                features: true,
+                webhook_url: true,
+                is_test_mode: true,
+                monthly_transactions: true,
+                monthly_volume: true,
+                success_rate: true,
+                metadata: true,
+                created_at: true,
+                updated_at: true,
+            },
+        });
+        if (!gateway) {
+            return writeError(res, 404, 'Payment gateway not found');
+        }
+        writeSuccess(res, 200, 'Payment gateway retrieved successfully', gateway);
+    }
+    catch (err) {
+        console.error('Error fetching payment gateway:', err);
+        writeError(res, 500, 'Failed to fetch payment gateway', err.message);
+    }
+};
+/**
+ * Create a new payment gateway
+ */
+export const createPaymentGateway = async (req, res) => {
+    try {
+        const user = req.user;
+        const { name, type, provider, gateway, transaction_fee, currency, description, logo, supported_countries, features, api_credentials, webhook_url, is_test_mode, } = req.body;
+        // Validate required fields
+        if (!name || !type || !provider || !gateway) {
+            return writeError(res, 400, 'Name, type, provider, and gateway are required');
+        }
+        const newGateway = await prisma.paymentGatewayConfig.create({
+            data: {
+                name,
+                type,
+                provider,
+                gateway,
+                transaction_fee: transaction_fee || 0,
+                currency: currency || 'KES',
+                description,
+                logo,
+                supported_countries: supported_countries || [],
+                features: features || [],
+                api_credentials: api_credentials || {},
+                webhook_url,
+                is_test_mode: is_test_mode !== undefined ? is_test_mode : true,
+                status: 'inactive',
+                created_by: user.id,
+            },
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                provider: true,
+                gateway: true,
+                status: true,
+                transaction_fee: true,
+                currency: true,
+                description: true,
+                logo: true,
+                supported_countries: true,
+                features: true,
+                is_test_mode: true,
+                created_at: true,
+                updated_at: true,
+            },
+        });
+        writeSuccess(res, 201, 'Payment gateway created successfully', newGateway);
+    }
+    catch (err) {
+        console.error('Error creating payment gateway:', err);
+        writeError(res, 500, 'Failed to create payment gateway', err.message);
+    }
+};
+/**
+ * Update a payment gateway
+ */
+export const updatePaymentGateway = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, type, provider, gateway, transaction_fee, currency, description, logo, supported_countries, features, api_credentials, webhook_url, is_test_mode, } = req.body;
+        // Check if gateway exists
+        const existingGateway = await prisma.paymentGatewayConfig.findUnique({
+            where: { id },
+        });
+        if (!existingGateway) {
+            return writeError(res, 404, 'Payment gateway not found');
+        }
+        // Build update data
+        const updateData = {};
+        if (name !== undefined)
+            updateData.name = name;
+        if (type !== undefined)
+            updateData.type = type;
+        if (provider !== undefined)
+            updateData.provider = provider;
+        if (gateway !== undefined)
+            updateData.gateway = gateway;
+        if (transaction_fee !== undefined)
+            updateData.transaction_fee = transaction_fee;
+        if (currency !== undefined)
+            updateData.currency = currency;
+        if (description !== undefined)
+            updateData.description = description;
+        if (logo !== undefined)
+            updateData.logo = logo;
+        if (supported_countries !== undefined)
+            updateData.supported_countries = supported_countries;
+        if (features !== undefined)
+            updateData.features = features;
+        if (api_credentials !== undefined)
+            updateData.api_credentials = api_credentials;
+        if (webhook_url !== undefined)
+            updateData.webhook_url = webhook_url;
+        if (is_test_mode !== undefined)
+            updateData.is_test_mode = is_test_mode;
+        updateData.updated_at = new Date();
+        const updatedGateway = await prisma.paymentGatewayConfig.update({
+            where: { id },
+            data: updateData,
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                provider: true,
+                gateway: true,
+                status: true,
+                transaction_fee: true,
+                currency: true,
+                description: true,
+                logo: true,
+                supported_countries: true,
+                features: true,
+                is_test_mode: true,
+                created_at: true,
+                updated_at: true,
+            },
+        });
+        writeSuccess(res, 200, 'Payment gateway updated successfully', updatedGateway);
+    }
+    catch (err) {
+        console.error('Error updating payment gateway:', err);
+        writeError(res, 500, 'Failed to update payment gateway', err.message);
+    }
+};
+/**
+ * Toggle payment gateway status
+ */
+export const togglePaymentGatewayStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const gateway = await prisma.paymentGatewayConfig.findUnique({
+            where: { id },
+        });
+        if (!gateway) {
+            return writeError(res, 404, 'Payment gateway not found');
+        }
+        const newStatus = gateway.status === 'active' ? 'inactive' : 'active';
+        const updatedGateway = await prisma.paymentGatewayConfig.update({
+            where: { id },
+            data: {
+                status: newStatus,
+                updated_at: new Date(),
+            },
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                provider: true,
+                gateway: true,
+                status: true,
+                transaction_fee: true,
+                currency: true,
+                description: true,
+                logo: true,
+                supported_countries: true,
+                features: true,
+                is_test_mode: true,
+                monthly_transactions: true,
+                monthly_volume: true,
+                success_rate: true,
+                created_at: true,
+                updated_at: true,
+            },
+        });
+        writeSuccess(res, 200, `Payment gateway ${newStatus} successfully`, updatedGateway);
+    }
+    catch (err) {
+        console.error('Error toggling payment gateway status:', err);
+        writeError(res, 500, 'Failed to toggle payment gateway status', err.message);
     }
 };

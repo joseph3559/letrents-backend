@@ -13,6 +13,16 @@ export var UserRole;
     UserRole["AGENT"] = "agent";
     UserRole["CARETAKER"] = "caretaker";
     UserRole["TENANT"] = "tenant";
+    UserRole["ADMIN"] = "admin";
+    UserRole["MANAGER"] = "manager";
+    UserRole["TEAM_LEAD"] = "team_lead";
+    UserRole["STAFF"] = "staff";
+    UserRole["FINANCE"] = "finance";
+    UserRole["SALES"] = "sales";
+    UserRole["MARKETING"] = "marketing";
+    UserRole["SUPPORT"] = "support";
+    UserRole["HR"] = "hr";
+    UserRole["AUDITOR"] = "auditor";
 })(UserRole || (UserRole = {}));
 export var UserStatus;
 (function (UserStatus) {

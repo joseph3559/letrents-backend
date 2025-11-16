@@ -12,6 +12,7 @@ import {
   getTenantMaintenance,
   getTenantNotifications,
   createMaintenanceRequest,
+  updateTenantMaintenanceRequest,
   updateTenantProfile,
   uploadTenantProfilePicture,
   submitLeaseEditRequest,
@@ -92,6 +93,7 @@ router.get('/pending-payables', getTenantPendingPayables);
 // Maintenance requests
 router.get('/maintenance', getTenantMaintenance);
 router.post('/maintenance', createMaintenanceRequest);
+router.put('/maintenance/:id', updateTenantMaintenanceRequest);
 
 // Notifications/Notices
 router.get('/notifications', getTenantNotifications);
