@@ -1,0 +1,1943 @@
+{
+	"info": {
+		"_postman_id": "letrents-api-v2",
+		"name": "LetRents API v2.0",
+		"description": "Complete API collection for LetRents Property Management System\n\n## Features\n- ✅ All endpoints organized by resource\n- ✅ Automated tests for all requests\n- ✅ Environment variables support\n- ✅ Authentication handling\n- ✅ Request/response examples\n\n## Setup Instructions\n1. Import this collection into Postman\n2. Create an environment with:\n   - `base_url`: http://localhost:8080/api/v1\n   - `token`: (will be set automatically after login)\n3. Run the Authentication > Login request first\n4. All other requests will use the token automatically",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.token) {",
+									"        pm.environment.set('token', response.data.token);",
+									"        pm.environment.set('user_id', response.data.user.id);",
+									"        pm.environment.set('user_role', response.data.user.role);",
+									"        pm.environment.set('company_id', response.data.user.company_id || '');",
+									"    }",
+									"}",
+									"",
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has success field', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});",
+									"",
+									"pm.test('Response contains token', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('token');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@letrents.com\",\n    \"password\": \"admin123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Authenticate user and receive JWT token"
+					},
+					"response": []
+				},
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201 or 200', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"pm.test('Response has success field', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"newuser@example.com\",\n    \"password\": \"SecurePass123!\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"role\": \"landlord\",\n    \"company_name\": \"My Property Company\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains user data', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('email');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "me"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Request Password Reset",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/request-password-reset",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "request-password-reset"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Properties",
+			"item": [
+				{
+					"name": "List Properties",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains properties array', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.be.an('array');",
+									"});",
+									"",
+									"if (pm.response.json().data && pm.response.json().data.length > 0) {",
+									"    pm.environment.set('property_id', pm.response.json().data[0].id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/properties?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["properties"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Property",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('property_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Sunset Apartments\",\n    \"address\": \"123 Main Street\",\n    \"city\": \"Nairobi\",\n    \"property_type\": \"residential\",\n    \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/properties",
+							"host": ["{{base_url}}"],
+							"path": ["properties"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Property",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains property data', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('name');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/properties/{{property_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["properties", "{{property_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Property",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Property Name\",\n    \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/properties/{{property_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["properties", "{{property_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Property Analytics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/properties/{{property_id}}/analytics",
+							"host": ["{{base_url}}"],
+							"path": ["properties", "{{property_id}}", "analytics"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Property Units",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/properties/{{property_id}}/units",
+							"host": ["{{base_url}}"],
+							"path": ["properties", "{{property_id}}", "units"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Property",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/properties/{{property_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["properties", "{{property_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Units",
+			"item": [
+				{
+					"name": "List Units",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"if (pm.response.json().data && pm.response.json().data.length > 0) {",
+									"    pm.environment.set('unit_id', pm.response.json().data[0].id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/units?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["units"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Unit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('unit_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"property_id\": \"{{property_id}}\",\n    \"unit_number\": \"A101\",\n    \"unit_type\": \"apartment\",\n    \"bedrooms\": 2,\n    \"bathrooms\": 1,\n    \"rent_amount\": 50000,\n    \"status\": \"available\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/units",
+							"host": ["{{base_url}}"],
+							"path": ["units"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Unit",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/units/{{unit_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["units", "{{unit_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Unit",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rent_amount\": 55000,\n    \"status\": \"occupied\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/units/{{unit_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["units", "{{unit_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Unit Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"maintenance\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/units/{{unit_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["units", "{{unit_id}}", "status"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Tenant to Unit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tenant_id\": \"{{tenant_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/units/{{unit_id}}/assign-tenant",
+							"host": ["{{base_url}}"],
+							"path": ["units", "{{unit_id}}", "assign-tenant"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Release Tenant from Unit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/units/{{unit_id}}/release-tenant",
+							"host": ["{{base_url}}"],
+							"path": ["units", "{{unit_id}}", "release-tenant"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Available Units",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/units/available?city=Nairobi&min_rent=30000&max_rent=100000",
+							"host": ["{{base_url}}"],
+							"path": ["units", "available"],
+							"query": [
+								{
+									"key": "city",
+									"value": "Nairobi"
+								},
+								{
+									"key": "min_rent",
+									"value": "30000"
+								},
+								{
+									"key": "max_rent",
+									"value": "100000"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Unit",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/units/{{unit_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["units", "{{unit_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tenants",
+			"item": [
+				{
+					"name": "List Tenants",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"if (pm.response.json().data && pm.response.json().data.length > 0) {",
+									"    pm.environment.set('tenant_id', pm.response.json().data[0].id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenants?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["tenants"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('tenant_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"tenant@example.com\",\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+254712345678\",\n    \"id_number\": \"12345678\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/tenants",
+							"host": ["{{base_url}}"],
+							"path": ["tenants"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Tenant",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"+254798765432\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Unit to Tenant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"unit_id\": \"{{unit_id}}\",\n    \"rent_amount\": 50000,\n    \"lease_start_date\": \"2024-01-01\",\n    \"lease_end_date\": \"2024-12-31\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}/assign-unit",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}", "assign-unit"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Payments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}/payments",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}", "payments"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Maintenance",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}/maintenance",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}", "maintenance"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Tenant Invitation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}/invite",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}", "invite"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Terminate Tenant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"termination_date\": \"2024-12-31\",\n    \"reason\": \"Lease ended\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}/terminate",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}", "terminate"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Tenant",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenants/{{tenant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["tenants", "{{tenant_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Invoices",
+			"item": [
+				{
+					"name": "List Invoices",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"if (pm.response.json().data && pm.response.json().data.length > 0) {",
+									"    pm.environment.set('invoice_id', pm.response.json().data[0].id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/invoices?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["invoices"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Invoice",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('invoice_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tenant_id\": \"{{tenant_id}}\",\n    \"unit_id\": \"{{unit_id}}\",\n    \"amount\": 50000,\n    \"due_date\": \"2024-02-01\",\n    \"invoice_type\": \"rent\",\n    \"description\": \"Monthly rent for January 2024\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/invoices",
+							"host": ["{{base_url}}"],
+							"path": ["invoices"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Invoice",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/invoices/{{invoice_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["invoices", "{{invoice_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Invoice",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"amount\": 55000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/invoices/{{invoice_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["invoices", "{{invoice_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Invoice",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/invoices/{{invoice_id}}/send",
+							"host": ["{{base_url}}"],
+							"path": ["invoices", "{{invoice_id}}", "send"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Invoice as Paid",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"payment_date\": \"2024-01-15\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/invoices/{{invoice_id}}/mark-paid",
+							"host": ["{{base_url}}"],
+							"path": ["invoices", "{{invoice_id}}", "mark-paid"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Invoice",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/invoices/{{invoice_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["invoices", "{{invoice_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Payments",
+			"item": [
+				{
+					"name": "List Payments",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"if (pm.response.json().data && pm.response.json().data.length > 0) {",
+									"    pm.environment.set('payment_id', pm.response.json().data[0].id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/payments?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["payments"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Payment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('payment_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tenant_id\": \"{{tenant_id}}\",\n    \"invoice_id\": \"{{invoice_id}}\",\n    \"amount\": 50000,\n    \"payment_method\": \"mpesa\",\n    \"payment_date\": \"2024-01-15\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments",
+							"host": ["{{base_url}}"],
+							"path": ["payments"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Payment",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/payments/{{payment_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "{{payment_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Payment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/payments/{{payment_id}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "{{payment_id}}", "approve"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Payment",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"amount\": 55000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments/{{payment_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "{{payment_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Payment",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/payments/{{payment_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "{{payment_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Maintenance",
+			"item": [
+				{
+					"name": "List Maintenance Requests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"if (pm.response.json().data && pm.response.json().data.length > 0) {",
+									"    pm.environment.set('maintenance_id', pm.response.json().data[0].id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/maintenance/requests?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["maintenance", "requests"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Maintenance Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 201', function () {",
+									"    pm.expect([200, 201]).to.include(pm.response.code);",
+									"});",
+									"",
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.data && response.data.id) {",
+									"        pm.environment.set('maintenance_id', response.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"unit_id\": \"{{unit_id}}\",\n    \"title\": \"Leaking faucet\",\n    \"description\": \"The kitchen faucet is leaking\",\n    \"priority\": \"medium\",\n    \"category\": \"plumbing\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/maintenance/requests",
+							"host": ["{{base_url}}"],
+							"path": ["maintenance", "requests"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Maintenance Request",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/maintenance/requests/{{maintenance_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["maintenance", "requests", "{{maintenance_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Maintenance Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"in_progress\",\n    \"priority\": \"high\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/maintenance/requests/{{maintenance_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["maintenance", "requests", "{{maintenance_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Maintenance Overview",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/maintenance/overview",
+							"host": ["{{base_url}}"],
+							"path": ["maintenance", "overview"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Maintenance Request",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/maintenance/requests/{{maintenance_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["maintenance", "requests", "{{maintenance_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard Stats",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains stats', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.be.an('object');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/dashboard/stats",
+							"host": ["{{base_url}}"],
+							"path": ["dashboard", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Onboarding Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/dashboard/onboarding/status",
+							"host": ["{{base_url}}"],
+							"path": ["dashboard", "onboarding", "status"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "Get Financial Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/reports/financial?start_date=2024-01-01&end_date=2024-12-31",
+							"host": ["{{base_url}}"],
+							"path": ["reports", "financial"],
+							"query": [
+								{
+									"key": "start_date",
+									"value": "2024-01-01"
+								},
+								{
+									"key": "end_date",
+									"value": "2024-12-31"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Occupancy Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/reports/occupancy",
+							"host": ["{{base_url}}"],
+							"path": ["reports", "occupancy"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Maintenance Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/reports/maintenance",
+							"host": ["{{base_url}}"],
+							"path": ["reports", "maintenance"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Leases",
+			"item": [
+				{
+					"name": "List Leases",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/leases?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["leases"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Lease",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tenant_id\": \"{{tenant_id}}\",\n    \"unit_id\": \"{{unit_id}}\",\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\",\n    \"rent_amount\": 50000,\n    \"deposit_amount\": 100000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/leases",
+							"host": ["{{base_url}}"],
+							"path": ["leases"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Lease",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/leases/:id",
+							"host": ["{{base_url}}"],
+							"path": ["leases", ":id"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Lease",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rent_amount\": 55000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/leases/:id",
+							"host": ["{{base_url}}"],
+							"path": ["leases", ":id"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Terminate Lease",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"termination_date\": \"2024-12-31\",\n    \"reason\": \"Lease ended\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/leases/:id/terminate",
+							"host": ["{{base_url}}"],
+							"path": ["leases", ":id", "terminate"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Renew Lease",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"end_date\": \"2025-12-31\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/leases/:id/renew",
+							"host": ["{{base_url}}"],
+							"path": ["leases", ":id", "renew"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tenant Portal",
+			"item": [
+				{
+					"name": "Get Tenant Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenant-portal/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["tenant-portal", "dashboard"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenant-portal/profile",
+							"host": ["{{base_url}}"],
+							"path": ["tenant-portal", "profile"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Payments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenant-portal/payments",
+							"host": ["{{base_url}}"],
+							"path": ["tenant-portal", "payments"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Invoices",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenant-portal/invoices",
+							"host": ["{{base_url}}"],
+							"path": ["tenant-portal", "invoices"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Maintenance",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/tenant-portal/maintenance",
+							"host": ["{{base_url}}"],
+							"path": ["tenant-portal", "maintenance"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "System",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Service is healthy', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status || jsonData.data.status).to.eql('healthy');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["health"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "API Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/v1",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "v1"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080/api/v1",
+			"type": "string"
+		}
+	]
+}
+

@@ -5,10 +5,16 @@ import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import fs from 'fs';
 import path from 'path';
+import yaml from 'js-yaml';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { env } from './config/env.js';
 import { errorHandler } from './utils/response.js';
 import routes from './routes/index.js';
 import { routeAliasMiddleware, deprecationWarningMiddleware } from './middleware/route-aliases.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 
@@ -94,17 +100,36 @@ app.get('/api/v1', (_req, res) => {
   });
 });
 
-// Swagger (serve existing YAML from Go backend)
+// Swagger Documentation Setup
 try {
-	const swaggerPath = path.resolve('/home/scott/Desktop/Office/letrents/backend/swagger.yaml');
+	const swaggerPath = path.resolve(__dirname, '../../docs/swagger.yaml');
 	if (fs.existsSync(swaggerPath)) {
 		const swaggerDocument = fs.readFileSync(swaggerPath, 'utf-8');
-		app.use('/docs', swaggerUi.serve, swaggerUi.setup(undefined, { swaggerUrl: '/swagger.yaml' }));
+		const swaggerSpec = yaml.load(swaggerDocument) as any;
+		
+		app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+			customCss: '.swagger-ui .topbar { display: none }',
+			customSiteTitle: 'LetRents API Documentation',
+			customfavIcon: '/favicon.ico',
+		}));
+		
+		// Also serve raw YAML
 		app.get('/swagger.yaml', (_req, res) => {
 			res.type('yaml').send(swaggerDocument);
 		});
+		
+		// Serve JSON version
+		app.get('/swagger.json', (_req, res) => {
+			res.json(swaggerSpec);
+		});
+		
+		console.log('✅ Swagger documentation loaded successfully');
+	} else {
+		console.warn('⚠️  Swagger documentation file not found at:', swaggerPath);
 	}
-} catch (_) {}
+} catch (error) {
+	console.error('❌ Error setting up Swagger documentation:', error);
+}
 
 // API request logging (development only)
 if (process.env.NODE_ENV === 'development') {
