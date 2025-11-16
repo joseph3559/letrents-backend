@@ -23,7 +23,6 @@ import billing from './billing.js';
 import superAdmin from './super-admin.js';
 import enums from './enums.js';
 import email from './email.js';
-// import scheduler from './scheduler.js';
 import setup from './setup.js';
 import testEmail from './test-email.js';
 import checklists from './checklists.js';
@@ -137,7 +136,6 @@ router.post('/mpesa/c2b/confirmation', async (req, res) => {
   return c2bConfirmation(req, res);
 });
 router.use('/enums', enums);
-// router.use('/scheduler', scheduler);
 router.use('/setup', setup);
 router.use('/test-email', testEmail);
 router.use('/checklists', requireAuth, checklists);
@@ -177,57 +175,6 @@ router.get('/revenue/dashboard', requireAuth, requireSuperAdmin, async (req, res
 });
 
 // Removed duplicate /agencies routes - they're now in /super-admin/agencies
-
-// Additional missing endpoints
-// Test endpoint for user metrics
-router.get('/test-user-metrics', (req, res) => {
-	const role = req.query.role as string;
-	
-	let metrics;
-	
-	if (role === 'landlord') {
-		metrics = {
-			total_users: 1,
-			active_users: 1,
-			inactive_users: 0,
-			users_by_role: [
-				{ role: 'landlord', count: 1 }
-			],
-			growth_rate: 0
-		};
-	} else if (role === 'tenant') {
-		metrics = {
-			total_users: 3,
-			active_users: 3,
-			inactive_users: 0,
-			users_by_role: [
-				{ role: 'tenant', count: 3 }
-			],
-			growth_rate: 15.2
-		};
-	} else {
-		// All users
-		metrics = {
-			total_users: 6,
-			active_users: 6,
-			inactive_users: 0,
-			users_by_role: [
-				{ role: 'super_admin', count: 1 },
-				{ role: 'landlord', count: 1 },
-				{ role: 'tenant', count: 3 },
-				{ role: 'caretaker', count: 1 },
-				{ role: 'agent', count: 1 }
-			],
-			growth_rate: 8.5
-		};
-	}
-
-	res.status(200).json({ 
-		success: true, 
-		message: 'User metrics retrieved successfully', 
-		data: metrics 
-	});
-});
 
 // Add proper users/metrics endpoint
 router.get('/users/metrics', requireAuth, requireSuperAdmin, (req, res) => {
