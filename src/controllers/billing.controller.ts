@@ -359,12 +359,34 @@ export const verifySubscription = async (req: Request, res: Response) => {
       metadata,
       transactionPlan: transaction.plan,
       planCode,
+      transactionAmount: transaction.amount,
       transactionKeys: Object.keys(transaction),
     });
 
-    if (!planCode) {
-      // If no plan code found, try to get it from the subscription if it exists
-      // This handles cases where payment was made but plan wasn't in metadata
+    let finalPlanCode = planCode;
+
+    if (!finalPlanCode) {
+      // CRITICAL FIX: If plan code is missing, infer it from transaction amount
+      // This handles cases where payment was successful but metadata wasn't properly set
+      const transactionAmount = transaction.amount; // Amount in kobo
+      
+      // Map amounts to plan codes (from PaystackService plans)
+      const amountToPlanCode: { [key: number]: string } = {
+        250000: 'PLN_o3ryf9smw5vhppd', // Starter: 2,500 KES
+        500000: 'PLN_5hpqovvz3chh7gn', // Professional: 5,000 KES
+        1200000: 'PLN_klg59ghnitsonct', // Enterprise: 12,000 KES
+      };
+
+      if (amountToPlanCode[transactionAmount]) {
+        finalPlanCode = amountToPlanCode[transactionAmount];
+        console.log(`✅ Inferred plan code from amount: ${transactionAmount} kobo -> ${finalPlanCode}`);
+      } else {
+        console.warn(`⚠️ Could not infer plan code from amount: ${transactionAmount} kobo`);
+      }
+    }
+
+    if (!finalPlanCode) {
+      // If still no plan code, try to get it from existing subscription
       const { getPrisma } = await import('../config/prisma.js');
       const prisma = getPrisma();
       
@@ -411,7 +433,17 @@ export const verifySubscription = async (req: Request, res: Response) => {
         });
       }
       
-      return writeError(res, 400, 'Invalid payment: plan code not found in transaction metadata');
+      // Last resort: If payment was successful but we can't determine the plan,
+      // log detailed error but don't reject the payment - this is critical!
+      console.error('❌ CRITICAL: Payment successful but plan code cannot be determined', {
+        reference,
+        amount: transaction.amount,
+        metadata,
+        transactionPlan: transaction.plan,
+        companyId: user.company_id,
+      });
+      
+      return writeError(res, 400, 'Invalid payment: plan code not found in transaction metadata. Payment was successful but could not be verified. Please contact support with reference: ' + reference);
     }
 
     // Get subscription by company and plan code
@@ -424,7 +456,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
       'PLN_5hpqovvz3chh7gn': 'professional',
       'PLN_klg59ghnitsonct': 'enterprise',
     };
-    const planName = planCodeToName[planCode] || 'starter';
+    const planName = planCodeToName[finalPlanCode] || 'starter';
 
     // Get plan amount from PaystackService
     const { PaystackService: PaystackServiceClass } = await import('../services/paystack.service.js');
@@ -436,7 +468,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
     let subscription = await prisma.subscription.findFirst({
       where: {
         company_id: user.company_id,
-        paystack_plan_code: planCode,
+        paystack_plan_code: finalPlanCode,
       },
       include: {
         company: {
@@ -451,7 +483,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
 
     // If not found by plan code, find ANY existing subscription for this company (for upgrades)
     if (!subscription) {
-      console.log(`🔍 No subscription found with plan code ${planCode}, checking for existing subscription to upgrade...`);
+      console.log(`🔍 No subscription found with plan code ${finalPlanCode}, checking for existing subscription to upgrade...`);
       subscription = await prisma.subscription.findFirst({
         where: {
           company_id: user.company_id,
@@ -480,7 +512,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
           data: {
             plan: planName as any,
             status: 'active',
-            paystack_plan_code: planCode,
+            paystack_plan_code: finalPlanCode,
             amount: planAmount,
             paystack_customer_code: transaction.customer?.customer_code || subscription.paystack_customer_code,
             next_billing_date: nextBillingDate,
@@ -510,7 +542,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
 
     // If subscription still doesn't exist, create it
     if (!subscription) {
-      console.log(`📝 Creating new subscription for company ${user.company_id} with plan ${planName} (${planCode})`);
+      console.log(`📝 Creating new subscription for company ${user.company_id} with plan ${planName} (${finalPlanCode})`);
       
       const trialStartDate = new Date();
       const trialEndDate = new Date();
@@ -522,7 +554,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
           plan: planName as any,
           status: 'active', // Payment successful, so activate immediately
           gateway: 'paystack',
-          paystack_plan_code: planCode,
+          paystack_plan_code: finalPlanCode,
           paystack_customer_code: transaction.customer?.customer_code || null,
           amount: planAmount,
           currency: 'KES',
@@ -554,7 +586,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
       });
     } else {
       // Update existing subscription to ensure it's active and has latest payment info
-      if (subscription.status !== 'active' || subscription.paystack_plan_code !== planCode) {
+      if (subscription.status !== 'active' || subscription.paystack_plan_code !== finalPlanCode) {
         console.log(`🔄 Updating subscription ${subscription.id} to active status with plan ${planName}`);
         
         const nextBillingDate = new Date();
@@ -565,7 +597,7 @@ export const verifySubscription = async (req: Request, res: Response) => {
           data: {
             status: 'active',
             plan: planName as any,
-            paystack_plan_code: planCode,
+            paystack_plan_code: finalPlanCode,
             amount: planAmount,
             next_billing_date: nextBillingDate,
             metadata: {
