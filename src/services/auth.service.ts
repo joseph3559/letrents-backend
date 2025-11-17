@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { JWTClaims, UserRole } from '../types/index.js';
 import { emailService } from './email.service.js';
+import { sendSignupNotification } from '../utils/slack.service.js';
 
 export class AuthService {
 	private prisma = getPrisma();
@@ -326,6 +327,19 @@ export class AuthService {
 					// Don't fail registration if welcome email fails
 				}
 			}
+
+			// Send Slack notification for new signup
+			try {
+				await sendSignupNotification({
+					name: `${user.first_name} ${user.last_name}`,
+					email: user.email!,
+					phone_number: user.phone_number || undefined,
+					role: role,
+				});
+			} catch (error) {
+				console.error('Error sending Slack notification:', error);
+				// Don't fail registration if Slack notification fails
+			}
 			
 			return { user: userWithAgency || user, requires_mfa: true, mfa_methods: ['email'] };
 		}
@@ -353,6 +367,19 @@ export class AuthService {
 				console.error('Error sending welcome email:', error);
 				// Don't fail registration if welcome email fails
 			}
+		}
+
+		// Send Slack notification for new signup
+		try {
+			await sendSignupNotification({
+				name: `${(updatedUser || user).first_name} ${(updatedUser || user).last_name}`,
+				email: (updatedUser || user).email!,
+				phone_number: (updatedUser || user).phone_number || undefined,
+				role: role,
+			});
+		} catch (error) {
+			console.error('Error sending Slack notification:', error);
+			// Don't fail registration if Slack notification fails
 		}
 		
 		// autologin path (no email verification required)

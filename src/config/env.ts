@@ -43,4 +43,8 @@ export const env = {
 		fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@letrents.com',
 		fromName: process.env.EMAIL_FROM_NAME || 'LetRents',
 	},
+	slack: {
+		devSignupWebhookUrl: process.env.SLACK_DEV_SIGNUP_WEBHOOK_URL || '',
+		prodSignupWebhookUrl: process.env.SLACK_PROD_SIGNUP_WEBHOOK_URL || '',
+	},
 };
