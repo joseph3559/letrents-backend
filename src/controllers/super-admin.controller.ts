@@ -657,34 +657,174 @@ export const getAnalyticsChart = async (req: Request, res: Response) => {
     const { chartType } = req.params;
     const period = req.query.period as string || '30d';
 
-    // Generate mock chart data based on chart type
-    let chartData;
-    const labels = [];
-    const data = [];
+    // Calculate date range based on period
+    let days = 30;
+    if (period === '7d') days = 7;
+    else if (period === '90d') days = 90;
+    else if (period === '1y') days = 365;
 
-    // Generate last 30 days
-    for (let i = 29; i >= 0; i--) {
+    const labels: string[] = [];
+    const data: number[] = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Generate date labels
+    for (let i = days - 1; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       labels.push(date.toISOString().split('T')[0]);
-      
-      // Generate realistic data based on chart type
-      switch (chartType) {
-        case 'revenue':
-          data.push(Math.floor(Math.random() * 50000) + 100000);
-          break;
-        case 'occupancy':
-          data.push(Math.floor(Math.random() * 20) + 75);
-          break;
-        case 'tenants':
-          data.push(Math.floor(Math.random() * 10) + 50);
-          break;
-        default:
-          data.push(Math.floor(Math.random() * 100));
-      }
     }
 
-    chartData = { labels, data };
+    // Fetch real data based on chart type
+    switch (chartType) {
+      case 'revenue': {
+        // Get daily revenue from billing invoices and rental revenue
+        // Query subscription revenue separately
+        const subscriptionRevenueData = await prisma.$queryRaw<any[]>`
+          SELECT 
+            date.date::date as date,
+            COALESCE(SUM(bi.amount), 0)::numeric as subscription_revenue
+          FROM generate_series(${startDate}::date, CURRENT_DATE, '1 day'::interval) as date
+          LEFT JOIN billing_invoices bi ON DATE(bi.paid_at) = date.date::date AND bi.status = 'paid'
+          GROUP BY date.date::date
+          ORDER BY date.date::date
+        `;
+
+        // Query subscription revenue from direct payments
+        const directSubscriptionRevenueData = await prisma.$queryRaw<any[]>`
+          SELECT 
+            date.date::date as date,
+            COALESCE(SUM(s.amount), 0)::numeric as direct_subscription_revenue
+          FROM generate_series(${startDate}::date, CURRENT_DATE, '1 day'::interval) as date
+          LEFT JOIN subscriptions s ON DATE(s.created_at) = date.date::date 
+            AND s.status IN ('active', 'trial')
+            AND (s.metadata->>'created_from_payment')::boolean = true
+            AND NOT EXISTS (
+              SELECT 1 FROM billing_invoices bi2 
+              WHERE bi2.subscription_id = s.id 
+              AND DATE(bi2.paid_at) = date.date::date
+            )
+          GROUP BY date.date::date
+          ORDER BY date.date::date
+        `;
+
+        // Query rental revenue
+        const rentalRevenueData = await prisma.$queryRaw<any[]>`
+          SELECT 
+            date.date::date as date,
+            COALESCE(SUM(u.rent_amount), 0)::numeric as rental_revenue
+          FROM generate_series(${startDate}::date, CURRENT_DATE, '1 day'::interval) as date
+          LEFT JOIN units u ON DATE(u.updated_at) = date.date::date AND u.status = 'occupied'
+          GROUP BY date.date::date
+          ORDER BY date.date::date
+        `;
+
+        // Combine all revenue sources
+        const revenueMap = new Map<string, number>();
+        
+        subscriptionRevenueData.forEach((row: any) => {
+          const dateStr = row.date ? new Date(row.date).toISOString().split('T')[0] : null;
+          if (dateStr) {
+            revenueMap.set(dateStr, Number(row.subscription_revenue || 0));
+          }
+        });
+
+        directSubscriptionRevenueData.forEach((row: any) => {
+          const dateStr = row.date ? new Date(row.date).toISOString().split('T')[0] : null;
+          if (dateStr) {
+            const current = revenueMap.get(dateStr) || 0;
+            revenueMap.set(dateStr, current + Number(row.direct_subscription_revenue || 0));
+          }
+        });
+
+        rentalRevenueData.forEach((row: any) => {
+          const dateStr = row.date ? new Date(row.date).toISOString().split('T')[0] : null;
+          if (dateStr) {
+            const current = revenueMap.get(dateStr) || 0;
+            revenueMap.set(dateStr, current + Number(row.rental_revenue || 0));
+          }
+        });
+
+        labels.forEach(label => {
+          data.push(revenueMap.get(label) || 0);
+        });
+        break;
+      }
+      case 'occupancy': {
+        // Get daily occupancy rates - get current total units and occupied units per day
+        const occupancyData = await prisma.$queryRaw<any[]>`
+          SELECT 
+            date.date::date as date,
+            COUNT(*) FILTER (WHERE u.status = 'occupied')::numeric as occupied,
+            COUNT(*)::numeric as total
+          FROM generate_series(${startDate}::date, CURRENT_DATE, '1 day'::interval) as date
+          LEFT JOIN units u ON u.updated_at <= date.date::date + INTERVAL '1 day'
+            AND (u.created_at <= date.date::date + INTERVAL '1 day' OR u.status = 'occupied')
+          GROUP BY date.date::date
+          ORDER BY date.date::date
+        `;
+
+        const occupancyMap = new Map<string, number>();
+        occupancyData.forEach((row: any) => {
+          const dateStr = row.date ? new Date(row.date).toISOString().split('T')[0] : null;
+          if (dateStr) {
+            const total = Number(row.total || 0);
+            const occupied = Number(row.occupied || 0);
+            if (total > 0) {
+              occupancyMap.set(dateStr, (occupied / total) * 100);
+            } else {
+              occupancyMap.set(dateStr, 0);
+            }
+          }
+        });
+
+        labels.forEach(label => {
+          data.push(occupancyMap.get(label) || 0);
+        });
+        break;
+      }
+      case 'tenants': {
+        // Get daily tenant counts
+        const tenantData = await prisma.$queryRaw<any[]>`
+          SELECT 
+            DATE(created_at) as date,
+            COUNT(*)::numeric as count
+          FROM users
+          WHERE role = 'tenant'
+            AND created_at >= ${startDate}::timestamp
+          GROUP BY DATE(created_at)
+          ORDER BY DATE(created_at)
+        `;
+
+        const tenantMap = new Map();
+        let cumulative = 0;
+        tenantData.forEach((row: any) => {
+          const dateStr = row.date ? new Date(row.date).toISOString().split('T')[0] : null;
+          if (dateStr) {
+            cumulative += Number(row.count || 0);
+            tenantMap.set(dateStr, cumulative);
+          }
+        });
+
+        // Get total tenants before start date
+        const initialCount = await prisma.user.count({
+          where: {
+            role: 'tenant',
+            created_at: { lt: startDate }
+          }
+        });
+
+        labels.forEach(label => {
+          const count = tenantMap.get(label);
+          data.push(count !== undefined ? initialCount + count : initialCount);
+        });
+        break;
+      }
+      default:
+        labels.forEach(() => data.push(0));
+    }
+
+    const chartData = { labels, data };
 
     writeSuccess(res, 200, `${chartType} chart data retrieved successfully`, chartData);
   } catch (err: any) {
@@ -1908,22 +2048,100 @@ export const getRevenueSummary = async (req: Request, res: Response) => {
   try {
     const period = req.query.period as string || 'month';
     
-    const [
-      currentRevenue,
-      previousRevenue
-    ] = await Promise.all([
-      prisma.$queryRaw`SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'`,
-      prisma.$queryRaw`SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied'` // Mock previous period
+    // Calculate date ranges based on period
+    const now = new Date();
+    let currentStart: Date, currentEnd: Date, previousStart: Date, previousEnd: Date;
+    
+    if (period === 'week') {
+      // Current week (Monday to Sunday)
+      const currentDay = now.getDay();
+      const diff = currentDay === 0 ? -6 : 1 - currentDay;
+      currentStart = new Date(now);
+      currentStart.setDate(now.getDate() + diff);
+      currentStart.setHours(0, 0, 0, 0);
+      currentEnd = new Date(currentStart);
+      currentEnd.setDate(currentStart.getDate() + 6);
+      currentEnd.setHours(23, 59, 59, 999);
+      
+      // Previous week
+      previousStart = new Date(currentStart);
+      previousStart.setDate(currentStart.getDate() - 7);
+      previousEnd = new Date(currentEnd);
+      previousEnd.setDate(currentEnd.getDate() - 7);
+    } else if (period === 'month') {
+      // Current month
+      currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      // Previous month
+      previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      previousEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (period === 'quarter') {
+      // Current quarter
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      currentStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+      currentEnd = new Date(now.getFullYear(), (currentQuarter + 1) * 3, 0, 23, 59, 59, 999);
+      
+      // Previous quarter
+      const prevQuarter = currentQuarter === 0 ? 3 : currentQuarter - 1;
+      const prevYear = currentQuarter === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      previousStart = new Date(prevYear, prevQuarter * 3, 1);
+      previousEnd = new Date(prevYear, (prevQuarter + 1) * 3, 0, 23, 59, 59, 999);
+    } else {
+      // Year
+      currentStart = new Date(now.getFullYear(), 0, 1);
+      currentEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+      
+      previousStart = new Date(now.getFullYear() - 1, 0, 1);
+      previousEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+    }
+
+    // Get current period revenue (subscription + rental)
+    const [currentSubRevenue, currentRentRevenue, currentAgencies] = await Promise.all([
+      prisma.$queryRaw<any[]>`SELECT COALESCE(SUM(amount), 0)::numeric as total FROM billing_invoices WHERE status = 'paid' AND paid_at >= ${currentStart}::timestamp AND paid_at <= ${currentEnd}::timestamp`,
+      prisma.$queryRaw<any[]>`SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied' AND updated_at >= ${currentStart}::timestamp AND updated_at <= ${currentEnd}::timestamp`,
+      prisma.$queryRaw<any[]>`SELECT COUNT(DISTINCT a.id)::numeric as count FROM agencies a WHERE a.created_at <= ${currentEnd}::timestamp`
     ]);
 
-    const current = Array.isArray(currentRevenue) ? Number((currentRevenue[0] as any)?.total || 0) : 0;
-    const previous = Array.isArray(previousRevenue) ? Number((previousRevenue[0] as any)?.total || 0) * 0.9 : 0; // Mock 10% growth
+    // Get previous period revenue
+    const [previousSubRevenue, previousRentRevenue, previousAgencies] = await Promise.all([
+      prisma.$queryRaw<any[]>`SELECT COALESCE(SUM(amount), 0)::numeric as total FROM billing_invoices WHERE status = 'paid' AND paid_at >= ${previousStart}::timestamp AND paid_at <= ${previousEnd}::timestamp`,
+      prisma.$queryRaw<any[]>`SELECT COALESCE(SUM(rent_amount), 0)::numeric as total FROM units WHERE status = 'occupied' AND updated_at >= ${previousStart}::timestamp AND updated_at <= ${previousEnd}::timestamp`,
+      prisma.$queryRaw<any[]>`SELECT COUNT(DISTINCT a.id)::numeric as count FROM agencies a WHERE a.created_at <= ${previousEnd}::timestamp`
+    ]);
+
+    const currentSub = Array.isArray(currentSubRevenue) ? Number((currentSubRevenue[0] as any)?.total || 0) : 0;
+    const currentRent = Array.isArray(currentRentRevenue) ? Number((currentRentRevenue[0] as any)?.total || 0) : 0;
+    const currentTotal = currentSub + currentRent;
+    const currentAgenciesCount = Array.isArray(currentAgencies) ? Number((currentAgencies[0] as any)?.count || 0) : 0;
+
+    const previousSub = Array.isArray(previousSubRevenue) ? Number((previousSubRevenue[0] as any)?.total || 0) : 0;
+    const previousRent = Array.isArray(previousRentRevenue) ? Number((previousRentRevenue[0] as any)?.total || 0) : 0;
+    const previousTotal = previousSub + previousRent;
+    const previousAgenciesCount = Array.isArray(previousAgencies) ? Number((previousAgencies[0] as any)?.count || 0) : 0;
+
+    const revenueGrowth = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal * 100) : 0;
+    const agenciesGrowth = previousAgenciesCount > 0 ? ((currentAgenciesCount - previousAgenciesCount) / previousAgenciesCount * 100) : 0;
+    const avgRevenuePerAgencyCurrent = currentAgenciesCount > 0 ? currentTotal / currentAgenciesCount : 0;
+    const avgRevenuePerAgencyPrevious = previousAgenciesCount > 0 ? previousTotal / previousAgenciesCount : 0;
+    const avgRevenueGrowth = avgRevenuePerAgencyPrevious > 0 ? ((avgRevenuePerAgencyCurrent - avgRevenuePerAgencyPrevious) / avgRevenuePerAgencyPrevious * 100) : 0;
 
     const summary = {
-      current_period: current,
-      previous_period: previous,
-      growth_amount: current - previous,
-      growth_percentage: previous > 0 ? ((current - previous) / previous * 100).toFixed(1) : '0',
+      current_period: {
+        total_revenue: currentTotal,
+        active_agencies: currentAgenciesCount,
+        average_revenue_per_agency: avgRevenuePerAgencyCurrent
+      },
+      previous_period: {
+        total_revenue: previousTotal,
+        active_agencies: previousAgenciesCount,
+        average_revenue_per_agency: avgRevenuePerAgencyPrevious
+      },
+      growth: {
+        revenue: revenueGrowth,
+        agencies: agenciesGrowth,
+        avg_revenue_per_agency: avgRevenueGrowth
+      },
       period: period
     };
 
@@ -1936,11 +2154,49 @@ export const getRevenueSummary = async (req: Request, res: Response) => {
 
 export const getBillingPlans = async (req: Request, res: Response) => {
   try {
-    // Mock billing plans data with monthly_price and yearly_price fields
-    const plans = [
+    // Get real subscriber counts and revenue for each plan
+    const planStats = await prisma.subscription.groupBy({
+      by: ['plan'],
+      _count: { plan: true },
+      where: {
+        status: { in: ['active', 'trial'] }
+      }
+    });
+
+    // Get monthly revenue for each plan from paid invoices
+    const planRevenue = await prisma.$queryRaw<any[]>`
+      SELECT 
+        s.plan,
+        COALESCE(SUM(bi.amount), 0)::numeric as monthly_revenue
+      FROM subscriptions s
+      LEFT JOIN billing_invoices bi ON bi.subscription_id = s.id 
+        AND bi.status = 'paid'
+        AND bi.paid_at >= DATE_TRUNC('month', CURRENT_DATE)
+      WHERE s.status IN ('active', 'trial')
+      GROUP BY s.plan
+    `;
+
+    // Create a map of plan stats
+    const statsMap = new Map();
+    planStats.forEach(stat => {
+      statsMap.set(stat.plan, { subscribers: stat._count.plan, revenue: 0 });
+    });
+
+    planRevenue.forEach((row: any) => {
+      const plan = row.plan;
+      if (statsMap.has(plan)) {
+        statsMap.get(plan).revenue = Number(row.monthly_revenue || 0);
+      } else {
+        statsMap.set(plan, { subscribers: 0, revenue: Number(row.monthly_revenue || 0) });
+      }
+    });
+
+    // Base plan configurations
+    const planConfigs = [
       {
         id: '1',
         name: 'Starter',
+        plan_key: 'starter',
         price: 2500,
         monthly_price: 2500,
         yearly_price: 25000, // 10 months price (2 months free)
@@ -1956,13 +2212,13 @@ export const getBillingPlans = async (req: Request, res: Response) => {
           'Monthly reports',
         ],
         active: true,
-        subscribers: 25,
         max_properties: 5,
         max_units: 50
       },
       {
         id: '2',
         name: 'Professional',
+        plan_key: 'professional',
         price: 5000,
         monthly_price: 5000,
         yearly_price: 50000, // 10 months price (2 months free)
@@ -1980,13 +2236,13 @@ export const getBillingPlans = async (req: Request, res: Response) => {
           'Document storage (5GB)',
         ],
         active: true,
-        subscribers: 18,
         max_properties: 20,
         max_units: 200
       },
       {
         id: '3',
         name: 'Enterprise',
+        plan_key: 'enterprise',
         price: 12000,
         monthly_price: 12000,
         yearly_price: 120000, // 10 months price (2 months free)
@@ -2005,11 +2261,20 @@ export const getBillingPlans = async (req: Request, res: Response) => {
           'Training & onboarding',
         ],
         active: true,
-        subscribers: 12,
         max_properties: null, // Unlimited
         max_units: null // Unlimited
       }
     ];
+
+    // Merge real stats with plan configs
+    const plans = planConfigs.map(plan => {
+      const stats = statsMap.get(plan.plan_key) || { subscribers: 0, revenue: 0 };
+      return {
+        ...plan,
+        subscribers: stats.subscribers,
+        revenue: stats.revenue
+      };
+    });
 
     writeSuccess(res, 200, 'Billing plans retrieved successfully', plans);
   } catch (err: any) {
