@@ -18,15 +18,44 @@ const __dirname = dirname(__filename);
 
 const app = express();
 
-app.use(helmet());
-// CORS configuration - allow all origins in development, restrict in production
+// Configure Helmet with proper CORS headers support
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS configuration - allow all origins in development/dev, restrict in production
+const isDev = process.env.NODE_ENV !== 'production' || 
+              (process.env.API_URL && process.env.API_URL.includes('dev')) ||
+              (process.env.HOST && process.env.HOST.includes('dev'));
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.ALLOWED_ORIGINS?.split(',') || []
-    : true, // Allow all origins in development
+  origin: isDev 
+    ? true // Allow all origins in dev/development
+    : (origin, callback) => {
+        // In production, check against allowed origins
+        const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+        // Also allow dev origins if they exist in the list
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.warn(`⚠️ CORS: Blocked origin: ${origin}`);
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'user-email', // Custom header used by frontend
+    'User-Email', // Support both cases
+  ],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 }));
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
