@@ -13,7 +13,6 @@ module.exports = {
         target: 'ES2022',
         moduleResolution: 'NodeNext',
       },
-      isolatedModules: true,
     }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
