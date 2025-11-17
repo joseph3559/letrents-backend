@@ -30,11 +30,23 @@ cd "$APP_DIR" || exit 1
 echo "📥 Pulling latest code from $BRANCH..."
 git fetch origin
 git checkout "$BRANCH"
-git pull origin "$BRANCH"
 
-# Install dependencies
+# Reset any local changes to dist/ directory (generated files)
+echo "🧹 Cleaning dist directory..."
+git checkout -- dist/ 2>/dev/null || true
+git clean -fd dist/ 2>/dev/null || true
+
+# Pull latest changes
+git pull origin "$BRANCH" || {
+    echo "⚠️  Git pull had conflicts in dist/, resetting dist/..."
+    git checkout -- dist/ 2>/dev/null || true
+    git clean -fd dist/ 2>/dev/null || true
+    git pull origin "$BRANCH"
+}
+
+# Install all dependencies (including dev dependencies needed for build)
 echo "📦 Installing dependencies..."
-npm ci --production
+npm ci
 
 # Build application
 echo "🔨 Building application..."
