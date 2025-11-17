@@ -15,4 +15,14 @@ if (!process.env.BREVO_API_KEY) {
 if (!process.env.EMAIL_PROVIDER) {
   process.env.EMAIL_PROVIDER = 'brevo';
 }
+// ImageKit service will use test mode (no actual uploads)
+if (!process.env.IMAGEKIT_PUBLIC_KEY) {
+  process.env.IMAGEKIT_PUBLIC_KEY = '';
+}
+if (!process.env.IMAGEKIT_PRIVATE_KEY) {
+  process.env.IMAGEKIT_PRIVATE_KEY = '';
+}
+if (!process.env.IMAGEKIT_ENDPOINT_URL) {
+  process.env.IMAGEKIT_ENDPOINT_URL = '';
+}
 
