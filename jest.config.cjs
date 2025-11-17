@@ -24,4 +24,5 @@ module.exports = {
   testEnvironmentOptions: {
     customExportConditions: [''],
   },
+  setupFiles: ['<rootDir>/jest.setup.js'],
 };
