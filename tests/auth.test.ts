@@ -1,5 +1,5 @@
-const request = require('supertest');
-const app = require('../dist/src/app.js').default;
+import request from 'supertest';
+import app from '../src/app.js';
 
 describe('Auth', () => {
 	it('registers a user (tenant) and returns verification required when email verification is on', async () => {
@@ -19,6 +19,7 @@ describe('Auth', () => {
 	});
 
 	it('protects routes with JWT', async () => {
-		await request(app).get('/api/v1/properties').expect(200); // currently public skeleton
+		// Route now requires authentication
+		await request(app).get('/api/v1/properties').expect(401);
 	});
 });
