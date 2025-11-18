@@ -91,12 +91,22 @@ jobs:
           port: 22
           script: |
             cd /var/www/letrents-backend-dev
-            git pull origin dev
-            npm ci --production
+            git fetch origin
+            git checkout dev
+            # Reset any local changes to dist/ directory (generated files)
+            git checkout -- dist/ 2>/dev/null || true
+            git clean -fd dist/ 2>/dev/null || true
+            git pull origin dev || {
+              git checkout -- dist/ 2>/dev/null || true
+              git clean -fd dist/ 2>/dev/null || true
+              git pull origin dev
+            }
+            # Install all dependencies (including dev dependencies for building)
+            npm ci
             npm run build
             npx prisma generate
             npx prisma migrate deploy
-            pm2 restart letrents-backend-dev || pm2 start dist/src/index.js --name letrents-backend-dev
+            pm2 restart letrents-backend-dev || pm2 start dist/src/index.js --name letrents-backend-dev --update-env
             pm2 save
 
   deploy-production:
@@ -133,12 +143,22 @@ jobs:
           port: 22
           script: |
             cd /var/www/letrents-backend
-            git pull origin main
-            npm ci --production
+            git fetch origin
+            git checkout main
+            # Reset any local changes to dist/ directory (generated files)
+            git checkout -- dist/ 2>/dev/null || true
+            git clean -fd dist/ 2>/dev/null || true
+            git pull origin main || {
+              git checkout -- dist/ 2>/dev/null || true
+              git clean -fd dist/ 2>/dev/null || true
+              git pull origin main
+            }
+            # Install all dependencies (including dev dependencies for building)
+            npm ci
             npm run build
             npx prisma generate
             npx prisma migrate deploy
-            pm2 restart letrents-backend || pm2 start dist/src/index.js --name letrents-backend
+            pm2 restart letrents-backend || pm2 start dist/src/index.js --name letrents-backend --update-env
             pm2 save
 
       - name: Health Check
