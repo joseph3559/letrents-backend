@@ -1,6 +1,7 @@
 import { getPrisma } from '../config/prisma.js';
 import { notificationsService } from '../services/notifications.service.js';
 import { emailService } from '../services/email.service.js';
+import { registerFCMToken as registerFCMTokenService } from '../services/push-notification.service.js';
 const prisma = getPrisma();
 // Get tenant dashboard summary
 export const getTenantDashboard = async (req, res) => {
@@ -15,7 +16,15 @@ export const getTenantDashboard = async (req, res) => {
         // Get tenant profile with current unit and property info
         const tenant = await prisma.user.findUnique({
             where: { id: user.user_id },
-            include: {
+            select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                phone_number: true,
+                status: true,
+                email_verified: true,
+                created_at: true,
                 tenant_profile: {
                     include: {
                         current_unit: {
@@ -150,7 +159,15 @@ export const getTenantProfile = async (req, res) => {
         }
         const tenant = await prisma.user.findUnique({
             where: { id: user.user_id },
-            include: {
+            select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                phone_number: true,
+                status: true,
+                email_verified: true,
+                created_at: true,
                 tenant_profile: {
                     include: {
                         current_unit: {
@@ -739,6 +756,90 @@ export const getTenantMaintenance = async (req, res) => {
     }
 };
 // Get tenant notifications/notices
+// Get tenant messages (chat messages only)
+export const getTenantMessages = async (req, res) => {
+    try {
+        const user = req.user;
+        if (user.role !== 'tenant') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Tenant role required.'
+            });
+        }
+        const page = parseInt(req.query.page) || 1;
+        const limit = Math.min(parseInt(req.query.limit) || 10, 100);
+        const offset = (page - 1) * limit;
+        // Fetch all messages (notifications with notification_type='message' or category='message')
+        const allMessages = await prisma.notification.findMany({
+            where: {
+                recipient_id: user.user_id,
+                OR: [
+                    { notification_type: 'message' },
+                    { category: 'message' }
+                ]
+            },
+            include: {
+                sender: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                        role: true
+                    }
+                }
+            },
+            orderBy: {
+                created_at: 'desc'
+            }
+        });
+        // Filter out messages deleted by current user
+        const messages = allMessages.filter((notif) => {
+            // Check if deleted_by_users array contains current user ID
+            if (notif.deleted_by_users) {
+                let deletedByUsers = [];
+                if (Array.isArray(notif.deleted_by_users)) {
+                    deletedByUsers = notif.deleted_by_users;
+                }
+                else if (typeof notif.deleted_by_users === 'string') {
+                    try {
+                        deletedByUsers = JSON.parse(notif.deleted_by_users);
+                    }
+                    catch {
+                        deletedByUsers = [];
+                    }
+                }
+                // Exclude if current user is in deleted_by_users
+                if (deletedByUsers.includes(user.user_id)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        // Apply pagination after filtering
+        const paginatedMessages = messages.slice(offset, offset + limit);
+        const total = messages.length;
+        res.json({
+            success: true,
+            message: 'Messages retrieved successfully',
+            data: paginatedMessages,
+            pagination: {
+                page,
+                per_page: limit,
+                total,
+                total_pages: Math.ceil(total / limit)
+            }
+        });
+    }
+    catch (error) {
+        console.error('Error getting tenant messages:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve messages'
+        });
+    }
+};
+// Get tenant notifications (alerts/notices only, excluding messages)
 export const getTenantNotifications = async (req, res) => {
     try {
         const user = req.user;
@@ -751,38 +852,87 @@ export const getTenantNotifications = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = Math.min(parseInt(req.query.limit) || 10, 100);
         const offset = (page - 1) * limit;
-        const [notifications, total] = await Promise.all([
-            prisma.notification.findMany({
-                where: {
-                    recipient_id: user.user_id
-                },
-                include: {
-                    sender: {
-                        select: {
-                            id: true,
-                            first_name: true,
-                            last_name: true,
-                            email: true,
-                            role: true
-                        }
+        // Fetch all notifications EXCLUDING messages
+        // Filter out where notification_type='message' OR category='message'
+        const allNotifications = await prisma.notification.findMany({
+            where: {
+                recipient_id: user.user_id,
+                NOT: {
+                    OR: [
+                        { notification_type: 'message' },
+                        { category: 'message' }
+                    ]
+                }
+            },
+            include: {
+                sender: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                        role: true
                     }
                 },
-                orderBy: {
-                    created_at: 'desc'
+                recipient: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        role: true
+                    }
                 },
-                skip: offset,
-                take: limit
-            }),
-            prisma.notification.count({
-                where: {
-                    recipient_id: user.user_id
+                property: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                },
+                unit: {
+                    select: {
+                        id: true,
+                        unit_number: true
+                    }
                 }
-            })
-        ]);
+            },
+            orderBy: {
+                created_at: 'desc'
+            }
+        });
+        // Filter out notifications deleted by current user (unless deleted_for_everyone is true)
+        const notifications = allNotifications.filter((notif) => {
+            // If deleted for everyone, show it (with placeholder message if needed)
+            if (notif.deleted_for_everyone) {
+                return true;
+            }
+            // Check if deleted_by_users array contains current user ID
+            if (notif.deleted_by_users) {
+                let deletedByUsers = [];
+                if (Array.isArray(notif.deleted_by_users)) {
+                    deletedByUsers = notif.deleted_by_users;
+                }
+                else if (typeof notif.deleted_by_users === 'string') {
+                    try {
+                        deletedByUsers = JSON.parse(notif.deleted_by_users);
+                    }
+                    catch {
+                        deletedByUsers = [];
+                    }
+                }
+                // Exclude if current user is in deleted_by_users
+                if (deletedByUsers.includes(user.user_id)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        // Apply pagination after filtering
+        const paginatedNotifications = notifications.slice(offset, offset + limit);
+        const total = notifications.length;
         res.json({
             success: true,
             message: 'Notifications retrieved successfully',
-            data: notifications,
+            data: paginatedNotifications,
             pagination: {
                 page,
                 per_page: limit,
@@ -828,8 +978,14 @@ export const createMaintenanceRequest = async (req, res) => {
         if (!targetUnitId) {
             const tenant = await prisma.user.findUnique({
                 where: { id: user.user_id },
-                include: {
-                    tenant_profile: true
+                select: {
+                    id: true,
+                    tenant_profile: {
+                        select: {
+                            current_unit_id: true,
+                            current_property_id: true
+                        }
+                    }
                 }
             });
             if (tenant?.tenant_profile?.current_unit_id) {
@@ -1641,6 +1797,39 @@ export const cleanupDuplicatePayment = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to delete payment'
+        });
+    }
+};
+// Register FCM token for push notifications
+export const registerFCMToken = async (req, res) => {
+    try {
+        const user = req.user;
+        const { fcm_token } = req.body;
+        if (!fcm_token) {
+            return res.status(400).json({
+                success: false,
+                message: 'FCM token is required'
+            });
+        }
+        const success = await registerFCMTokenService(user.user_id, fcm_token);
+        if (success) {
+            res.json({
+                success: true,
+                message: 'FCM token registered successfully'
+            });
+        }
+        else {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to register FCM token'
+            });
+        }
+    }
+    catch (error) {
+        console.error('Error registering FCM token:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to register FCM token'
         });
     }
 };

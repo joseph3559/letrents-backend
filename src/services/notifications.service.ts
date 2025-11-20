@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause, formatDataForRole } from '../utils/roleBasedFiltering.js';
+import { supabaseRealtimeService } from './supabase-realtime.service.js';
 
 const prisma = new PrismaClient();
 
@@ -60,7 +61,7 @@ export const notificationsService = {
     const [notifications, total] = await Promise.all([
       prisma.notification.findMany({
         where: whereClause,
-        take: limit,
+        take: limit * 2, // Fetch more to account for filtering
         skip: offset,
         orderBy: {
           created_at: 'desc'
@@ -101,12 +102,37 @@ export const notificationsService = {
       })
     ]);
 
+    // Filter out messages deleted by current user (unless deleted_for_everyone is true)
+    const filteredNotifications = notifications.filter(notification => {
+      // If deleted for everyone, show it (with placeholder message)
+      if (notification.deleted_for_everyone) {
+        return true;
+      }
+
+      // Check if current user has deleted this message
+      let deletedByUsers = [];
+      if (notification.deleted_by_users) {
+        if (Array.isArray(notification.deleted_by_users)) {
+          deletedByUsers = notification.deleted_by_users;
+        } else if (typeof notification.deleted_by_users === 'string') {
+          try {
+            deletedByUsers = JSON.parse(notification.deleted_by_users);
+          } catch {
+            deletedByUsers = [];
+          }
+        }
+      }
+      
+      // Exclude if current user is in deleted_by_users
+      return !deletedByUsers.includes(user.user_id);
+    }).slice(0, limit); // Apply limit after filtering
+
     return {
-      notifications: formatDataForRole(user, notifications),
-      total,
+      notifications: formatDataForRole(user, filteredNotifications),
+      total: filteredNotifications.length,
       page: Math.floor(offset / limit) + 1,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(filteredNotifications.length / limit)
     };
   },
 
@@ -145,9 +171,40 @@ export const notificationsService = {
             last_name: true,
             role: true,
           }
+        },
+        recipient: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            role: true,
+          }
+        },
+        property: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        unit: {
+          select: {
+            id: true,
+            unit_number: true,
+          }
         }
       }
     });
+
+    // Publish to Supabase Realtime for real-time delivery
+    try {
+      await supabaseRealtimeService.publishNotification(notification);
+    } catch (error) {
+      // Silently fail if Supabase is not available
+      console.debug('Supabase Realtime not available:', error);
+    }
+
+    // TODO: Push notifications - Replace Firebase FCM with Supabase push notifications or another service
+    // For now, real-time updates work via Supabase Realtime subscriptions
 
     return notification;
   },
@@ -217,6 +274,20 @@ export const notificationsService = {
       throw new Error('Notification not found or access denied');
     }
 
+    // Check if user is the sender (for message editing)
+    const isSender = existingNotification.sender_id === user.user_id;
+    
+    // If updating message content, check 15-minute time limit
+    if ((updateData.message || updateData.content) && isSender) {
+      const messageTime = new Date(existingNotification.created_at).getTime();
+      const now = new Date().getTime();
+      const diffInMinutes = (now - messageTime) / (1000 * 60);
+      
+      if (diffInMinutes > 15) {
+        throw new Error('Messages can only be edited within 15 minutes of sending');
+      }
+    }
+
     // Only allow updating certain fields
     const updateFields: any = {};
     
@@ -224,7 +295,13 @@ export const notificationsService = {
       updateFields.title = updateData.title;
     }
     if (updateData.message || updateData.content) {
-      updateFields.message = updateData.message || updateData.content;
+      // Only allow sender to edit message content
+      if (isSender) {
+        updateFields.message = updateData.message || updateData.content;
+        updateFields.updated_at = new Date();
+      } else {
+        throw new Error('Only the sender can edit message content');
+      }
     }
     if (updateData.priority) {
       updateFields.priority = updateData.priority;
@@ -248,31 +325,98 @@ export const notificationsService = {
             last_name: true,
             role: true,
           }
+        },
+        recipient: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            role: true,
+          }
         }
       }
     });
 
+    // Publish read status to Supabase Realtime
+    if (updateFields.is_read && updatedNotification.recipient_id && updatedNotification.sender_id) {
+      try {
+        await supabaseRealtimeService.publishReadStatus(
+          updatedNotification.sender_id,
+          notificationId,
+          updatedNotification.recipient_id,
+          updatedNotification.read_at || new Date()
+        );
+      } catch (error) {
+        console.debug('Supabase not available for read status update:', error);
+      }
+    }
+
     return updatedNotification;
   },
 
-  async deleteNotification(user: JWTClaims, notificationId: string) {
+  async deleteNotification(user: JWTClaims, notificationId: string, deleteForEveryone: boolean = false) {
     // Check if notification exists and user has access
     const existingNotification = await this.getNotification(user, notificationId);
     if (!existingNotification) {
       throw new Error('Notification not found or access denied');
     }
 
-    // Only allow deletion if user is the recipient or has admin privileges
-    if (existingNotification.recipient_id !== user.user_id && 
-        !['super_admin', 'agency_admin'].includes(user.role)) {
+    const isSender = existingNotification.sender_id === user.user_id;
+    const isRecipient = existingNotification.recipient_id === user.user_id;
+    const isAdmin = ['super_admin', 'agency_admin'].includes(user.role);
+
+    // Only sender can delete for everyone, and only within 15 minutes (like WhatsApp)
+    if (deleteForEveryone) {
+      if (!isSender) {
+        throw new Error('Only the sender can delete a message for everyone');
+      }
+
+      // Check if message is within 15 minutes
+      const messageTime = new Date(existingNotification.created_at).getTime();
+      const now = new Date().getTime();
+      const diffInMinutes = (now - messageTime) / (1000 * 60);
+
+      if (diffInMinutes > 15) {
+        throw new Error('Messages can only be deleted for everyone within 15 minutes of sending');
+      }
+
+      // Delete for everyone - mark as deleted_for_everyone
+      await prisma.notification.update({
+        where: { id: notificationId },
+        data: {
+          deleted_for_everyone: true,
+          message: 'This message was deleted',
+          updated_at: new Date(),
+        }
+      });
+
+      return { success: true, deletedForEveryone: true };
+    }
+
+    // Delete for me only - soft delete by adding user to deleted_by_users array
+    if (!isSender && !isRecipient && !isAdmin) {
       throw new Error('Insufficient permissions to delete notification');
     }
 
-    await prisma.notification.delete({
-      where: { id: notificationId }
+    // Get current deleted_by_users array
+    const deletedByUsers = Array.isArray(existingNotification.deleted_by_users) 
+      ? existingNotification.deleted_by_users 
+      : (existingNotification.deleted_by_users ? JSON.parse(existingNotification.deleted_by_users) : []);
+
+    // Add current user to deleted_by_users if not already there
+    if (!deletedByUsers.includes(user.user_id)) {
+      deletedByUsers.push(user.user_id);
+    }
+
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        deleted_by_users: deletedByUsers,
+        updated_at: new Date(),
+      }
     });
 
-    return { success: true };
+    return { success: true, deletedForEveryone: false };
   },
 
   async markAsRead(user: JWTClaims, notificationId: string) {

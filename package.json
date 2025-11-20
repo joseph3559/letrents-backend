@@ -16,7 +16,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "cleanup:soft-deleted": "node scripts/cleanup-soft-deleted-messages.js"
   },
   "keywords": [
     "property-management",

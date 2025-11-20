@@ -66,8 +66,10 @@ export const notificationsController = {
         try {
             const user = req.user;
             const { id } = req.params;
-            await notificationsService.deleteNotification(user, id);
-            writeSuccess(res, 200, 'Notification deleted successfully');
+            // Handle both body and query parameters for deleteForEveryone
+            const deleteForEveryone = req.body?.deleteForEveryone === true || req.query?.deleteForEveryone === 'true';
+            const result = await notificationsService.deleteNotification(user, id, deleteForEveryone);
+            writeSuccess(res, 200, result.deletedForEveryone ? 'Message deleted for everyone' : 'Message deleted for you', result);
         }
         catch (error) {
             writeError(res, 500, error.message);

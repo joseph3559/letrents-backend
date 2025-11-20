@@ -10,6 +10,7 @@ import {
   getTenantPendingPayables,
   processTenantPayment,
   getTenantMaintenance,
+  getTenantMessages,
   getTenantNotifications,
   createMaintenanceRequest,
   updateTenantMaintenanceRequest,
@@ -22,7 +23,8 @@ import {
   getTenantUnacknowledgedModifications,
   getTenantLeaseModificationStats,
   cancelTenantPendingPayment,
-  cleanupDuplicatePayment
+  cleanupDuplicatePayment,
+  registerFCMToken
 } from '../controllers/tenant-portal.controller.js';
 
 import {
@@ -95,7 +97,10 @@ router.get('/maintenance', getTenantMaintenance);
 router.post('/maintenance', createMaintenanceRequest);
 router.put('/maintenance/:id', updateTenantMaintenanceRequest);
 
-// Notifications/Notices
+// Messages/Chat (separate from notifications)
+router.get('/messages', getTenantMessages);
+
+// Notifications/Alerts (excludes messages)
 router.get('/notifications', getTenantNotifications);
 router.get('/notices', getTenantNotifications); // Alias for notifications
 
@@ -118,5 +123,8 @@ router.get('/settings/security/activity', getSecurityActivity);
 router.get('/settings/security/2fa', get2FASettings);
 router.post('/settings/security/2fa/enable', enable2FA);
 router.post('/settings/security/2fa/disable', disable2FA);
+
+// Push Notifications - FCM Token Registration
+router.post('/fcm-token', registerFCMToken);
 
 export default router;

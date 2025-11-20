@@ -1,10 +1,23 @@
 import app from './app.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { createServer } from 'http';
+import { supabaseRealtimeService } from './services/supabase-realtime.service.js';
 
 const port = env.port;
 
-app.listen(port, env.host, () => {
+// Create HTTP server from Express app
+const httpServer = createServer(app);
+
+// Initialize Supabase Realtime service
+if (supabaseRealtimeService.isInitialized()) {
+  console.log('✅ Supabase Realtime service initialized');
+} else {
+  console.warn('⚠️ Supabase Realtime service not initialized. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
+}
+
+// Start server
+httpServer.listen(port, env.host, () => {
 	logger.info({ port, host: env.host }, 'Server started');
 	
 	console.log('\n╔════════════════════════════════════════════════════════════════╗');
@@ -15,6 +28,7 @@ app.listen(port, env.host, () => {
 	console.log(`✅ Server Status:        Running`);
 	console.log(`🌐 Environment:         ${env.nodeEnv}`);
 	console.log(`🔗 Server URL:          http://${env.host}:${port}`);
+	console.log(`🔔 Supabase Realtime:    ${supabaseRealtimeService.isInitialized() ? 'Enabled' : 'Disabled'}`);
 	console.log(`🏥 Health Check:        http://${env.host}:${port}/health`);
 	console.log(`📚 API Documentation:   http://${env.host}:${port}/docs`);
 	console.log(`📡 API Endpoint:        http://${env.host}:${port}/api/v1`);
