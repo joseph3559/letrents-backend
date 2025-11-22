@@ -24,7 +24,9 @@ import {
   getTenantLeaseModificationStats,
   cancelTenantPendingPayment,
   cleanupDuplicatePayment,
-  registerFCMToken
+  registerPushToken,
+  unregisterPushToken,
+  testPushNotification
 } from '../controllers/tenant-portal.controller.js';
 
 import {
@@ -124,7 +126,9 @@ router.get('/settings/security/2fa', get2FASettings);
 router.post('/settings/security/2fa/enable', enable2FA);
 router.post('/settings/security/2fa/disable', disable2FA);
 
-// Push Notifications - FCM Token Registration
-router.post('/fcm-token', registerFCMToken);
+// Push Notifications - Supabase Push Token Registration
+router.post('/push-token', registerPushToken);
+router.delete('/push-token', unregisterPushToken);
+router.post('/push-token/test', testPushNotification); // Test endpoint for push notifications
 
 export default router;

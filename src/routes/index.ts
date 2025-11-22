@@ -16,6 +16,8 @@ import propertyFinancials from './property-financials.js';
 import propertyStaff from './property-staff.js';
 import leases from './leases.js';
 import notifications from './notifications.js';
+import messages from './messages.js';
+import messaging from './messaging.js';
 import reports from './reports.js';
 import payments from './payments.js';
 import mpesa from './mpesa.js';
@@ -94,6 +96,8 @@ router.put('/notifications/templates/:id', requireAuth, requireSuperAdmin, async
 });
 
 router.use('/notifications', requireAuth, notifications);
+router.use('/messages', requireAuth, messages);
+router.use('/messaging', requireAuth, messaging);
 router.use('/reports', requireAuth, reports);
 router.use('/payments', requireAuth, payments);
 router.use('/mpesa', requireAuth, mpesa); // M-Pesa management needs auth

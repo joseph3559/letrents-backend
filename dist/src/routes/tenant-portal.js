@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { getTenantDashboard, getTenantProfile, getTenantLeases, getTenantPayments, getTenantPaymentById, getTenantInvoices, getTenantPendingPayables, processTenantPayment, getTenantMaintenance, getTenantMessages, getTenantNotifications, createMaintenanceRequest, updateTenantMaintenanceRequest, updateTenantProfile, uploadTenantProfilePicture, submitLeaseEditRequest, getTenantLeaseModifications, getTenantAllModifications, acknowledgeTenantLeaseModification, getTenantUnacknowledgedModifications, getTenantLeaseModificationStats, cancelTenantPendingPayment, cleanupDuplicatePayment, registerFCMToken } from '../controllers/tenant-portal.controller.js';
+import { getTenantDashboard, getTenantProfile, getTenantLeases, getTenantPayments, getTenantPaymentById, getTenantInvoices, getTenantPendingPayables, processTenantPayment, getTenantMaintenance, getTenantMessages, getTenantNotifications, createMaintenanceRequest, updateTenantMaintenanceRequest, updateTenantProfile, uploadTenantProfilePicture, submitLeaseEditRequest, getTenantLeaseModifications, getTenantAllModifications, acknowledgeTenantLeaseModification, getTenantUnacknowledgedModifications, getTenantLeaseModificationStats, cancelTenantPendingPayment, cleanupDuplicatePayment, registerPushToken, unregisterPushToken, testPushNotification } from '../controllers/tenant-portal.controller.js';
 import { getTenantPreferences, updateTenantPreferences, getNotificationSettings, updateNotificationSettings, changePassword, getActiveSessions, revokeSession, revokeAllOtherSessions, getSecurityActivity, get2FASettings, enable2FA, disable2FA } from '../controllers/tenant-settings.controller.js';
 // Configure multer for profile picture uploads
 const upload = multer({
@@ -69,6 +69,8 @@ router.get('/settings/security/activity', getSecurityActivity);
 router.get('/settings/security/2fa', get2FASettings);
 router.post('/settings/security/2fa/enable', enable2FA);
 router.post('/settings/security/2fa/disable', disable2FA);
-// Push Notifications - FCM Token Registration
-router.post('/fcm-token', registerFCMToken);
+// Push Notifications - Supabase Push Token Registration
+router.post('/push-token', registerPushToken);
+router.delete('/push-token', unregisterPushToken);
+router.post('/push-token/test', testPushNotification); // Test endpoint for push notifications
 export default router;

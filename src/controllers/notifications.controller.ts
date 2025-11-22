@@ -7,7 +7,7 @@ export const notificationsController = {
   getNotifications: async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as JWTClaims;
-      const { limit = 10, offset = 0, category, status, priority, property_ids } = req.query;
+      const { limit = 10, offset = 0, category, status, priority, property_ids, notification_type } = req.query;
       
       // Parse property_ids (comma-separated) for super-admin filtering
       let propertyIds: string[] | undefined = undefined;
@@ -21,6 +21,7 @@ export const notificationsController = {
         ...(category && { category: category as string }),
         ...(status && { status: status as string }),
         ...(priority && { priority: priority as string }),
+        ...(notification_type && { notification_type: notification_type as string }),
         ...(propertyIds && { property_ids: propertyIds }),
       };
 

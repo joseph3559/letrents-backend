@@ -5,5 +5,7 @@ node_modules
 # Firebase service account key (contains sensitive credentials)
 firebase-service-account.json
 **/firebase-service-account.json
+*-firebase-adminsdk-*.json
+letrents-firebase-adminsdk-*.json
 
 /generated/prisma

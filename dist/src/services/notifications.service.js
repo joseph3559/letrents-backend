@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { formatDataForRole } from '../utils/roleBasedFiltering.js';
 import { supabaseRealtimeService } from './supabase-realtime.service.js';
+import { pushNotificationService } from './push-notification.service.js';
 const prisma = new PrismaClient();
 export const notificationsService = {
     async getNotifications(user, limit = 10, offset = 0, filters = {}) {
@@ -9,18 +10,47 @@ export const notificationsService = {
         delete filters?.property_ids; // Remove from filters to avoid conflicts
         // Build role-based where clause for notifications
         // Include both sent and received notifications
+        // Handle special case for message filtering (notification_type='message' OR category='message')
+        const { notification_type, category, ...restFilters } = filters;
+        // Build AND conditions array
+        const andConditions = [];
+        // Add recipient/sender OR condition (for all roles except super_admin)
+        // This ensures admins see both sent and received notifications
+        if (user.role !== 'super_admin') {
+            andConditions.push({
+                OR: [
+                    { recipient_id: user.user_id }, // Received notifications
+                    { sender_id: user.user_id } // Sent notifications (important for admins to see their sent notices/reminders)
+                ]
+            });
+        }
+        // Add message type filter if filtering for messages
+        if (notification_type === 'message') {
+            andConditions.push({
+                OR: [
+                    { notification_type: 'message' },
+                    { category: 'message' }
+                ]
+            });
+        }
+        // Add category filter to AND conditions to ensure it works with sender/recipient OR condition
+        if (category) {
+            andConditions.push({ category });
+        }
+        // Build base where clause
         let whereClause = {
-            ...filters,
-            company_id: user.company_id,
-            OR: [
-                { recipient_id: user.user_id }, // Received notifications
-                { sender_id: user.user_id } // Sent notifications
-            ]
+            ...restFilters,
         };
+        // Add company_id for non-super-admin users
+        if (user.role !== 'super_admin') {
+            whereClause.company_id = user.company_id;
+        }
+        // Add AND conditions if any
+        if (andConditions.length > 0) {
+            whereClause.AND = andConditions;
+        }
         // Super admin can see all notifications
         if (user.role === 'super_admin') {
-            delete whereClause.OR;
-            delete whereClause.company_id;
             // If property_ids provided, filter by property_id
             if (propertyIds && Array.isArray(propertyIds) && propertyIds.length > 0) {
                 whereClause.property_id = { in: propertyIds };
@@ -38,14 +68,25 @@ export const notificationsService = {
                     property_id: true
                 }
             });
-            const propertyIds = agentProperties.map(ap => ap.property_id);
+            const agentPropertyIds = agentProperties.map(ap => ap.property_id);
             // Update OR clause to also include notifications for assigned properties
-            if (propertyIds.length > 0) {
-                whereClause.OR = [
-                    { recipient_id: user.user_id }, // Received notifications
-                    { sender_id: user.user_id }, // Sent notifications
-                    { property_id: { in: propertyIds } } // Notifications for assigned properties
-                ];
+            if (agentPropertyIds.length > 0) {
+                // Find the OR condition in AND array and update it
+                const orConditionIndex = andConditions.findIndex((cond) => cond.OR);
+                if (orConditionIndex >= 0) {
+                    andConditions[orConditionIndex].OR.push({ property_id: { in: agentPropertyIds } } // Notifications for assigned properties
+                    );
+                }
+                else {
+                    // If no OR condition exists, create one
+                    andConditions.push({
+                        OR: [
+                            { recipient_id: user.user_id },
+                            { sender_id: user.user_id },
+                            { property_id: { in: agentPropertyIds } }
+                        ]
+                    });
+                }
             }
         }
         const [notifications, total] = await Promise.all([
@@ -128,6 +169,11 @@ export const notificationsService = {
         if (!['landlord', 'agency_admin', 'super_admin', 'agent', 'caretaker', 'tenant'].includes(user.role)) {
             throw new Error('Insufficient permissions to create notification');
         }
+        // Extract channels from metadata if provided (mobile app sends channels in metadata)
+        let notificationChannels = notificationData.channels || ['app'];
+        if (notificationData.metadata?.channels && Array.isArray(notificationData.metadata.channels)) {
+            notificationChannels = [...new Set([...notificationChannels, ...notificationData.metadata.channels])];
+        }
         // Prepare notification data
         const createData = {
             title: notificationData.title,
@@ -139,6 +185,7 @@ export const notificationsService = {
             recipient_id: notificationData.recipientId || notificationData.recipient_id, // ✅ Support both formats
             is_read: false,
             company_id: user.company_id,
+            channels: notificationChannels, // Include channels in createData
             // Optional fields
             ...(notificationData.property_id && { property_id: notificationData.property_id }),
             ...(notificationData.unit_id && { unit_id: notificationData.unit_id }),
@@ -187,8 +234,59 @@ export const notificationsService = {
             // Silently fail if Supabase is not available
             console.debug('Supabase Realtime not available:', error);
         }
-        // TODO: Push notifications - Replace Firebase FCM with Supabase push notifications or another service
-        // For now, real-time updates work via Supabase Realtime subscriptions
+        // Check if push notifications should be sent
+        const channels = Array.isArray(createData.channels)
+            ? createData.channels
+            : typeof createData.channels === 'string'
+                ? JSON.parse(createData.channels)
+                : ['app'];
+        // Also check metadata for channels (mobile app sends channels in metadata)
+        let allChannels = [...channels];
+        if (createData.metadata && typeof createData.metadata === 'object') {
+            const metadataChannels = createData.metadata.channels;
+            if (Array.isArray(metadataChannels)) {
+                allChannels = [...new Set([...channels, ...metadataChannels])];
+            }
+        }
+        // Send push notification for messages and important notifications
+        // Always send push for messages, and for other notifications if 'push' is in channels
+        const shouldSendPush = allChannels.includes('push') ||
+            notification.notification_type === 'message' ||
+            notification.category === 'message' ||
+            notification.priority === 'urgent' ||
+            notification.priority === 'high';
+        if (shouldSendPush) {
+            // Check user preferences
+            const shouldSend = await pushNotificationService.shouldSendNotification(notification.recipient_id, createData.category || 'general', createData.priority || 'medium');
+            if (shouldSend) {
+                // Send push notification
+                try {
+                    const pushResult = await pushNotificationService.sendToUser(notification.recipient_id, {
+                        title: notification.title,
+                        body: notification.message,
+                        notificationType: notification.notification_type,
+                        category: notification.category || 'general',
+                        priority: notification.priority === 'urgent' ? 'high' : 'normal',
+                        data: {
+                            notificationId: notification.id,
+                            id: notification.id, // Also include as 'id' for easier access
+                            sender_id: notification.sender_id || '',
+                            recipient_id: notification.recipient_id || '',
+                            category: notification.category,
+                            actionUrl: notification.action_url,
+                        },
+                    });
+                    // Log delivery
+                    if (pushResult.sent > 0) {
+                        await pushNotificationService.logDelivery(notification.id, notification.recipient_id, 'push', 'sent', { sent: pushResult.sent, failed: pushResult.failed });
+                    }
+                }
+                catch (error) {
+                    console.error('Error sending push notification:', error);
+                    await pushNotificationService.logDelivery(notification.id, notification.recipient_id, 'push', 'failed', { error: error.message });
+                }
+            }
+        }
         return notification;
     },
     async getNotification(user, notificationId) {
@@ -396,6 +494,22 @@ export const notificationsService = {
                 }
             }
         });
+        // Publish read status to Supabase Realtime
+        try {
+            if (existingNotification.sender_id) {
+                await supabaseRealtimeService.publishReadStatus(existingNotification.sender_id, notificationId, user.user_id, new Date());
+            }
+        }
+        catch (error) {
+            console.debug('Failed to publish read status to Supabase:', error);
+        }
+        // Also publish notification read event
+        try {
+            await supabaseRealtimeService.publishNotificationRead(notificationId, user.user_id, existingNotification.sender_id || undefined);
+        }
+        catch (error) {
+            console.debug('Failed to publish notification read to Supabase:', error);
+        }
         return updatedNotification;
     },
     async getUnreadCount(user) {

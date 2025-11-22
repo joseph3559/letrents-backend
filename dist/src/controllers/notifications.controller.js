@@ -4,7 +4,7 @@ export const notificationsController = {
     getNotifications: async (req, res) => {
         try {
             const user = req.user;
-            const { limit = 10, offset = 0, category, status, priority, property_ids } = req.query;
+            const { limit = 10, offset = 0, category, status, priority, property_ids, notification_type } = req.query;
             // Parse property_ids (comma-separated) for super-admin filtering
             let propertyIds = undefined;
             if (property_ids) {
@@ -16,6 +16,7 @@ export const notificationsController = {
                 ...(category && { category: category }),
                 ...(status && { status: status }),
                 ...(priority && { priority: priority }),
+                ...(notification_type && { notification_type: notification_type }),
                 ...(propertyIds && { property_ids: propertyIds }),
             };
             const notifications = await notificationsService.getNotifications(user, Number(limit), Number(offset), filters);
