@@ -16,36 +16,6 @@ function initializeFirebaseAdmin() {
   }
 
   try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    
-    // Try multiple paths for service account JSON file
-    const possiblePaths = [
-      path.join(__dirname, '../../letrents-firebase-adminsdk-fbsvc-0a3f22a51b.json'), // backend/letrents-firebase-adminsdk...
-      path.join(__dirname, '../../../letrents-firebase-adminsdk-fbsvc-0a3f22a51b.json'), // project root
-      process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
-    ].filter(p => p); // Remove empty strings
-    
-    let serviceAccount: any = null;
-    let serviceAccountPath: string | null = null;
-    
-    // Try to find and load the service account file
-    for (const tryPath of possiblePaths) {
-      try {
-        const fileContent = readFileSync(tryPath, 'utf8');
-        serviceAccount = JSON.parse(fileContent);
-        serviceAccountPath = tryPath;
-        break;
-      } catch (e) {
-        // Continue to next path
-        continue;
-      }
-    }
-    
-    if (!serviceAccount) {
-      throw new Error('Firebase service account JSON file not found. Tried paths: ' + possiblePaths.join(', '));
-    }
-
     // Check if Firebase Admin is already initialized
     try {
       if (admin.apps && admin.apps.length > 0) {
@@ -57,17 +27,93 @@ function initializeFirebaseAdmin() {
       // admin.apps might not be available yet, continue to initialize
     }
 
+    let serviceAccount: any = null;
+    let credentialSource: string = '';
+
+    // Method 1: Use GOOGLE_APPLICATION_CREDENTIALS (standard Firebase env var)
+    // This is the recommended approach for production
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      try {
+        const fileContent = readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8');
+        serviceAccount = JSON.parse(fileContent);
+        credentialSource = `GOOGLE_APPLICATION_CREDENTIALS (${process.env.GOOGLE_APPLICATION_CREDENTIALS})`;
+      } catch (e) {
+        console.warn(`⚠️ Failed to load credentials from GOOGLE_APPLICATION_CREDENTIALS: ${e}`);
+      }
+    }
+
+    // Method 2: Use FIREBASE_SERVICE_ACCOUNT_KEY (JSON content as env var)
+    // Best for production - store JSON content directly in environment variable
+    if (!serviceAccount && process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      try {
+        // Handle both plain JSON string and base64 encoded
+        let jsonString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+        try {
+          // Try base64 decode first (common in CI/CD systems)
+          jsonString = Buffer.from(jsonString, 'base64').toString('utf8');
+        } catch (e) {
+          // Not base64, use as-is
+        }
+        serviceAccount = JSON.parse(jsonString);
+        credentialSource = 'FIREBASE_SERVICE_ACCOUNT_KEY (environment variable)';
+      } catch (e) {
+        console.warn(`⚠️ Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${e}`);
+      }
+    }
+
+    // Method 3: Use FIREBASE_SERVICE_ACCOUNT_PATH (custom path env var)
+    if (!serviceAccount && process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+      try {
+        const fileContent = readFileSync(process.env.FIREBASE_SERVICE_ACCOUNT_PATH, 'utf8');
+        serviceAccount = JSON.parse(fileContent);
+        credentialSource = `FIREBASE_SERVICE_ACCOUNT_PATH (${process.env.FIREBASE_SERVICE_ACCOUNT_PATH})`;
+      } catch (e) {
+        console.warn(`⚠️ Failed to load credentials from FIREBASE_SERVICE_ACCOUNT_PATH: ${e}`);
+      }
+    }
+
+    // Method 4: Try default file paths (for local development)
+    if (!serviceAccount) {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      
+      const possiblePaths = [
+        path.join(__dirname, '../../letrents-firebase-adminsdk-fbsvc-0a3f22a51b.json'), // backend/letrents-firebase-adminsdk...
+        path.join(__dirname, '../../../letrents-firebase-adminsdk-fbsvc-0a3f22a51b.json'), // project root
+      ];
+      
+      for (const tryPath of possiblePaths) {
+        try {
+          const fileContent = readFileSync(tryPath, 'utf8');
+          serviceAccount = JSON.parse(fileContent);
+          credentialSource = `file path (${tryPath})`;
+          break;
+        } catch (e) {
+          // Continue to next path
+          continue;
+        }
+      }
+    }
+    
+    if (!serviceAccount) {
+      throw new Error(
+        'Firebase service account credentials not found. ' +
+        'Please set one of: GOOGLE_APPLICATION_CREDENTIALS, FIREBASE_SERVICE_ACCOUNT_KEY, ' +
+        'FIREBASE_SERVICE_ACCOUNT_PATH, or place the JSON file in the backend directory.'
+      );
+    }
+
     // Initialize Firebase Admin SDK
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
-    console.log(`✅ Firebase Admin SDK initialized with service account from: ${serviceAccountPath}`);
+    console.log(`✅ Firebase Admin SDK initialized with credentials from: ${credentialSource}`);
     
     firebaseAdminInitialized = true;
   } catch (error: any) {
     console.error('❌ Error initializing Firebase Admin SDK:', error.message);
     console.warn('⚠️ FCM push notifications will not work until Firebase Admin SDK is properly configured');
-    console.warn('   Please ensure the service account JSON file is in the backend directory or set FIREBASE_SERVICE_ACCOUNT_PATH');
+    console.warn('   For production, set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_KEY environment variable');
   }
 }
 
