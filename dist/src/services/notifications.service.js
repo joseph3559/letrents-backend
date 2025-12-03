@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { formatDataForRole } from '../utils/roleBasedFiltering.js';
+import { supabaseRealtimeService } from './supabase-realtime.service.js';
+import { pushNotificationService } from './push-notification.service.js';
 const prisma = new PrismaClient();
 export const notificationsService = {
     async getNotifications(user, limit = 10, offset = 0, filters = {}) {
@@ -8,18 +10,47 @@ export const notificationsService = {
         delete filters?.property_ids; // Remove from filters to avoid conflicts
         // Build role-based where clause for notifications
         // Include both sent and received notifications
+        // Handle special case for message filtering (notification_type='message' OR category='message')
+        const { notification_type, category, ...restFilters } = filters;
+        // Build AND conditions array
+        const andConditions = [];
+        // Add recipient/sender OR condition (for all roles except super_admin)
+        // This ensures admins see both sent and received notifications
+        if (user.role !== 'super_admin') {
+            andConditions.push({
+                OR: [
+                    { recipient_id: user.user_id }, // Received notifications
+                    { sender_id: user.user_id } // Sent notifications (important for admins to see their sent notices/reminders)
+                ]
+            });
+        }
+        // Add message type filter if filtering for messages
+        if (notification_type === 'message') {
+            andConditions.push({
+                OR: [
+                    { notification_type: 'message' },
+                    { category: 'message' }
+                ]
+            });
+        }
+        // Add category filter to AND conditions to ensure it works with sender/recipient OR condition
+        if (category) {
+            andConditions.push({ category });
+        }
+        // Build base where clause
         let whereClause = {
-            ...filters,
-            company_id: user.company_id,
-            OR: [
-                { recipient_id: user.user_id }, // Received notifications
-                { sender_id: user.user_id } // Sent notifications
-            ]
+            ...restFilters,
         };
+        // Add company_id for non-super-admin users
+        if (user.role !== 'super_admin') {
+            whereClause.company_id = user.company_id;
+        }
+        // Add AND conditions if any
+        if (andConditions.length > 0) {
+            whereClause.AND = andConditions;
+        }
         // Super admin can see all notifications
         if (user.role === 'super_admin') {
-            delete whereClause.OR;
-            delete whereClause.company_id;
             // If property_ids provided, filter by property_id
             if (propertyIds && Array.isArray(propertyIds) && propertyIds.length > 0) {
                 whereClause.property_id = { in: propertyIds };
@@ -37,20 +68,31 @@ export const notificationsService = {
                     property_id: true
                 }
             });
-            const propertyIds = agentProperties.map(ap => ap.property_id);
+            const agentPropertyIds = agentProperties.map(ap => ap.property_id);
             // Update OR clause to also include notifications for assigned properties
-            if (propertyIds.length > 0) {
-                whereClause.OR = [
-                    { recipient_id: user.user_id }, // Received notifications
-                    { sender_id: user.user_id }, // Sent notifications
-                    { property_id: { in: propertyIds } } // Notifications for assigned properties
-                ];
+            if (agentPropertyIds.length > 0) {
+                // Find the OR condition in AND array and update it
+                const orConditionIndex = andConditions.findIndex((cond) => cond.OR);
+                if (orConditionIndex >= 0) {
+                    andConditions[orConditionIndex].OR.push({ property_id: { in: agentPropertyIds } } // Notifications for assigned properties
+                    );
+                }
+                else {
+                    // If no OR condition exists, create one
+                    andConditions.push({
+                        OR: [
+                            { recipient_id: user.user_id },
+                            { sender_id: user.user_id },
+                            { property_id: { in: agentPropertyIds } }
+                        ]
+                    });
+                }
             }
         }
         const [notifications, total] = await Promise.all([
             prisma.notification.findMany({
                 where: whereClause,
-                take: limit,
+                take: limit * 2, // Fetch more to account for filtering
                 skip: offset,
                 orderBy: {
                     created_at: 'desc'
@@ -90,18 +132,47 @@ export const notificationsService = {
                 where: whereClause
             })
         ]);
+        // Filter out messages deleted by current user (unless deleted_for_everyone is true)
+        const filteredNotifications = notifications.filter(notification => {
+            // If deleted for everyone, show it (with placeholder message)
+            if (notification.deleted_for_everyone) {
+                return true;
+            }
+            // Check if current user has deleted this message
+            let deletedByUsers = [];
+            if (notification.deleted_by_users) {
+                if (Array.isArray(notification.deleted_by_users)) {
+                    deletedByUsers = notification.deleted_by_users;
+                }
+                else if (typeof notification.deleted_by_users === 'string') {
+                    try {
+                        deletedByUsers = JSON.parse(notification.deleted_by_users);
+                    }
+                    catch {
+                        deletedByUsers = [];
+                    }
+                }
+            }
+            // Exclude if current user is in deleted_by_users
+            return !deletedByUsers.includes(user.user_id);
+        }).slice(0, limit); // Apply limit after filtering
         return {
-            notifications: formatDataForRole(user, notifications),
-            total,
+            notifications: formatDataForRole(user, filteredNotifications),
+            total: filteredNotifications.length,
             page: Math.floor(offset / limit) + 1,
             limit,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.ceil(filteredNotifications.length / limit)
         };
     },
     async createNotification(user, notificationData) {
         // Validate permissions - only certain roles can create notifications
         if (!['landlord', 'agency_admin', 'super_admin', 'agent', 'caretaker', 'tenant'].includes(user.role)) {
             throw new Error('Insufficient permissions to create notification');
+        }
+        // Extract channels from metadata if provided (mobile app sends channels in metadata)
+        let notificationChannels = notificationData.channels || ['app'];
+        if (notificationData.metadata?.channels && Array.isArray(notificationData.metadata.channels)) {
+            notificationChannels = [...new Set([...notificationChannels, ...notificationData.metadata.channels])];
         }
         // Prepare notification data
         const createData = {
@@ -114,6 +185,7 @@ export const notificationsService = {
             recipient_id: notificationData.recipientId || notificationData.recipient_id, // ✅ Support both formats
             is_read: false,
             company_id: user.company_id,
+            channels: notificationChannels, // Include channels in createData
             // Optional fields
             ...(notificationData.property_id && { property_id: notificationData.property_id }),
             ...(notificationData.unit_id && { unit_id: notificationData.unit_id }),
@@ -131,9 +203,90 @@ export const notificationsService = {
                         last_name: true,
                         role: true,
                     }
+                },
+                recipient: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        role: true,
+                    }
+                },
+                property: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                },
+                unit: {
+                    select: {
+                        id: true,
+                        unit_number: true,
+                    }
                 }
             }
         });
+        // Publish to Supabase Realtime for real-time delivery
+        try {
+            await supabaseRealtimeService.publishNotification(notification);
+        }
+        catch (error) {
+            // Silently fail if Supabase is not available
+            console.debug('Supabase Realtime not available:', error);
+        }
+        // Check if push notifications should be sent
+        const channels = Array.isArray(createData.channels)
+            ? createData.channels
+            : typeof createData.channels === 'string'
+                ? JSON.parse(createData.channels)
+                : ['app'];
+        // Also check metadata for channels (mobile app sends channels in metadata)
+        let allChannels = [...channels];
+        if (createData.metadata && typeof createData.metadata === 'object') {
+            const metadataChannels = createData.metadata.channels;
+            if (Array.isArray(metadataChannels)) {
+                allChannels = [...new Set([...channels, ...metadataChannels])];
+            }
+        }
+        // Send push notification for messages and important notifications
+        // Always send push for messages, and for other notifications if 'push' is in channels
+        const shouldSendPush = allChannels.includes('push') ||
+            notification.notification_type === 'message' ||
+            notification.category === 'message' ||
+            notification.priority === 'urgent' ||
+            notification.priority === 'high';
+        if (shouldSendPush) {
+            // Check user preferences
+            const shouldSend = await pushNotificationService.shouldSendNotification(notification.recipient_id, createData.category || 'general', createData.priority || 'medium');
+            if (shouldSend) {
+                // Send push notification
+                try {
+                    const pushResult = await pushNotificationService.sendToUser(notification.recipient_id, {
+                        title: notification.title,
+                        body: notification.message,
+                        notificationType: notification.notification_type,
+                        category: notification.category || 'general',
+                        priority: notification.priority === 'urgent' ? 'high' : 'normal',
+                        data: {
+                            notificationId: notification.id,
+                            id: notification.id, // Also include as 'id' for easier access
+                            sender_id: notification.sender_id || '',
+                            recipient_id: notification.recipient_id || '',
+                            category: notification.category,
+                            actionUrl: notification.action_url,
+                        },
+                    });
+                    // Log delivery
+                    if (pushResult.sent > 0) {
+                        await pushNotificationService.logDelivery(notification.id, notification.recipient_id, 'push', 'sent', { sent: pushResult.sent, failed: pushResult.failed });
+                    }
+                }
+                catch (error) {
+                    console.error('Error sending push notification:', error);
+                    await pushNotificationService.logDelivery(notification.id, notification.recipient_id, 'push', 'failed', { error: error.message });
+                }
+            }
+        }
         return notification;
     },
     async getNotification(user, notificationId) {
@@ -195,13 +348,31 @@ export const notificationsService = {
         if (!existingNotification) {
             throw new Error('Notification not found or access denied');
         }
+        // Check if user is the sender (for message editing)
+        const isSender = existingNotification.sender_id === user.user_id;
+        // If updating message content, check 15-minute time limit
+        if ((updateData.message || updateData.content) && isSender) {
+            const messageTime = new Date(existingNotification.created_at).getTime();
+            const now = new Date().getTime();
+            const diffInMinutes = (now - messageTime) / (1000 * 60);
+            if (diffInMinutes > 15) {
+                throw new Error('Messages can only be edited within 15 minutes of sending');
+            }
+        }
         // Only allow updating certain fields
         const updateFields = {};
         if (updateData.title) {
             updateFields.title = updateData.title;
         }
         if (updateData.message || updateData.content) {
-            updateFields.message = updateData.message || updateData.content;
+            // Only allow sender to edit message content
+            if (isSender) {
+                updateFields.message = updateData.message || updateData.content;
+                updateFields.updated_at = new Date();
+            }
+            else {
+                throw new Error('Only the sender can edit message content');
+            }
         }
         if (updateData.priority) {
             updateFields.priority = updateData.priority;
@@ -224,26 +395,80 @@ export const notificationsService = {
                         last_name: true,
                         role: true,
                     }
+                },
+                recipient: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        role: true,
+                    }
                 }
             }
         });
+        // Publish read status to Supabase Realtime
+        if (updateFields.is_read && updatedNotification.recipient_id && updatedNotification.sender_id) {
+            try {
+                await supabaseRealtimeService.publishReadStatus(updatedNotification.sender_id, notificationId, updatedNotification.recipient_id, updatedNotification.read_at || new Date());
+            }
+            catch (error) {
+                console.debug('Supabase not available for read status update:', error);
+            }
+        }
         return updatedNotification;
     },
-    async deleteNotification(user, notificationId) {
+    async deleteNotification(user, notificationId, deleteForEveryone = false) {
         // Check if notification exists and user has access
         const existingNotification = await this.getNotification(user, notificationId);
         if (!existingNotification) {
             throw new Error('Notification not found or access denied');
         }
-        // Only allow deletion if user is the recipient or has admin privileges
-        if (existingNotification.recipient_id !== user.user_id &&
-            !['super_admin', 'agency_admin'].includes(user.role)) {
+        const isSender = existingNotification.sender_id === user.user_id;
+        const isRecipient = existingNotification.recipient_id === user.user_id;
+        const isAdmin = ['super_admin', 'agency_admin'].includes(user.role);
+        // Only sender can delete for everyone, and only within 15 minutes (like WhatsApp)
+        if (deleteForEveryone) {
+            if (!isSender) {
+                throw new Error('Only the sender can delete a message for everyone');
+            }
+            // Check if message is within 15 minutes
+            const messageTime = new Date(existingNotification.created_at).getTime();
+            const now = new Date().getTime();
+            const diffInMinutes = (now - messageTime) / (1000 * 60);
+            if (diffInMinutes > 15) {
+                throw new Error('Messages can only be deleted for everyone within 15 minutes of sending');
+            }
+            // Delete for everyone - mark as deleted_for_everyone
+            await prisma.notification.update({
+                where: { id: notificationId },
+                data: {
+                    deleted_for_everyone: true,
+                    message: 'This message was deleted',
+                    updated_at: new Date(),
+                }
+            });
+            return { success: true, deletedForEveryone: true };
+        }
+        // Delete for me only - soft delete by adding user to deleted_by_users array
+        if (!isSender && !isRecipient && !isAdmin) {
             throw new Error('Insufficient permissions to delete notification');
         }
-        await prisma.notification.delete({
-            where: { id: notificationId }
+        // Get current deleted_by_users array
+        const deletedByUsers = Array.isArray(existingNotification.deleted_by_users)
+            ? existingNotification.deleted_by_users
+            : (existingNotification.deleted_by_users ? JSON.parse(existingNotification.deleted_by_users) : []);
+        // Add current user to deleted_by_users if not already there
+        if (!deletedByUsers.includes(user.user_id)) {
+            deletedByUsers.push(user.user_id);
+        }
+        await prisma.notification.update({
+            where: { id: notificationId },
+            data: {
+                deleted_by_users: deletedByUsers,
+                updated_at: new Date(),
+            }
         });
-        return { success: true };
+        return { success: true, deletedForEveryone: false };
     },
     async markAsRead(user, notificationId) {
         // Check if notification exists and user has access
@@ -269,6 +494,22 @@ export const notificationsService = {
                 }
             }
         });
+        // Publish read status to Supabase Realtime
+        try {
+            if (existingNotification.sender_id) {
+                await supabaseRealtimeService.publishReadStatus(existingNotification.sender_id, notificationId, user.user_id, new Date());
+            }
+        }
+        catch (error) {
+            console.debug('Failed to publish read status to Supabase:', error);
+        }
+        // Also publish notification read event
+        try {
+            await supabaseRealtimeService.publishNotificationRead(notificationId, user.user_id, existingNotification.sender_id || undefined);
+        }
+        catch (error) {
+            console.debug('Failed to publish notification read to Supabase:', error);
+        }
         return updatedNotification;
     },
     async getUnreadCount(user) {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { getTenantDashboard, getTenantProfile, getTenantLeases, getTenantPayments, getTenantPaymentById, getTenantInvoices, getTenantPendingPayables, processTenantPayment, getTenantMaintenance, getTenantNotifications, createMaintenanceRequest, updateTenantMaintenanceRequest, updateTenantProfile, uploadTenantProfilePicture, submitLeaseEditRequest, getTenantLeaseModifications, getTenantAllModifications, acknowledgeTenantLeaseModification, getTenantUnacknowledgedModifications, getTenantLeaseModificationStats, cancelTenantPendingPayment, cleanupDuplicatePayment } from '../controllers/tenant-portal.controller.js';
+import { getTenantDashboard, getTenantProfile, getTenantLeases, getTenantPayments, getTenantPaymentById, getTenantInvoices, getTenantPendingPayables, processTenantPayment, getTenantMaintenance, getTenantMessages, getTenantNotifications, createMaintenanceRequest, updateTenantMaintenanceRequest, updateTenantProfile, uploadTenantProfilePicture, submitLeaseEditRequest, getTenantLeaseModifications, getTenantAllModifications, acknowledgeTenantLeaseModification, getTenantUnacknowledgedModifications, getTenantLeaseModificationStats, cancelTenantPendingPayment, cleanupDuplicatePayment, registerPushToken, unregisterPushToken, testPushNotification } from '../controllers/tenant-portal.controller.js';
 import { getTenantPreferences, updateTenantPreferences, getNotificationSettings, updateNotificationSettings, changePassword, getActiveSessions, revokeSession, revokeAllOtherSessions, getSecurityActivity, get2FASettings, enable2FA, disable2FA } from '../controllers/tenant-settings.controller.js';
 // Configure multer for profile picture uploads
 const upload = multer({
@@ -48,7 +48,9 @@ router.get('/pending-payables', getTenantPendingPayables);
 router.get('/maintenance', getTenantMaintenance);
 router.post('/maintenance', createMaintenanceRequest);
 router.put('/maintenance/:id', updateTenantMaintenanceRequest);
-// Notifications/Notices
+// Messages/Chat (separate from notifications)
+router.get('/messages', getTenantMessages);
+// Notifications/Alerts (excludes messages)
 router.get('/notifications', getTenantNotifications);
 router.get('/notices', getTenantNotifications); // Alias for notifications
 // Settings - Preferences
@@ -67,4 +69,8 @@ router.get('/settings/security/activity', getSecurityActivity);
 router.get('/settings/security/2fa', get2FASettings);
 router.post('/settings/security/2fa/enable', enable2FA);
 router.post('/settings/security/2fa/disable', disable2FA);
+// Push Notifications - Supabase Push Token Registration
+router.post('/push-token', registerPushToken);
+router.delete('/push-token', unregisterPushToken);
+router.post('/push-token/test', testPushNotification); // Test endpoint for push notifications
 export default router;

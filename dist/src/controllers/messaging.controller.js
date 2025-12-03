@@ -1,0 +1,230 @@
+import { messagingService } from '../services/messaging.service.js';
+import { writeSuccess, writeError } from '../utils/response.js';
+export const messagingController = {
+    getConversations: async (req, res) => {
+        try {
+            const user = req.user;
+            const { limit = 50, offset = 0 } = req.query;
+            const conversations = await messagingService.getConversations(user, Number(limit), Number(offset));
+            writeSuccess(res, 200, 'Conversations retrieved successfully', conversations);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    createConversation: async (req, res) => {
+        try {
+            const user = req.user;
+            const { participantIds, isGroup, groupName } = req.body;
+            if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+                return writeError(res, 400, 'participantIds array is required');
+            }
+            const conversation = await messagingService.getOrCreateConversation(user, participantIds, isGroup || false, groupName);
+            writeSuccess(res, 201, 'Conversation created successfully', conversation);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    getConversation: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id } = req.params;
+            // Verify user is participant
+            const { PrismaClient } = await import('@prisma/client');
+            const prisma = new PrismaClient();
+            const participant = await prisma.conversationParticipant.findFirst({
+                where: {
+                    conversation_id: id,
+                    user_id: user.user_id,
+                },
+                include: {
+                    conversation: {
+                        include: {
+                            participants: {
+                                include: {
+                                    user: {
+                                        select: {
+                                            id: true,
+                                            first_name: true,
+                                            last_name: true,
+                                            role: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!participant) {
+                return writeError(res, 404, 'Conversation not found or access denied');
+            }
+            writeSuccess(res, 200, 'Conversation retrieved successfully', participant.conversation);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    getMessages: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id } = req.params;
+            const { limit = 50, offset = 0, before } = req.query;
+            const beforeDate = before ? new Date(before) : undefined;
+            const result = await messagingService.getMessages(user, id, Number(limit), Number(offset), beforeDate);
+            writeSuccess(res, 200, 'Messages retrieved successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    createMessage: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id: conversationId } = req.params;
+            const { recipientIds, content, subject, messageType, priority, replyToMessageId, attachments, metadata, } = req.body;
+            if (!content || !content.trim()) {
+                return writeError(res, 400, 'Message content is required');
+            }
+            const message = await messagingService.createMessage(user, {
+                conversationId,
+                recipientIds: recipientIds || [],
+                content: content.trim(),
+                subject,
+                messageType,
+                priority,
+                replyToMessageId,
+                attachments,
+                metadata,
+            });
+            writeSuccess(res, 201, 'Message sent successfully', message);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    updateMessage: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id } = req.params;
+            const { content, subject } = req.body;
+            if (!content || !content.trim()) {
+                return writeError(res, 400, 'Message content is required');
+            }
+            const message = await messagingService.updateMessage(user, id, {
+                content: content.trim(),
+                subject,
+            });
+            writeSuccess(res, 200, 'Message updated successfully', message);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    deleteMessage: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id } = req.params;
+            const { deleteForEveryone } = req.query;
+            const result = await messagingService.deleteMessage(user, id, deleteForEveryone === 'true');
+            writeSuccess(res, 200, result.deletedForEveryone
+                ? 'Message deleted for everyone'
+                : 'Message deleted for you', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    addReaction: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id } = req.params;
+            const { reactionType } = req.body;
+            if (!reactionType) {
+                return writeError(res, 400, 'reactionType is required');
+            }
+            const result = await messagingService.addReaction(user, id, reactionType);
+            writeSuccess(res, 200, 'Reaction added successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    removeReaction: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id, reactionType } = req.params;
+            const result = await messagingService.removeReaction(user, id, reactionType);
+            writeSuccess(res, 200, 'Reaction removed successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    pinMessage: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id: conversationId, messageId } = req.params;
+            const { note } = req.body;
+            const result = await messagingService.pinMessage(user, conversationId, messageId, note);
+            writeSuccess(res, 200, 'Message pinned successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    unpinMessage: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id: conversationId, messageId } = req.params;
+            const result = await messagingService.unpinMessage(user, conversationId, messageId);
+            writeSuccess(res, 200, 'Message unpinned successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    searchMessages: async (req, res) => {
+        try {
+            const user = req.user;
+            const { q, conversationId, limit = 50 } = req.query;
+            if (!q || typeof q !== 'string') {
+                return writeError(res, 400, 'Search query (q) is required');
+            }
+            const messages = await messagingService.searchMessages(user, q, conversationId, Number(limit));
+            writeSuccess(res, 200, 'Messages found successfully', messages);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    updatePresence: async (req, res) => {
+        try {
+            const user = req.user;
+            const { status, message } = req.body;
+            if (!status) {
+                return writeError(res, 400, 'status is required');
+            }
+            const result = await messagingService.updatePresence(user, status, message);
+            writeSuccess(res, 200, 'Presence updated successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+    updateTypingIndicator: async (req, res) => {
+        try {
+            const user = req.user;
+            const { conversationId, isTyping } = req.body;
+            if (!conversationId) {
+                return writeError(res, 400, 'conversationId is required');
+            }
+            const result = await messagingService.updateTypingIndicator(user, conversationId, isTyping === true);
+            writeSuccess(res, 200, 'Typing indicator updated successfully', result);
+        }
+        catch (error) {
+            writeError(res, 500, error.message);
+        }
+    },
+};

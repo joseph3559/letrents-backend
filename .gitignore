@@ -2,4 +2,10 @@ node_modules
 # Keep environment variables out of version control
 .env
 
+# Firebase service account key (contains sensitive credentials)
+firebase-service-account.json
+**/firebase-service-account.json
+*-firebase-adminsdk-*.json
+letrents-firebase-adminsdk-*.json
+
 /generated/prisma

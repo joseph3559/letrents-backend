@@ -3,6 +3,7 @@ import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import { notificationsService } from '../services/notifications.service.js';
 import { emailService } from '../services/email.service.js';
+import { pushNotificationService } from '../services/push-notification.service.js';
 
 const prisma = getPrisma();
 
@@ -21,7 +22,15 @@ export const getTenantDashboard = async (req: Request, res: Response) => {
     // Get tenant profile with current unit and property info
     const tenant = await prisma.user.findUnique({
       where: { id: user.user_id },
-      include: {
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        phone_number: true,
+        status: true,
+        email_verified: true,
+        created_at: true,
         tenant_profile: {
           include: {
             current_unit: {
@@ -171,7 +180,15 @@ export const getTenantProfile = async (req: Request, res: Response) => {
 
     const tenant = await prisma.user.findUnique({
       where: { id: user.user_id },
-      include: {
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        phone_number: true,
+        status: true,
+        email_verified: true,
+        created_at: true,
         tenant_profile: {
           include: {
             current_unit: {
@@ -411,6 +428,17 @@ export const getTenantPaymentById = async (req: Request, res: Response) => {
             last_name: true,
             email: true
           }
+        },
+        mpesa_transactions: {
+          take: 1,
+          orderBy: {
+            created_at: 'desc'
+          },
+          select: {
+            trans_id: true,
+            transaction_type: true,
+            business_short_code: true
+          }
         }
       }
     });
@@ -449,11 +477,17 @@ export const getTenantPaymentById = async (req: Request, res: Response) => {
       }
     }
 
+    // Extract M-Pesa receipt number from transaction if available
+    const mpesaReceipt = payment.mpesa_transactions && payment.mpesa_transactions.length > 0
+      ? payment.mpesa_transactions[0].trans_id
+      : null
+
     res.json({
       success: true,
       message: 'Payment details retrieved successfully',
       data: {
         ...payment,
+        mpesa_receipt_number: mpesaReceipt,
         invoice
       }
     });
@@ -496,6 +530,11 @@ export const getTenantInvoices = async (req: Request, res: Response) => {
       prisma.invoice.findMany({
         where: whereClause,
         include: {
+          line_items: {
+            orderBy: {
+              created_at: 'asc'
+            }
+          },
           property: {
             select: {
               id: true,
@@ -515,7 +554,8 @@ export const getTenantInvoices = async (req: Request, res: Response) => {
               id: true,
               first_name: true,
               last_name: true,
-              email: true
+              email: true,
+              phone_number: true
             }
           }
         },
@@ -541,11 +581,26 @@ export const getTenantInvoices = async (req: Request, res: Response) => {
       }
     });
 
+    // Format invoices with proper number conversions for line items
+    const formattedInvoices = invoices.map(invoice => ({
+      ...invoice,
+      total_amount: Number(invoice.total_amount),
+      subtotal: Number(invoice.subtotal),
+      tax_amount: Number(invoice.tax_amount),
+      discount_amount: Number(invoice.discount_amount),
+      line_items: invoice.line_items.map(item => ({
+        ...item,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price),
+        total_price: Number(item.total_price)
+      }))
+    }));
+
     res.json({
       success: true,
       message: 'Invoices retrieved successfully',
       data: {
-        invoices,
+        invoices: formattedInvoices,
         total,
         pending_amount: pendingAmount._sum ? Number(pendingAmount._sum.total_amount || 0) : 0,
         page,
@@ -807,6 +862,118 @@ export const getTenantMaintenance = async (req: Request, res: Response) => {
 };
 
 // Get tenant notifications/notices
+// Get tenant messages (chat messages only)
+export const getTenantMessages = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    
+    if (user.role !== 'tenant') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Tenant role required.'
+      });
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
+    const offset = (page - 1) * limit;
+
+    // Fetch all messages (notifications with notification_type='message' or category='message')
+    // Include both sent and received messages so the mobile app can see complete conversations
+    const allMessages = await prisma.notification.findMany({
+      where: {
+        OR: [
+          // Received messages (where tenant is recipient)
+          {
+            recipient_id: user.user_id,
+            OR: [
+              { notification_type: 'message' },
+              { category: 'message' }
+            ]
+          },
+          // Sent messages (where tenant is sender)
+          {
+            sender_id: user.user_id,
+            OR: [
+              { notification_type: 'message' },
+              { category: 'message' }
+            ]
+          }
+        ]
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            role: true
+          }
+        },
+        recipient: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            role: true
+          }
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    // Filter out messages deleted by current user
+    const messages = allMessages.filter((notif: any) => {
+      // Check if deleted_by_users array contains current user ID
+      if (notif.deleted_by_users) {
+        let deletedByUsers = [];
+        if (Array.isArray(notif.deleted_by_users)) {
+          deletedByUsers = notif.deleted_by_users;
+        } else if (typeof notif.deleted_by_users === 'string') {
+          try {
+            deletedByUsers = JSON.parse(notif.deleted_by_users);
+          } catch {
+            deletedByUsers = [];
+          }
+        }
+        // Exclude if current user is in deleted_by_users
+        if (deletedByUsers.includes(user.user_id)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Apply pagination after filtering
+    const paginatedMessages = messages.slice(offset, offset + limit);
+    const total = messages.length;
+
+    res.json({
+      success: true,
+      message: 'Messages retrieved successfully',
+      data: paginatedMessages,
+      pagination: {
+        page,
+        per_page: limit,
+        total,
+        total_pages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Error getting tenant messages:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve messages'
+    });
+  }
+};
+
+// Get tenant notifications (alerts/notices only, excluding messages)
 export const getTenantNotifications = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;
@@ -822,39 +989,89 @@ export const getTenantNotifications = async (req: Request, res: Response) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
     const offset = (page - 1) * limit;
 
-    const [notifications, total] = await Promise.all([
-      prisma.notification.findMany({
-        where: {
-          recipient_id: user.user_id
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              first_name: true,
-              last_name: true,
-              email: true,
-              role: true
-            }
+    // Fetch all notifications EXCLUDING messages
+    // Filter out where notification_type='message' OR category='message'
+    const allNotifications = await prisma.notification.findMany({
+      where: {
+        recipient_id: user.user_id,
+        NOT: {
+          OR: [
+            { notification_type: 'message' },
+            { category: 'message' }
+          ]
+        }
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            role: true
           }
         },
-        orderBy: {
-          created_at: 'desc'
+        recipient: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            role: true
+          }
         },
-        skip: offset,
-        take: limit
-      }),
-      prisma.notification.count({
-        where: {
-          recipient_id: user.user_id
+        property: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        unit: {
+          select: {
+            id: true,
+            unit_number: true
+          }
         }
-      })
-    ]);
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    // Filter out notifications deleted by current user (unless deleted_for_everyone is true)
+    const notifications = allNotifications.filter((notif: any) => {
+      // If deleted for everyone, show it (with placeholder message if needed)
+      if (notif.deleted_for_everyone) {
+        return true;
+      }
+
+      // Check if deleted_by_users array contains current user ID
+      if (notif.deleted_by_users) {
+        let deletedByUsers = [];
+        if (Array.isArray(notif.deleted_by_users)) {
+          deletedByUsers = notif.deleted_by_users;
+        } else if (typeof notif.deleted_by_users === 'string') {
+          try {
+            deletedByUsers = JSON.parse(notif.deleted_by_users);
+          } catch {
+            deletedByUsers = [];
+          }
+        }
+        // Exclude if current user is in deleted_by_users
+        if (deletedByUsers.includes(user.user_id)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Apply pagination after filtering
+    const paginatedNotifications = notifications.slice(offset, offset + limit);
+    const total = notifications.length;
 
     res.json({
       success: true,
       message: 'Notifications retrieved successfully',
-      data: notifications,
+      data: paginatedNotifications,
       pagination: {
         page,
         per_page: limit,
@@ -908,8 +1125,14 @@ export const createMaintenanceRequest = async (req: Request, res: Response) => {
     if (!targetUnitId) {
       const tenant = await prisma.user.findUnique({
         where: { id: user.user_id },
-        include: {
-          tenant_profile: true
+        select: {
+          id: true,
+          tenant_profile: {
+            select: {
+              current_unit_id: true,
+              current_property_id: true
+            }
+          }
         }
       });
 
@@ -1681,22 +1904,30 @@ export const processTenantPayment = async (req: Request, res: Response) => {
       console.error('Failed to send custom tenant receipt email:', emailErr);
     }
 
-    // Optional: In-app notification for the tenant
+    // Send in-app and push notification for the tenant
     try {
       await notificationsService.createNotification(user, {
-        user_id: user.user_id,
+        recipientId: user.user_id, // Send to the tenant
+        notification_type: 'payment_receipt',
         type: 'payment_receipt',
-        title: 'Payment Successful - Receipt Generated',
-        message: `Your online payment of KSh ${(data?.total_amount || 0).toLocaleString()} has been processed.`,
-        data: {
+        title: 'Payment Successful',
+        message: `Your payment of KSh ${(data?.total_amount || 0).toLocaleString()} has been processed successfully. Receipt generated.`,
+        priority: 'high', // High priority to ensure push notification is sent
+        category: 'payment',
+        channels: ['app', 'push'], // Include push channel for mobile notification
+        metadata: {
+          channels: ['app', 'push'], // Also in metadata for compatibility
           invoices_paid: data?.invoices_paid,
           receipts: data?.receipts,
           transaction_id,
           reference_number,
+          total_amount: data?.total_amount,
+          payment_date: new Date().toISOString(),
         },
       });
+      console.log('✅ Payment notification sent to tenant');
     } catch (notifErr) {
-      console.error('Failed to send in-app notification to tenant:', notifErr);
+      console.error('❌ Failed to send payment notification to tenant:', notifErr);
     }
 
     return res.status(200).json({ success: true, message: 'Payment processed successfully', data });
@@ -1839,6 +2070,155 @@ export const cleanupDuplicatePayment = async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete payment'
+    });
+  }
+};
+
+// Register push token for notifications (Supabase Realtime)
+export const registerPushToken = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { token, platform = 'web', device_id, device_info } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Push token is required'
+      });
+    }
+
+    if (!['web', 'ios', 'android'].includes(platform)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Platform must be one of: web, ios, android'
+      });
+    }
+
+    const success = await pushNotificationService.registerToken(
+      user.user_id,
+      token,
+      platform as 'web' | 'ios' | 'android',
+      device_id,
+      device_info
+    );
+
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Push token registered successfully via Supabase'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to register push token'
+      });
+    }
+  } catch (error: any) {
+    console.error('Error registering push token:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to register push token',
+      error: error.message
+    });
+  }
+};
+
+// Test push notification (for debugging)
+export const testPushNotification = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    
+    if (!user.user_id) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Get user's registered tokens
+    const tokens = await pushNotificationService.getUserTokens(user.user_id);
+    
+    console.log(`📱 Testing push notification for user ${user.user_id}`);
+    console.log(`📱 Found ${tokens.length} registered token(s)`);
+    
+    if (tokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No push tokens registered for this user. Please ensure the app has registered a token.',
+        tokens: []
+      });
+    }
+
+    // Send test notification
+    const result = await pushNotificationService.sendToUser(
+      user.user_id,
+      {
+        title: '🧪 Test Push Notification',
+        body: `This is a test notification sent at ${new Date().toLocaleString()}. If you see this, push notifications are working!`,
+        notificationType: 'test',
+        category: 'test',
+        priority: 'high',
+        data: {
+          test: true,
+          timestamp: new Date().toISOString(),
+          userId: user.user_id
+        },
+        sound: 'default',
+        badge: 1
+      }
+    );
+
+    return res.json({
+      success: result.success,
+      message: result.success 
+        ? `Test notification sent! (FCM: ${result.sent}, Failed: ${result.failed})`
+        : `Failed to send test notification (Failed: ${result.failed})`,
+      tokens: tokens.map(t => ({
+        platform: t.platform,
+        token: t.token.substring(0, 20) + '...', // Partial token for security
+        device_id: t.device_id
+      })),
+      result,
+      errors: result.errors || []
+    });
+  } catch (error) {
+    console.error('Error testing push notification:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to test push notification',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+// Unregister push token
+export const unregisterPushToken = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { token } = req.body;
+
+    const success = await pushNotificationService.unregisterToken(
+      user.user_id,
+      token
+    );
+
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Push token unregistered successfully'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to unregister push token'
+      });
+    }
+  } catch (error: any) {
+    console.error('Error unregistering push token:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unregister push token',
+      error: error.message
     });
   }
 };

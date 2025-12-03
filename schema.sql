@@ -147,7 +147,7 @@ CREATE TYPE message_status AS ENUM (
 -- ============================================================================
 
 -- Companies table for multi-tenancy
-CREATE TABLE companies (
+CREATE TABLE IF NOT EXISTS companies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     business_type VARCHAR(100),
@@ -176,7 +176,7 @@ CREATE TABLE companies (
 );
 
 -- Agencies table
-CREATE TABLE agencies (
+CREATE TABLE IF NOT EXISTS agencies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -189,7 +189,7 @@ CREATE TABLE agencies (
 );
 
 -- Users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255),
@@ -223,7 +223,7 @@ CREATE TABLE users (
 -- AUTHENTICATION TABLES
 -- ============================================================================
 
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
     token_hash VARCHAR(255) NOT NULL UNIQUE,
@@ -236,7 +236,7 @@ CREATE TABLE refresh_tokens (
     revoked_at TIMESTAMPTZ
 );
 
-CREATE TABLE password_reset_tokens (
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
     token_hash VARCHAR(255) NOT NULL UNIQUE,
@@ -246,7 +246,7 @@ CREATE TABLE password_reset_tokens (
     used_at TIMESTAMPTZ
 );
 
-CREATE TABLE email_verification_tokens (
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
     token_hash VARCHAR(255) NOT NULL UNIQUE,
@@ -257,7 +257,7 @@ CREATE TABLE email_verification_tokens (
     used_at TIMESTAMPTZ
 );
 
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
     session_token VARCHAR(255) NOT NULL UNIQUE,
@@ -274,8 +274,9 @@ CREATE TABLE user_sessions (
 -- PROPERTY MANAGEMENT TABLES
 -- ============================================================================
 
-CREATE TABLE properties (
+CREATE TABLE IF NOT EXISTS properties (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id UUID NOT NULL,
     name VARCHAR(255) NOT NULL,
     type property_type NOT NULL,
     description TEXT,
@@ -323,7 +324,7 @@ CREATE TABLE properties (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE units (
+CREATE TABLE IF NOT EXISTS units (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     property_id UUID NOT NULL,
     unit_number VARCHAR(50) NOT NULL,
@@ -388,7 +389,7 @@ CREATE TABLE units (
 -- COMMUNICATIONS SYSTEM
 -- ============================================================================
 
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     subject VARCHAR(255) NOT NULL,
     type VARCHAR(20) DEFAULT 'direct',
@@ -397,7 +398,7 @@ CREATE TABLE conversations (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE conversation_participants (
+CREATE TABLE IF NOT EXISTS conversation_participants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID NOT NULL,
     user_id UUID NOT NULL,
@@ -408,7 +409,7 @@ CREATE TABLE conversation_participants (
     UNIQUE(conversation_id, user_id)
 );
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID,
     sender_id UUID NOT NULL,
@@ -430,7 +431,7 @@ CREATE TABLE messages (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE message_recipients (
+CREATE TABLE IF NOT EXISTS message_recipients (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     message_id UUID NOT NULL,
     recipient_id UUID NOT NULL,
@@ -444,7 +445,7 @@ CREATE TABLE message_recipients (
     UNIQUE(message_id, recipient_id)
 );
 
-CREATE TABLE message_templates (
+CREATE TABLE IF NOT EXISTS message_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL,
     subject VARCHAR(255),
@@ -461,7 +462,7 @@ CREATE TABLE message_templates (
 -- NOTIFICATIONS SYSTEM
 -- ============================================================================
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     sender_id UUID,
     recipient_id UUID NOT NULL,
@@ -484,7 +485,7 @@ CREATE TABLE notifications (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE notification_preferences (
+CREATE TABLE IF NOT EXISTS notification_preferences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
     notification_type VARCHAR(50) NOT NULL,
@@ -500,7 +501,7 @@ CREATE TABLE notification_preferences (
 -- MAINTENANCE SYSTEM
 -- ============================================================================
 
-CREATE TABLE maintenance_requests (
+CREATE TABLE IF NOT EXISTS maintenance_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     property_id UUID NOT NULL,
     unit_id UUID,
@@ -528,7 +529,7 @@ CREATE TABLE maintenance_requests (
 -- FINANCIAL SYSTEM
 -- ============================================================================
 
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_number VARCHAR(50) NOT NULL UNIQUE,
     title VARCHAR(255) NOT NULL,
@@ -554,7 +555,7 @@ CREATE TABLE invoices (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE invoice_line_items (
+CREATE TABLE IF NOT EXISTS invoice_line_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_id UUID NOT NULL,
     description VARCHAR(255) NOT NULL,
@@ -569,7 +570,7 @@ CREATE TABLE invoice_line_items (
 -- TENANT MANAGEMENT
 -- ============================================================================
 
-CREATE TABLE tenant_profiles (
+CREATE TABLE IF NOT EXISTS tenant_profiles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL UNIQUE,
     id_number VARCHAR(50),
@@ -656,48 +657,48 @@ ALTER TABLE tenant_profiles ADD CONSTRAINT fk_tenant_profiles_user FOREIGN KEY (
 -- ============================================================================
 
 -- User indexes
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_status ON users(status);
-CREATE INDEX idx_users_company_id ON users(company_id);
-CREATE INDEX idx_users_agency_id ON users(agency_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id);
+CREATE INDEX IF NOT EXISTS idx_users_agency_id ON users(agency_id);
 
 -- Property indexes
-CREATE INDEX idx_properties_owner_id ON properties(owner_id);
-CREATE INDEX idx_properties_agency_id ON properties(agency_id);
-CREATE INDEX idx_properties_type ON properties(type);
-CREATE INDEX idx_properties_status ON properties(status);
-CREATE INDEX idx_properties_city ON properties(city);
+CREATE INDEX IF NOT EXISTS idx_properties_owner_id ON properties(owner_id);
+CREATE INDEX IF NOT EXISTS idx_properties_agency_id ON properties(agency_id);
+CREATE INDEX IF NOT EXISTS idx_properties_type ON properties(type);
+CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
+CREATE INDEX IF NOT EXISTS idx_properties_city ON properties(city);
 
 -- Unit indexes
-CREATE INDEX idx_units_property_id ON units(property_id);
-CREATE INDEX idx_units_current_tenant_id ON units(current_tenant_id);
-CREATE INDEX idx_units_status ON units(status);
-CREATE INDEX idx_units_type ON units(unit_type);
+CREATE INDEX IF NOT EXISTS idx_units_property_id ON units(property_id);
+CREATE INDEX IF NOT EXISTS idx_units_current_tenant_id ON units(current_tenant_id);
+CREATE INDEX IF NOT EXISTS idx_units_status ON units(status);
+CREATE INDEX IF NOT EXISTS idx_units_type ON units(unit_type);
 
 -- Message indexes
-CREATE INDEX idx_messages_sender_id ON messages(sender_id);
-CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX idx_messages_created_at ON messages(created_at);
-CREATE INDEX idx_message_recipients_recipient_id ON message_recipients(recipient_id);
-CREATE INDEX idx_message_recipients_is_read ON message_recipients(is_read);
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_message_recipients_recipient_id ON message_recipients(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_message_recipients_is_read ON message_recipients(is_read);
 
 -- Notification indexes
-CREATE INDEX idx_notifications_recipient_id ON notifications(recipient_id);
-CREATE INDEX idx_notifications_sender_id ON notifications(sender_id);
-CREATE INDEX idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_id ON notifications(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_sender_id ON notifications(sender_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 
 -- Maintenance indexes
-CREATE INDEX idx_maintenance_requests_property_id ON maintenance_requests(property_id);
-CREATE INDEX idx_maintenance_requests_unit_id ON maintenance_requests(unit_id);
-CREATE INDEX idx_maintenance_requests_status ON maintenance_requests(status);
-CREATE INDEX idx_maintenance_requests_assigned_to ON maintenance_requests(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_maintenance_requests_property_id ON maintenance_requests(property_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_requests_unit_id ON maintenance_requests(unit_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_requests_status ON maintenance_requests(status);
+CREATE INDEX IF NOT EXISTS idx_maintenance_requests_assigned_to ON maintenance_requests(assigned_to);
 
 -- Invoice indexes
-CREATE INDEX idx_invoices_issued_to ON invoices(issued_to);
-CREATE INDEX idx_invoices_status ON invoices(status);
-CREATE INDEX idx_invoices_due_date ON invoices(due_date);
+CREATE INDEX IF NOT EXISTS idx_invoices_issued_to ON invoices(issued_to);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON invoices(due_date);
 
 -- ============================================================================
 -- TRIGGERS FOR UPDATED_AT
@@ -752,7 +753,7 @@ INSERT INTO users (
 -- SCHEMA VERSION
 -- ============================================================================
 
-CREATE TABLE schema_migrations (
+CREATE TABLE IF NOT EXISTS schema_migrations (
     version VARCHAR(50) PRIMARY KEY,
     applied_at TIMESTAMPTZ DEFAULT NOW()
 );

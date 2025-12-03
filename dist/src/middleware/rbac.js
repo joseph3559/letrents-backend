@@ -13,6 +13,7 @@ const permissions = {
         inspections: ['*'],
         communications: ['*'],
         notifications: ['*'],
+        messages: ['*'],
         reports: ['*'],
         assignments: ['*'],
         leases: ['*'],
@@ -40,6 +41,7 @@ const permissions = {
         inspections: ['create', 'read', 'update', 'delete', 'overview', 'schedule'],
         communications: ['create', 'read', 'update', 'templates', 'overview'],
         notifications: ['create', 'read', 'update', 'delete', 'bulk'],
+        messages: ['create', 'read', 'update', 'delete'],
         reports: ['read', 'generate'],
         assignments: ['read', 'create', 'update'],
         leases: ['create', 'read', 'update'],
@@ -68,6 +70,7 @@ const permissions = {
         inspections: ['create', 'read', 'update', 'delete', 'overview', 'schedule'],
         communications: ['create', 'read', 'update', 'templates', 'overview'],
         notifications: ['create', 'read', 'update', 'delete', 'bulk'],
+        messages: ['create', 'read', 'update', 'delete'],
         reports: ['read', 'generate'],
         assignments: ['read', 'create', 'update'],
         leases: ['create', 'read', 'update'],
@@ -92,6 +95,7 @@ const permissions = {
         maintenance: ['create', 'read'],
         communications: ['create', 'read'],
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         payments: ['create', 'read', 'approve'],
         leases: ['create', 'read'],
         assignments: ['read'],
@@ -110,6 +114,7 @@ const permissions = {
         inspections: ['create', 'read', 'update'],
         communications: ['create', 'read'],
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         reports: ['read'],
         leases: ['read'],
         payments: ['create', 'read'],
@@ -123,6 +128,7 @@ const permissions = {
         invoices: ['read'],
         payments: ['read', 'create'], // Allow tenants to read and create (cancel) their own payments
         notifications: ['create', 'read', 'update', 'delete'], // Allow tenants to delete their own notifications
+        messages: ['create', 'read', 'update', 'delete'], // Allow tenants to manage their own messages
         communications: ['create', 'read'],
         checklists: ['read', 'update'],
     },
@@ -137,6 +143,7 @@ const permissions = {
         inspections: ['read', 'update'],
         communications: ['create', 'read', 'update'],
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         reports: ['read', 'generate'],
         leases: ['read', 'update'],
         payments: ['read', 'update'],
@@ -155,6 +162,7 @@ const permissions = {
         inspections: ['read', 'update', 'schedule'],
         communications: ['create', 'read', 'update'],
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         reports: ['read', 'generate'],
         leases: ['read', 'update'],
         payments: ['read', 'update'],
@@ -172,6 +180,7 @@ const permissions = {
         inspections: ['read', 'update'],
         communications: ['create', 'read', 'update'],
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         reports: ['read'],
         leases: ['read'],
         payments: ['read'],
@@ -186,6 +195,7 @@ const permissions = {
         maintenance: ['read', 'update'],
         communications: ['read'],
         notifications: ['read'],
+        messages: ['read'],
         tasks: ['read', 'update'],
         checklists: ['read'],
     },
@@ -205,6 +215,7 @@ const permissions = {
         dashboard: ['read'],
         communications: ['create', 'read', 'update'], // Follow-ups
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         leases: ['read'],
         tasks: ['create', 'read', 'update'], // Follow-up tasks
         // No system settings, no finance data
@@ -216,6 +227,7 @@ const permissions = {
         dashboard: ['read', 'charts'],
         communications: ['create', 'read', 'update', 'templates'],
         notifications: ['create', 'read', 'update', 'bulk'],
+        messages: ['create', 'read', 'update'],
         reports: ['read', 'generate'],
     },
     support: {
@@ -226,6 +238,7 @@ const permissions = {
         maintenance: ['read', 'update'],
         communications: ['create', 'read', 'update'],
         notifications: ['create', 'read', 'update'],
+        messages: ['create', 'read', 'update'],
         tasks: ['read', 'update'],
         checklists: ['read'],
     },
@@ -236,6 +249,7 @@ const permissions = {
         reports: ['read', 'generate'],
         communications: ['read'],
         notifications: ['read'],
+        messages: ['read'],
     },
     auditor: {
         properties: ['read'],

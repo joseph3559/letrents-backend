@@ -12,6 +12,7 @@ import { env } from './config/env.js';
 import { errorHandler } from './utils/response.js';
 import routes from './routes/index.js';
 import { routeAliasMiddleware, deprecationWarningMiddleware } from './middleware/route-aliases.js';
+import { supabaseRealtimeService } from './services/supabase-realtime.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -87,6 +88,9 @@ app.get('/api/v1/health', (_req, res) => {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: env.nodeEnv,
+      supabase: {
+        initialized: supabaseRealtimeService.isInitialized(),
+      },
     },
   });
 });

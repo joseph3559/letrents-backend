@@ -853,6 +853,39 @@ export class InvoicesService {
       const sendMethod = sendOptions?.method || 'email';
       console.log(`📧 Invoice ${invoice.invoice_number} sent via ${sendMethod} to ${invoice.recipient?.email || 'unknown recipient'}`);
 
+      // Create notification and send push notification to tenant
+      if (updatedInvoice.recipient?.id) {
+        try {
+          const { notificationsService } = await import('./notifications.service.js');
+          const tenantName = invoice.recipient ? `${invoice.recipient.first_name} ${invoice.recipient.last_name}`.trim() : 'Tenant';
+          
+          await notificationsService.createNotification(user, {
+            recipientId: updatedInvoice.recipient.id,
+            title: `New Invoice: ${updatedInvoice.invoice_number}`,
+            message: `You have a new invoice for ${updatedInvoice.currency || 'KES'} ${Number(updatedInvoice.total_amount).toLocaleString()}. Due date: ${new Date(updatedInvoice.due_date).toLocaleDateString()}`,
+            notification_type: 'invoice',
+            category: 'financial',
+            priority: 'high',
+            property_id: updatedInvoice.property_id,
+            unit_id: updatedInvoice.unit_id,
+            action_url: `/tenant/invoices/${updatedInvoice.id}`,
+            action_required: true,
+            channels: ['app', 'push'], // Include push in channels array
+            metadata: {
+              invoice_id: updatedInvoice.id,
+              invoice_number: updatedInvoice.invoice_number,
+              amount: updatedInvoice.total_amount,
+              due_date: updatedInvoice.due_date,
+            },
+          });
+          
+          console.log(`✅ Push notification sent for invoice ${updatedInvoice.invoice_number} to tenant ${updatedInvoice.recipient.id}`);
+        } catch (notificationError) {
+          console.error('❌ Error sending notification for invoice:', notificationError);
+          // Don't fail invoice sending if notification fails
+        }
+      }
+
       // Transform and return the updated invoice
       const transformedInvoice = {
         id: updatedInvoice.id,
