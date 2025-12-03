@@ -5,34 +5,67 @@ export class PaystackService {
     baseURL = 'https://api.paystack.co';
     config;
     rentConfig;
-    // Plan configurations from Paystack
+    // Plan configurations from Paystack - LIVE PRODUCTION PLANS
     plans = {
+        // Landlord Plans
         starter: {
-            plan_code: 'PLN_o3ryf9smw5vhppd',
+            plan_code: 'PLN_nm454jcqw9h5bbj', // Live: Starter KES 2,500
             amount: 250000, // KES 2,500 in kobo
             name: 'Starter Plan',
+            display_name: 'Starter',
+            plan_type: 'landlord',
         },
         professional: {
-            plan_code: 'PLN_5hpqovvz3chh7gn',
+            plan_code: 'PLN_9ydab3rsjq6dmt1', // Live: Professional KES 5,000
             amount: 500000, // KES 5,000 in kobo
             name: 'Professional Plan',
+            display_name: 'Professional',
+            plan_type: 'landlord',
         },
         enterprise: {
-            plan_code: 'PLN_klg59ghnitsonct',
+            plan_code: 'PLN_dvreplobequkcwy', // Live: Enterprise KES 12,000
             amount: 1200000, // KES 12,000 in kobo
             name: 'Enterprise Plan',
+            display_name: 'Enterprise',
+            plan_type: 'landlord',
+        },
+        // Agency Plans
+        team: {
+            plan_code: 'PLN_do00eklde465qbw', // Live: Team KES 5,000
+            amount: 500000, // KES 5,000 in kobo
+            name: 'Team Plan',
+            display_name: 'Team',
+            plan_type: 'agency',
+        },
+        business: {
+            plan_code: 'PLN_06f1e9dcypp4xbc', // Live: Business KES 8,000
+            amount: 800000, // KES 8,000 in kobo
+            name: 'Business Plan',
+            display_name: 'Business',
+            plan_type: 'agency',
+        },
+        corporate: {
+            plan_code: 'PLN_jijum0igpj0yaf3', // Live: Corporate KES 15,000
+            amount: 1500000, // KES 15,000 in kobo
+            name: 'Corporate Plan',
+            display_name: 'Corporate',
+            plan_type: 'agency',
         },
     };
     constructor() {
-        // SaaS subscription credentials
+        // SaaS subscription credentials - LIVE MODE
+        // Ensure PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY are set in production .env
         this.config = {
-            secretKey: process.env.PAYSTACK_SECRET_KEY || 'sk_test_d3829a1a9e2b62e6314b12f5f38ec1afd22599f7',
-            publicKey: process.env.PAYSTACK_PUBLIC_KEY || 'pk_test_021559fc9f5195aaac5352a6ed1cc3d8c09e1252',
+            secretKey: process.env.PAYSTACK_SECRET_KEY || '',
+            publicKey: process.env.PAYSTACK_PUBLIC_KEY || '',
         };
+        if (!this.config.secretKey || !this.config.publicKey) {
+            console.warn('⚠️ WARNING: Paystack credentials not configured. Please set PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY in environment variables.');
+        }
         // Rent collection credentials
         this.rentConfig = {
-            secretKey: process.env.RENT_PAYSTACK_SECRET_KEY || 'sk_test_612601ba9ec40de3806d6f37b810c8bd87605bf3',
-            publicKey: process.env.RENT_PAYSTACK_PUBLIC_KEY || 'pk_test_4cedd79cc84483ab217f8d7edb18d4b01af474a2',
+            secretKey: process.env.RENT_PAYSTACK_SECRET_KEY || '',
+            publicKey: process.env.RENT_PAYSTACK_PUBLIC_KEY || '',
         };
     }
     /**

@@ -324,12 +324,37 @@ export const verifySubscription = async (req, res) => {
             // CRITICAL FIX: If plan code is missing, infer it from transaction amount
             // This handles cases where payment was successful but metadata wasn't properly set
             const transactionAmount = transaction.amount; // Amount in kobo
-            // Map amounts to plan codes (from PaystackService plans)
+            // Map amounts to plan codes (LIVE PRODUCTION PLANS)
+            // Note: 5,000 KES maps to both Professional (landlord) and Team (agency) - determined by user role
             const amountToPlanCode = {
-                250000: 'PLN_o3ryf9smw5vhppd', // Starter: 2,500 KES
-                500000: 'PLN_5hpqovvz3chh7gn', // Professional: 5,000 KES
-                1200000: 'PLN_klg59ghnitsonct', // Enterprise: 12,000 KES
+                250000: ['PLN_nm454jcqw9h5bbj'], // Starter: 2,500 KES (landlord only)
+                500000: ['PLN_9ydab3rsjq6dmt1', 'PLN_do00eklde465qbw'], // Professional (landlord) or Team (agency): 5,000 KES
+                800000: ['PLN_06f1e9dcypp4xbc'], // Business: 8,000 KES (agency only)
+                1200000: ['PLN_dvreplobequkcwy'], // Enterprise: 12,000 KES (landlord only)
+                1500000: ['PLN_jijum0igpj0yaf3'], // Corporate: 15,000 KES (agency only)
             };
+            // Determine plan code based on amount and user role
+            const isAgency = user.role === 'agency_admin' || user.role === 'agent';
+            const planCodes = amountToPlanCode[transactionAmount];
+            if (planCodes && planCodes.length > 0) {
+                // If multiple plans for same amount, choose based on user role
+                if (planCodes.length === 1) {
+                    finalPlanCode = planCodes[0];
+                }
+                else {
+                    // For 5,000 KES: Professional (landlord) or Team (agency)
+                    if (transactionAmount === 500000) {
+                        finalPlanCode = isAgency ? 'PLN_do00eklde465qbw' : 'PLN_9ydab3rsjq6dmt1';
+                    }
+                    else {
+                        finalPlanCode = planCodes[0];
+                    }
+                }
+                console.log(`✅ Inferred plan code from amount: ${transactionAmount} kobo -> ${finalPlanCode} (${isAgency ? 'agency' : 'landlord'})`);
+            }
+            else {
+                console.warn(`⚠️ Could not infer plan code from amount: ${transactionAmount} kobo`);
+            }
             if (amountToPlanCode[transactionAmount]) {
                 finalPlanCode = amountToPlanCode[transactionAmount];
                 console.log(`✅ Inferred plan code from amount: ${transactionAmount} kobo -> ${finalPlanCode}`);
@@ -348,13 +373,20 @@ export const verifySubscription = async (req, res) => {
                 orderBy: { created_at: 'desc' },
             });
             if (existingSub && existingSub.paystack_plan_code) {
-                // Use existing plan code if available
+                // Use existing plan code if available - LIVE PRODUCTION PLANS
+                const isAgency = user.role === 'agency_admin' || user.role === 'agent';
                 const planCodeToName = {
-                    'PLN_o3ryf9smw5vhppd': 'starter',
-                    'PLN_5hpqovvz3chh7gn': 'professional',
-                    'PLN_klg59ghnitsonct': 'enterprise',
+                    'PLN_nm454jcqw9h5bbj': { landlord: 'starter', agency: 'starter' }, // Starter (landlord only)
+                    'PLN_9ydab3rsjq6dmt1': { landlord: 'professional', agency: 'professional' }, // Professional (landlord)
+                    'PLN_dvreplobequkcwy': { landlord: 'enterprise', agency: 'enterprise' }, // Enterprise (landlord)
+                    'PLN_do00eklde465qbw': { landlord: 'team', agency: 'team' }, // Team (agency)
+                    'PLN_06f1e9dcypp4xbc': { landlord: 'business', agency: 'business' }, // Business (agency)
+                    'PLN_jijum0igpj0yaf3': { landlord: 'corporate', agency: 'corporate' }, // Corporate (agency)
                 };
-                const planName = planCodeToName[existingSub.paystack_plan_code] || existingSub.plan;
+                const mapping = planCodeToName[existingSub.paystack_plan_code];
+                const planName = mapping
+                    ? (isAgency ? mapping.agency : mapping.landlord)
+                    : (existingSub.plan || 'starter');
                 // Extract payment channel information
                 const paymentChannel = transaction.channel || transaction.authorization?.channel || 'unknown';
                 const channelDisplay = getChannelDisplayName(paymentChannel, transaction.authorization);
@@ -394,18 +426,26 @@ export const verifySubscription = async (req, res) => {
         // Get subscription by company and plan code
         const { getPrisma } = await import('../config/prisma.js');
         const prisma = getPrisma();
-        // Map plan code to plan name
+        // Map plan code to plan name - LIVE PRODUCTION PLANS
+        const isAgency = user.role === 'agency_admin' || user.role === 'agent';
         const planCodeToName = {
-            'PLN_o3ryf9smw5vhppd': 'starter',
-            'PLN_5hpqovvz3chh7gn': 'professional',
-            'PLN_klg59ghnitsonct': 'enterprise',
+            'PLN_nm454jcqw9h5bbj': { landlord: 'starter', agency: 'starter' }, // Starter (landlord)
+            'PLN_9ydab3rsjq6dmt1': { landlord: 'professional', agency: 'professional' }, // Professional (landlord)
+            'PLN_dvreplobequkcwy': { landlord: 'enterprise', agency: 'enterprise' }, // Enterprise (landlord)
+            'PLN_do00eklde465qbw': { landlord: 'team', agency: 'team' }, // Team (agency)
+            'PLN_06f1e9dcypp4xbc': { landlord: 'business', agency: 'business' }, // Business (agency)
+            'PLN_jijum0igpj0yaf3': { landlord: 'corporate', agency: 'corporate' }, // Corporate (agency)
         };
-        const planName = planCodeToName[finalPlanCode] || 'starter';
+        const mapping = planCodeToName[finalPlanCode];
+        const planName = mapping
+            ? (isAgency ? mapping.agency : mapping.landlord)
+            : (isAgency ? 'team' : 'starter');
         // Get plan amount from PaystackService
         const { PaystackService: PaystackServiceClass } = await import('../services/paystack.service.js');
         const paystackServiceInstance = new PaystackServiceClass();
         const planConfig = paystackServiceInstance.plans[planName];
-        const planAmount = planConfig ? planConfig.amount / 100 : 2500; // Convert from kobo to KES
+        // Use transaction amount if available, otherwise use plan config amount
+        const planAmount = transaction.amount ? transaction.amount / 100 : (planConfig ? planConfig.amount / 100 : (isAgency ? 5000 : 2500));
         // First, try to find existing subscription by plan code (exact match)
         let subscription = await prisma.subscription.findFirst({
             where: {
