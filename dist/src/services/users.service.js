@@ -1,5 +1,5 @@
 import { getPrisma } from '../config/prisma.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 export class UsersService {
     prisma = getPrisma();
     async createUser(req, user) {
@@ -429,5 +429,44 @@ export class UsersService {
             },
         });
         return preferences;
+    }
+    async upgradeToAgency(user) {
+        if (user.role !== 'landlord') {
+            throw new Error('Only landlords can upgrade to agency accounts');
+        }
+        if (!user.company_id) {
+            throw new Error('Company information is required to upgrade to agency');
+        }
+        const company = await this.prisma.company.findUnique({
+            where: { id: user.company_id },
+            select: { id: true, name: true, email: true, phone_number: true },
+        });
+        if (!company) {
+            throw new Error('Company not found');
+        }
+        let agency = await this.prisma.agency.findFirst({
+            where: { company_id: company.id },
+        });
+        if (!agency) {
+            agency = await this.prisma.agency.create({
+                data: {
+                    company_id: company.id,
+                    name: `${company.name} Agency`,
+                    email: company.email || user.email || `${company.name}@agency.local`,
+                    phone_number: company.phone_number || null,
+                    status: 'active',
+                    created_by: user.user_id,
+                },
+            });
+        }
+        const updatedUser = await this.prisma.user.update({
+            where: { id: user.user_id },
+            data: {
+                role: 'agency_admin',
+                agency_id: agency.id,
+                updated_at: new Date(),
+            },
+        });
+        return { agency, user: updatedUser };
     }
 }

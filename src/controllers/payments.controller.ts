@@ -112,6 +112,31 @@ export const approvePayment = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Reconcile pending payments by reference/tenant (one-time fix)
+ */
+export const reconcilePendingPayments = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { references, tenant_id, include_all_pending } = req.body || {};
+
+    const result = await service.reconcilePendingPayments(
+      {
+        references,
+        tenant_id,
+        include_all_pending,
+      },
+      user
+    );
+
+    writeSuccess(res, 200, 'Pending payments reconciled successfully', result);
+  } catch (error: any) {
+    const message = error.message || 'Failed to reconcile pending payments';
+    const status = message.includes('permissions') ? 403 : 500;
+    writeError(res, status, message);
+  }
+};
+
 export const deletePayment = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;

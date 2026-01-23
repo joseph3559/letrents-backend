@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createTenant, getTenant, updateTenant, deleteTenant, checkTenantDeletable, listTenants, assignUnit, releaseUnit, terminateTenant, sendInvitation, resetPassword, getTenantPayments, getTenantDocuments, migrateTenant, getTenantActivity, updateRentDetails, getTenantMaintenance, createTenantMaintenance, getTenantPerformance, getTenantNotes, updateTenantNotes } from '../controllers/tenants.controller.js';
+import { uploadTenantDocuments, documentUploadMiddleware } from '../controllers/documents.controller.js';
 import { createTenantPayment } from '../controllers/payments.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
@@ -23,6 +24,7 @@ router.post('/:id/reset-password', rbacResource('tenants', 'update'), resetPassw
 router.get('/:id/payments', rbacResource('tenants', 'read'), getTenantPayments);
 router.post('/:id/payments', rbacResource('payments', 'create'), createTenantPayment);
 router.get('/:id/documents', rbacResource('tenants', 'read'), getTenantDocuments);
+router.post('/:id/documents', rbacResource('tenants', 'update'), documentUploadMiddleware, uploadTenantDocuments);
 router.get('/:id/activity', rbacResource('tenants', 'read'), getTenantActivity);
 router.get('/:id/maintenance', rbacResource('tenants', 'read'), getTenantMaintenance);
 router.post('/:id/maintenance', rbacResource('maintenance', 'create'), createTenantMaintenance);

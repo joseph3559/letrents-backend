@@ -32,6 +32,7 @@ import cleanup from './cleanup.js';
 import tasks from './task.routes.js';
 import webhooks from './webhooks.js';
 import emergencyContacts from './emergency-contacts.js';
+import vendors from './vendors.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
@@ -128,6 +129,7 @@ router.use('/test-email', testEmail);
 router.use('/checklists', requireAuth, checklists);
 router.use('/cleanup', requireAuth, cleanup);
 router.use('/emergency-contacts', requireAuth, emergencyContacts);
+router.use('/vendors', requireAuth, vendors);
 // Super Admin specific endpoints that frontend calls directly
 router.get('/kpis', requireAuth, requireSuperAdmin, async (req, res) => {
     const { getKPIMetrics } = await import('../controllers/super-admin.controller.js');

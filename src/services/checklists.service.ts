@@ -560,6 +560,13 @@ export class ChecklistsService {
             role: true,
           },
         },
+        items: {
+          include: {
+            checklist_item: {
+              select: { name: true, description: true },
+            },
+          },
+        },
       },
       orderBy: {
         created_at: 'desc',

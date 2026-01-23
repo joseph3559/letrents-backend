@@ -139,6 +139,7 @@ export class PropertiesService {
             where: { id },
             data: {
                 ...(req.name && { name: req.name }),
+                ...(req.type && { type: req.type }),
                 ...(req.description !== undefined && { description: req.description }),
                 ...(req.street && { street: req.street }),
                 ...(req.city && { city: req.city }),

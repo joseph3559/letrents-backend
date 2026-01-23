@@ -1,7 +1,9 @@
 import { getPrisma } from '../config/prisma.js';
 import { getNextInvoiceNumber, generatePropertyCode } from '../utils/invoice-number-generator.js';
+import { UsersService } from './users.service.js';
 export class InvoicesService {
     prisma = getPrisma();
+    usersService = new UsersService();
     async createInvoice(req, user, retryCount = 0) {
         // Calculate total amount from rent and utility bills
         let totalAmount = req.total_amount || 0;
@@ -54,7 +56,21 @@ export class InvoicesService {
         const propertyId = req.property_id || assignedUnit?.property_id;
         const unitId = req.unit_id || assignedUnit?.id;
         // Set defaults - ensure due_date is always a Date object
-        const dueDate = req.due_date ? new Date(req.due_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const preferences = await this.usersService.getCurrentUserPreferences(user);
+        const defaultCurrency = preferences?.default_currency || 'KES';
+        const dueDate = (() => {
+            if (req.due_date)
+                return new Date(req.due_date);
+            const day = preferences?.default_rent_due_date || 5;
+            const today = new Date();
+            const target = new Date(today);
+            target.setDate(day);
+            if (target < today) {
+                target.setMonth(target.getMonth() + 1);
+                target.setDate(day);
+            }
+            return target;
+        })();
         const description = req.description || 'Monthly Rent and Charges';
         const title = req.title || `Invoice for ${tenant.first_name} ${tenant.last_name}`;
         const invoiceType = req.invoice_type || 'monthly_rent';
@@ -91,7 +107,7 @@ export class InvoicesService {
                     tax_amount: "0", // No tax for now
                     discount_amount: "0", // No discount for now
                     total_amount: totalAmount.toString(),
-                    currency: 'KES',
+                    currency: req.currency || defaultCurrency,
                     due_date: dueDate,
                     status: 'sent', // Changed from 'draft' to 'sent' - invoices are immediately active
                     metadata: JSON.parse(JSON.stringify({
@@ -233,8 +249,10 @@ export class InvoicesService {
         });
         // ✅ AUTOMATICALLY CREATE A PENDING PAYMENT RECORD FOR THIS INVOICE
         try {
-            const currentDate = new Date();
-            const paymentPeriod = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            const paymentPeriod = dueDate.toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric',
+            });
             await this.prisma.payment.create({
                 data: {
                     company_id: user.company_id,
@@ -243,7 +261,7 @@ export class InvoicesService {
                     property_id: propertyId,
                     invoice_id: invoice.id,
                     amount: totalAmount,
-                    currency: 'KES',
+                    currency: req.currency || defaultCurrency,
                     payment_method: 'cash', // Default method, will be updated when actual payment is made
                     payment_type: invoiceType === 'monthly_rent' ? 'rent' : 'other',
                     status: 'pending',
@@ -963,21 +981,43 @@ export class InvoicesService {
             // Get current date
             const currentDate = new Date();
             currentDate.setHours(0, 0, 0, 0); // Set to start of day
-            // Find all sent invoices that are past due date
-            const overdueInvoices = await this.prisma.invoice.updateMany({
+            const candidates = await this.prisma.invoice.findMany({
                 where: {
                     status: 'sent',
-                    due_date: {
-                        lt: currentDate,
+                },
+                select: {
+                    id: true,
+                    due_date: true,
+                    issuer: {
+                        select: {
+                            preferences: {
+                                select: {
+                                    grace_period: true,
+                                },
+                            },
+                        },
                     },
                 },
-                data: {
-                    status: 'overdue',
-                    updated_at: new Date(),
-                },
             });
-            console.log(`⏰ Updated ${overdueInvoices.count} invoices to overdue status`);
-            return { updated: overdueInvoices.count };
+            let updated = 0;
+            for (const invoice of candidates) {
+                const grace = invoice.issuer?.preferences?.grace_period || 0;
+                const graceDate = new Date(invoice.due_date);
+                graceDate.setDate(graceDate.getDate() + grace);
+                graceDate.setHours(0, 0, 0, 0);
+                if (graceDate < currentDate) {
+                    await this.prisma.invoice.update({
+                        where: { id: invoice.id },
+                        data: {
+                            status: 'overdue',
+                            updated_at: new Date(),
+                        },
+                    });
+                    updated += 1;
+                }
+            }
+            console.log(`⏰ Updated ${updated} invoices to overdue status`);
+            return { updated };
         }
         catch (error) {
             console.error('❌ Error updating overdue invoices:', error);

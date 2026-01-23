@@ -1,0 +1,1 @@
+-- Baseline migration to align Prisma migrate history with existing schema.

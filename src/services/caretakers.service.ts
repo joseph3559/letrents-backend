@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause, formatDataForRole } from '../utils/roleBasedFiltering.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
 const prisma = new PrismaClient();

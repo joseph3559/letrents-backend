@@ -10,8 +10,10 @@ import {
 } from '../services/tenants.service.js';
 import { JWTClaims } from '../types/index.js';
 import { writeSuccess, writeError } from '../utils/response.js';
+import { getPrisma } from '../config/prisma.js';
 
 const service = new TenantsService();
+const prisma = getPrisma();
 
 export const createTenant = async (req: Request, res: Response) => {
   try {
@@ -299,11 +301,24 @@ export const getTenantDocuments = async (req: Request, res: Response) => {
       return writeError(res, 400, 'Tenant ID is required');
     }
 
-    // TODO: Implement document retrieval logic
-    // For now, return empty array as placeholder
-    const documents: any[] = [];
+    await service.getTenant(id, user);
 
-    writeSuccess(res, 200, 'Tenant documents retrieved successfully', documents);
+    const documents = await prisma.tenantDocument.findMany({
+      where: { tenant_id: id },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const formatted = documents.map((doc: any) => ({
+      id: doc.id,
+      name: doc.name,
+      type: doc.type,
+      category: doc.category,
+      size: `${(doc.size / 1024 / 1024).toFixed(2)} MB`,
+      uploadDate: doc.created_at.toISOString(),
+      url: doc.url,
+    }));
+
+    writeSuccess(res, 200, 'Tenant documents retrieved successfully', formatted);
   } catch (error: any) {
     const message = error.message || 'Failed to get tenant documents';
     const status = message.includes('not found') ? 404 :
@@ -467,8 +482,8 @@ export const getTenantNotes = async (req: Request, res: Response) => {
       return writeError(res, 400, 'Tenant ID is required');
     }
 
-    const notes = await service.getTenantNotes(id, user);
-    writeSuccess(res, 200, 'Tenant notes retrieved successfully', notes);
+    const data = await service.getTenantNotes(id, user);
+    writeSuccess(res, 200, 'Tenant notes retrieved successfully', data);
   } catch (error: any) {
     const message = error.message || 'Failed to get tenant notes';
     const status = message.includes('not found') ? 404 :
@@ -481,13 +496,25 @@ export const updateTenantNotes = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as JWTClaims;
     const { id } = req.params;
-    const { notes } = req.body;
+    const { notes, personal_notes, todos } = req.body;
 
     if (!id) {
       return writeError(res, 400, 'Tenant ID is required');
     }
 
-    const result = await service.updateTenantNotes(id, notes || '', user);
+    let payload: { personal_notes: string; todos: any[] };
+    if (personal_notes !== undefined || todos !== undefined) {
+      payload = {
+        personal_notes: (typeof personal_notes === 'string' ? personal_notes : '') ?? '',
+        todos: Array.isArray(todos) ? todos : [],
+      };
+    } else if (notes !== undefined) {
+      payload = { personal_notes: typeof notes === 'string' ? notes : '', todos: [] };
+    } else {
+      payload = { personal_notes: '', todos: [] };
+    }
+
+    const result = await service.updateTenantNotes(id, payload, user);
     writeSuccess(res, 200, 'Tenant notes updated successfully', result);
   } catch (error: any) {
     const message = error.message || 'Failed to update tenant notes';

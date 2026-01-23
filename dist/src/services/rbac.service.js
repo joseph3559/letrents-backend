@@ -2,44 +2,39 @@ import { buildPermissionMatrix } from '../middleware/rbac.js';
 export class RBACService {
     permissionMatrix = buildPermissionMatrix();
     async getAllRoles() {
-        const roles = [
-            {
-                name: 'super_admin',
-                display_name: 'Super Administrator',
-                description: 'Full system access with all permissions',
-                permissions: this.getRolePermissions('super_admin'),
-            },
-            {
-                name: 'agency_admin',
-                display_name: 'Agency Administrator',
-                description: 'Manage agency properties, users, and operations',
-                permissions: this.getRolePermissions('agency_admin'),
-            },
-            {
-                name: 'landlord',
-                display_name: 'Landlord',
-                description: 'Manage own properties, units, and tenants',
-                permissions: this.getRolePermissions('landlord'),
-            },
-            {
-                name: 'agent',
-                display_name: 'Agent',
-                description: 'Limited property and tenant management access',
-                permissions: this.getRolePermissions('agent'),
-            },
-            {
-                name: 'caretaker',
-                display_name: 'Caretaker',
-                description: 'Maintenance and basic property access',
-                permissions: this.getRolePermissions('caretaker'),
-            },
-            {
-                name: 'tenant',
-                display_name: 'Tenant',
-                description: 'Access to personal information and unit details',
-                permissions: this.getRolePermissions('tenant'),
-            },
-        ];
+        const roleDescriptions = {
+            super_admin: 'Full system access with all permissions',
+            agency_admin: 'Manage agency properties, users, and operations',
+            landlord: 'Manage own properties, units, and tenants',
+            agent: 'Limited property and tenant management access',
+            caretaker: 'Maintenance and basic property access',
+            tenant: 'Access to personal information and unit details',
+            cleaner: 'Cleaning tasks and basic property access',
+            security: 'Security operations with limited access',
+            maintenance: 'Maintenance tasks and inspections',
+            receptionist: 'Front desk operations and messaging',
+            accountant: 'Financial operations and reporting',
+            admin: 'Administrative access to daily operations',
+            manager: 'Operational management access',
+            team_lead: 'Team oversight with limited admin access',
+            staff: 'General staff access',
+            finance: 'Finance-focused access',
+            sales: 'Sales and tenant onboarding access',
+            marketing: 'Marketing and communications access',
+            support: 'Support operations access',
+            hr: 'Staff management and HR operations',
+            auditor: 'Read-only audit access',
+        };
+        const toDisplayName = (role) => role
+            .split('_')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+        const roles = Object.keys(this.permissionMatrix).map((role) => ({
+            name: role,
+            display_name: toDisplayName(role),
+            description: roleDescriptions[role] || `Standard access for ${toDisplayName(role)}`,
+            permissions: this.getRolePermissions(role),
+        }));
         return roles;
     }
     async getAllPermissions() {

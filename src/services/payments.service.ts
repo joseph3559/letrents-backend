@@ -1,6 +1,9 @@
 import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause } from '../utils/roleBasedFiltering.js';
+import { UnitActivityService } from './unit-activity.service.js';
+import { UsersService } from './users.service.js';
+import { getNextReceiptNumber } from '../utils/invoice-number-generator.js';
 
 export interface CreatePaymentRequest {
   tenant_id: string;
@@ -55,8 +58,16 @@ export interface PaymentFilters {
   max_amount?: number;
 }
 
+export interface ReconcilePendingPaymentsRequest {
+  references?: string[];
+  tenant_id?: string;
+  include_all_pending?: boolean;
+}
+
 export class PaymentsService {
   private prisma = getPrisma();
+  private unitActivityService = new UnitActivityService();
+  private usersService = new UsersService();
 
   async listPayments(filters: PaymentFilters = {}, user: JWTClaims, page = 1, limit = 10) {
     const skip = (page - 1) * limit;
@@ -288,6 +299,9 @@ export class PaymentsService {
       throw new Error('insufficient permissions to create payment for this tenant');
     }
 
+    const preferences = await this.usersService.getCurrentUserPreferences(user);
+    const defaultCurrency = preferences?.default_currency || 'KES';
+
     // Generate professional receipt number and payment reference if not provided
     const { getNextReceiptNumber, generatePaymentReference } = await import('../utils/invoice-number-generator.js');
     const receiptNumber = data.receipt_number || await getNextReceiptNumber(this.prisma, user.company_id!);
@@ -303,7 +317,7 @@ export class PaymentsService {
         lease_id: data.lease_id,
         invoice_id: data.invoice_id,
         amount: data.amount,
-        currency: data.currency || 'KES',
+        currency: data.currency || defaultCurrency,
         payment_method: data.payment_method as any,
         payment_type: data.payment_type as any,
         status: data.status as any || 'pending',
@@ -342,6 +356,24 @@ export class PaymentsService {
         },
       },
     });
+
+    if (payment.unit_id) {
+      await this.unitActivityService.logActivity({
+        unit_id: payment.unit_id,
+        company_id: payment.company_id,
+        actor_id: user.user_id,
+        event_type: 'payment_received',
+        title: 'Payment recorded',
+        description: `${payment.payment_method} payment of ${payment.amount} ${payment.currency || 'KES'} recorded`,
+        metadata: {
+          amount: payment.amount,
+          currency: payment.currency,
+          payment_method: payment.payment_method,
+          payment_type: payment.payment_type,
+          payment_id: payment.id,
+        },
+      });
+    }
 
     // Try to auto-reconcile this payment with pending invoices
     try {
@@ -601,6 +633,157 @@ export class PaymentsService {
     }
 
     return payment;
+  }
+
+  /**
+   * Reconcile pending online payments by reference/tenant, promote to approved,
+   * and update related invoices when fully paid.
+   */
+  async reconcilePendingPayments(
+    request: ReconcilePendingPaymentsRequest,
+    user: JWTClaims
+  ): Promise<{ reconciled: number; payments: any[] }> {
+    if (!['super_admin', 'agency_admin', 'landlord', 'agent'].includes(user.role)) {
+      throw new Error('insufficient permissions to reconcile payments');
+    }
+
+    const baseWhere = buildWhereClause(user, {}, 'payment');
+    const references = (request.references || []).map((r) => r.trim()).filter(Boolean);
+
+    const whereClause: any = {
+      ...baseWhere,
+      status: 'pending',
+    };
+
+    if (request.tenant_id) {
+      whereClause.tenant_id = request.tenant_id;
+    }
+
+    const referenceFilter =
+      references.length > 0
+        ? [
+            { reference_number: { in: references } },
+            { transaction_id: { in: references } },
+          ]
+        : [];
+
+    const anyRefFilter = [
+      { reference_number: { not: null } },
+      { transaction_id: { not: null } },
+    ];
+
+    if (request.include_all_pending && referenceFilter.length > 0) {
+      whereClause.OR = [...referenceFilter, ...anyRefFilter];
+    } else if (referenceFilter.length > 0) {
+      whereClause.OR = referenceFilter;
+    } else if (request.include_all_pending) {
+      whereClause.OR = anyRefFilter;
+    }
+
+    const pendingPayments = await this.prisma.payment.findMany({
+      where: whereClause,
+      orderBy: { created_at: 'asc' },
+    });
+
+    const reconciled: any[] = [];
+
+    for (const payment of pendingPayments) {
+      // If an approved/completed payment already exists for the same invoice,
+      // cancel this pending placeholder to prevent duplicate "pending" views.
+      if (payment.invoice_id) {
+        const approvedCount = await this.prisma.payment.count({
+          where: {
+            invoice_id: payment.invoice_id,
+            status: { in: ['approved', 'completed'] },
+            id: { not: payment.id },
+          },
+        });
+
+        if (approvedCount > 0) {
+          const cancelled = await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: 'cancelled',
+              notes: payment.notes
+                ? `${payment.notes} - Auto-cancelled (approved payment exists)`
+                : 'Auto-cancelled (approved payment exists)',
+              updated_at: new Date(),
+            },
+          });
+          reconciled.push(cancelled);
+          continue;
+        }
+      }
+
+      let receiptNumber = payment.receipt_number;
+      if (!receiptNumber || receiptNumber.startsWith('PENDING-')) {
+        receiptNumber = await getNextReceiptNumber(this.prisma, payment.company_id);
+      }
+
+      const updated = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'approved',
+          payment_method: payment.payment_method || 'online',
+          payment_date: payment.payment_date || new Date(),
+          receipt_number: receiptNumber,
+          processed_by: user.user_id,
+          processed_at: new Date(),
+          notes: payment.notes
+            ? `${payment.notes} - Auto-reconciled from pending`
+            : 'Auto-reconciled from pending',
+          updated_at: new Date(),
+        },
+      });
+
+      // Update invoice if fully paid
+      if (updated.invoice_id) {
+        try {
+          const invoice = await this.prisma.invoice.findUnique({
+            where: { id: updated.invoice_id },
+            select: {
+              id: true,
+              invoice_number: true,
+              total_amount: true,
+              status: true,
+            },
+          });
+
+          if (invoice) {
+            const totalPayments = await this.prisma.payment.aggregate({
+              where: {
+                invoice_id: updated.invoice_id,
+                status: { in: ['approved', 'completed'] },
+              },
+              _sum: { amount: true },
+            });
+
+            const totalPaid = Number(totalPayments._sum.amount || 0);
+            const invoiceAmount = Number(invoice.total_amount || 0);
+
+            if (totalPaid >= invoiceAmount) {
+              await this.prisma.invoice.update({
+                where: { id: updated.invoice_id },
+                data: {
+                  status: 'paid',
+                  paid_date: new Date(),
+                  payment_method: updated.payment_method,
+                  payment_reference: updated.receipt_number,
+                  updated_at: new Date(),
+                },
+              });
+            }
+          }
+        } catch (e) {
+          // Don't fail reconciliation if invoice update fails
+          console.warn('Invoice update failed during reconciliation:', e);
+        }
+      }
+
+      reconciled.push(updated);
+    }
+
+    return { reconciled: reconciled.length, payments: reconciled };
   }
 
   async deletePayment(id: string, user: JWTClaims) {

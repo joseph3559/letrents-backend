@@ -1,6 +1,7 @@
 import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import { LeasesService, CreateLeaseRequest } from './leases.service.js';
+import { UsersService } from './users.service.js';
 
 export interface UnitFilters {
   property_id?: string;
@@ -168,6 +169,7 @@ function mapUnitCondition(frontendCondition: string): string {
 export class UnitsService {
   private prisma = getPrisma();
   private leasesService = new LeasesService();
+  private usersService = new UsersService();
 
   async createUnit(req: CreateUnitRequest, user: JWTClaims): Promise<any> {
     // Validate user permissions
@@ -201,6 +203,9 @@ export class UnitsService {
       throw new Error('unit number already exists in this property');
     }
 
+    const preferences = await this.usersService.getCurrentUserPreferences(user);
+    const defaultCurrency = preferences?.default_currency || 'KES';
+
     // Apply defaults
     const unitData = {
       property_id: req.property_id,
@@ -217,7 +222,7 @@ export class UnitsService {
       has_parking: req.has_parking || false,
       parking_spaces: req.parking_spaces || 0,
       rent_amount: req.rent_amount,
-      currency: req.currency || 'KES',
+      currency: req.currency || defaultCurrency,
       deposit_amount: req.deposit_amount,
       deposit_months: req.deposit_months || 1,
       status: 'vacant' as any,

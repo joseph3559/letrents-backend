@@ -308,5 +308,19 @@ export const messagingController = {
       writeError(res, 500, error.message);
     }
   },
+
+  deleteConversation: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as JWTClaims;
+      const { id } = req.params;
+      await messagingService.deleteConversation(user, id);
+      writeSuccess(res, 200, 'Conversation deleted', { success: true });
+    } catch (error: any) {
+      if (error.message?.includes('not found') || error.message?.includes('not a participant')) {
+        return writeError(res, 404, error.message);
+      }
+      writeError(res, 500, error.message);
+    }
+  },
 };
 

@@ -97,12 +97,24 @@ export class SchedulerService {
                 include: {
                     recipient: true,
                     property: true,
-                    unit: true
+                    unit: true,
+                    issuer: {
+                        select: {
+                            preferences: {
+                                select: {
+                                    late_rent_reminder_enabled: true,
+                                },
+                            },
+                        },
+                    },
                 }
             });
             console.log(`📧 Found ${invoicesDue.length} invoices due in ${days} days`);
             for (const invoice of invoicesDue) {
                 try {
+                    if (invoice.issuer?.preferences?.late_rent_reminder_enabled === false) {
+                        continue;
+                    }
                     if (!invoice.recipient.email) {
                         console.warn(`⚠️ No email found for invoice recipient ${invoice.recipient.id}`);
                         continue;
@@ -119,6 +131,52 @@ export class SchedulerService {
                 catch (error) {
                     console.error(`❌ Failed to send reminder for invoice ${invoice.id}:`, error);
                 }
+            }
+        }
+        await this.sendLateRentPaymentReminders();
+    }
+    async sendLateRentPaymentReminders() {
+        const today = new Date();
+        const reminderDay = today.getDate();
+        const overdueInvoices = await prisma.invoice.findMany({
+            where: {
+                status: 'overdue',
+            },
+            include: {
+                recipient: true,
+                property: true,
+                unit: true,
+                issuer: {
+                    select: {
+                        preferences: {
+                            select: {
+                                late_rent_reminder_enabled: true,
+                                late_rent_reminder_date: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        for (const invoice of overdueInvoices) {
+            const prefs = invoice.issuer?.preferences;
+            if (!prefs?.late_rent_reminder_enabled)
+                continue;
+            if (prefs.late_rent_reminder_date && prefs.late_rent_reminder_date !== reminderDay) {
+                continue;
+            }
+            if (!invoice.recipient.email)
+                continue;
+            try {
+                await emailService.sendEmail({
+                    to: invoice.recipient.email,
+                    subject: `Late Rent Reminder - Invoice ${invoice.invoice_number}`,
+                    html: this.generateReminderEmailTemplate(invoice, 0),
+                    type: 'late_rent_reminder',
+                });
+            }
+            catch (error) {
+                console.error(`❌ Failed to send late reminder for invoice ${invoice.id}:`, error);
             }
         }
     }
@@ -149,12 +207,24 @@ export class SchedulerService {
                             owner: true // This is the landlord
                         }
                     },
-                    unit: true
+                    unit: true,
+                    creator: {
+                        select: {
+                            preferences: {
+                                select: {
+                                    auto_lease_renewal_reminders: true,
+                                },
+                            },
+                        },
+                    },
                 }
             });
             console.log(`📬 Found ${expiringLeases.length} leases expiring in ${days} days`);
             for (const lease of expiringLeases) {
                 try {
+                    if (lease.creator?.preferences?.auto_lease_renewal_reminders === false) {
+                        continue;
+                    }
                     // Notify landlord
                     if (lease.property.owner.email) {
                         await emailService.sendEmail({

@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause, formatDataForRole } from '../utils/roleBasedFiltering.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
 const prisma = new PrismaClient();
@@ -111,6 +111,7 @@ export const staffService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,
@@ -227,6 +228,7 @@ export const staffService = {
       employment_date: staffData.employment_date ? new Date(staffData.employment_date) : null,
       emergency_contact_name: staffData.emergency_contact_name,
       emergency_contact_phone: staffData.emergency_contact_phone,
+      emergency_contact_email: staffData.emergency_contact_email,
       emergency_relationship: staffData.emergency_relationship,
       working_hours: staffData.working_hours,
       off_days: Array.isArray(staffData.off_days) ? staffData.off_days.join(',') : staffData.off_days,
@@ -318,6 +320,7 @@ export const staffService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,
@@ -383,6 +386,7 @@ export const staffService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,
@@ -459,6 +463,25 @@ export const staffService = {
 
     // Prepare update data
     const updateFields: any = {};
+    const allowedRoleUpdates = new Set([
+      'agent',
+      'caretaker',
+      'cleaner',
+      'security',
+      'maintenance',
+      'receptionist',
+      'accountant',
+      'manager',
+      'admin',
+      'team_lead',
+      'staff',
+      'finance',
+      'sales',
+      'marketing',
+      'support',
+      'hr',
+      'auditor',
+    ]);
     
     // Basic fields
     if (updateData.first_name) {
@@ -475,6 +498,13 @@ export const staffService = {
     }
     if (updateData.status) {
       updateFields.status = updateData.status;
+    }
+    if (updateData.role) {
+      const nextRole = updateData.role.toString();
+      if (!allowedRoleUpdates.has(nextRole)) {
+        throw new Error('Invalid role assignment for staff member');
+      }
+      updateFields.role = nextRole;
     }
 
     // Extended staff fields
@@ -502,6 +532,9 @@ export const staffService = {
     }
     if (updateData.emergency_contact_phone !== undefined) {
       updateFields.emergency_contact_phone = updateData.emergency_contact_phone;
+    }
+    if (updateData.emergency_contact_email !== undefined) {
+      updateFields.emergency_contact_email = updateData.emergency_contact_email;
     }
     if (updateData.emergency_relationship !== undefined) {
       updateFields.emergency_relationship = updateData.emergency_relationship;
@@ -559,6 +592,7 @@ export const staffService = {
           employment_date: true,
           emergency_contact_name: true,
           emergency_contact_phone: true,
+          emergency_contact_email: true,
           emergency_relationship: true,
           working_hours: true,
           off_days: true,
@@ -1259,6 +1293,7 @@ export const careteakersService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,

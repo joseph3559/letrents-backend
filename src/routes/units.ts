@@ -14,6 +14,8 @@ import {
   cleanupDuplicateTenantAssignments
 } from '../controllers/units.controller.js';
 import { uploadUnitImages, deleteUnitImage, uploadMiddleware } from '../controllers/images.controller.js';
+import { getUnitDocuments, uploadUnitDocuments, documentUploadMiddleware } from '../controllers/documents.controller.js';
+import { getUnitActivity } from '../controllers/unit-activity.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 
 const router = Router();
@@ -28,6 +30,14 @@ router.get('/:id/financials', rbacResource('units', 'read'), getUnitFinancials);
 // Unit images management (must come before /:id route)
 router.post('/:id/images', rbacResource('units', 'photos'), uploadMiddleware, uploadUnitImages);
 router.delete('/:id/images/:imageId', rbacResource('units', 'photos'), deleteUnitImage);
+router.get('/:id/documents', rbacResource('units', 'read'), getUnitDocuments);
+router.post(
+  '/:id/documents',
+  rbacResource('units', 'update'),
+  documentUploadMiddleware,
+  uploadUnitDocuments
+);
+router.get('/:id/history', rbacResource('units', 'read'), getUnitActivity);
 
 router.get('/:id', rbacResource('units', 'read'), getUnit);
 router.put('/:id', rbacResource('units', 'update'), updateUnit);

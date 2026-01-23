@@ -1,8 +1,10 @@
 import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { LeasesService, CreateLeaseRequest } from './leases.service.js';
+import { UnitActivityService } from './unit-activity.service.js';
+import { UsersService } from './users.service.js';
 
 export interface TenantFilters {
   property_id?: string;
@@ -90,6 +92,8 @@ export interface TenantMigrationRequest {
 export class TenantsService {
   private prisma = getPrisma();
   private leasesService = new LeasesService();
+  private unitActivityService = new UnitActivityService();
+  private usersService = new UsersService();
 
   async createTenant(req: CreateTenantRequest, user: JWTClaims): Promise<any> {
     // Validate user permissions - agents can create tenants for their assigned properties
@@ -182,6 +186,9 @@ export class TenantsService {
         // Option 2: Calculate based on deposit_months (flexible: 1, 2, 3+ months)
         const securityDeposit = Number(unit.deposit_amount) || (rentAmount * (unit.deposit_months || 1));
         
+        const preferences = await this.usersService.getCurrentUserPreferences(user);
+        const preferredPaymentDay = preferences?.default_rent_due_date || 5;
+
         const leaseData = {
           tenant_id: tenant.id,
           property_id: unit.property.id,
@@ -191,12 +198,12 @@ export class TenantsService {
           end_date: req.lease_end_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year from now
           rent_amount: rentAmount,
           deposit_amount: securityDeposit,
-          payment_day: 5, // 5th of each month
+          payment_day: preferredPaymentDay,
           special_terms: `
 This lease agreement is automatically generated for the property unit ${unit.unit_number} at ${unit.property.name}.
 
 TERMS AND CONDITIONS:
-1. Rent is due on the 5th of each month
+1. Rent is due on the ${preferredPaymentDay}th of each month
 2. Late fee of KES 500 applies after 5 days grace period
 3. Security deposit of KES ${securityDeposit.toLocaleString()} (${unit.deposit_months || 1} month${(unit.deposit_months || 1) > 1 ? 's' : ''} rent) is required
 4. Tenant is responsible for utilities unless otherwise specified
@@ -234,6 +241,21 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
           lease_type: req.lease_type,
           status: 'occupied',
           updated_at: new Date(),
+        },
+      });
+
+      await this.unitActivityService.logActivity({
+        unit_id: req.unit_id,
+        company_id: user.company_id!,
+        actor_id: user.user_id,
+        event_type: 'tenant_move_in',
+        title: 'Tenant moved in',
+        description: `${tenant.first_name} ${tenant.last_name} assigned to unit ${unit.unit_number}`,
+        metadata: {
+          tenant_id: tenant.id,
+          lease_id: leaseId,
+          lease_start_date: req.lease_start_date,
+          lease_end_date: req.lease_end_date,
         },
       });
 
@@ -1486,8 +1508,13 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
     // Create pending payment record for the first month's rent (only for tenants, not caretakers)
     if (tenant.role === 'tenant') {
       try {
-        const currentDate = new Date();
-        const paymentPeriod = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const paymentDate = req.lease_start_date
+          ? new Date(req.lease_start_date)
+          : new Date();
+        const paymentPeriod = paymentDate.toLocaleDateString('en-US', {
+          month: 'long',
+          year: 'numeric',
+        });
         
         await this.prisma.payment.create({
           data: {
@@ -1501,7 +1528,7 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
             payment_method: 'cash', // Default method, will be updated when actual payment is made
             payment_type: 'rent',
             status: 'pending',
-            payment_date: new Date(),
+            payment_date: paymentDate,
             payment_period: paymentPeriod,
             receipt_number: `PENDING-${Date.now()}`,
             received_from: `${tenant.first_name} ${tenant.last_name}`,
@@ -2880,40 +2907,45 @@ If you have any questions, please contact your property management team.
     };
   }
 
-  async getTenantNotes(tenantId: string, user: JWTClaims): Promise<any> {
-    // Validate tenant access
+  async getTenantNotes(tenantId: string, user: JWTClaims): Promise<{ personal_notes: string; todos: any[]; updated_at: string | null }> {
     await this.getTenant(tenantId, user);
-
-    // Note: TenantProfile doesn't have a dedicated notes field in the schema
-    // For now, returning empty notes. Consider adding a notes field to the schema
-    // or creating a separate tenant_notes table in the future
+    if (!user.company_id) {
+      return { personal_notes: '', todos: [], updated_at: null };
+    }
+    const row = await this.prisma.landlordTenantNotes.findUnique({
+      where: { company_id_tenant_id: { company_id: user.company_id, tenant_id: tenantId } },
+    });
+    if (!row || !row.notes || typeof row.notes !== 'object') {
+      return { personal_notes: '', todos: [], updated_at: null };
+    }
+    const n = row.notes as Record<string, unknown>;
     return {
-      notes: ''
+      personal_notes: (typeof n.personal_notes === 'string' ? n.personal_notes : '') || '',
+      todos: Array.isArray(n.todos) ? n.todos : [],
+      updated_at: (typeof n.updated_at === 'string' ? n.updated_at : null) || null,
     };
   }
 
-  async updateTenantNotes(tenantId: string, notes: string, user: JWTClaims): Promise<any> {
-    // Validate tenant access
-    const tenant = await this.getTenant(tenantId, user);
-
-    if (!tenant.tenant_profile) {
-      throw new Error('Tenant profile not found');
+  async updateTenantNotes(
+    tenantId: string,
+    payload: { personal_notes: string; todos: any[] },
+    user: JWTClaims
+  ): Promise<{ personal_notes: string; todos: any[]; updated_at: string }> {
+    await this.getTenant(tenantId, user);
+    if (!user.company_id) {
+      throw new Error('Company context required to save tenant notes');
     }
-
-    // Note: TenantProfile doesn't have a dedicated notes field in the schema
-    // For now, just validating access. Consider adding a notes field to the schema
-    // or creating a separate tenant_notes table in the future
-    
-    // Update the updated_at timestamp to show the tenant was accessed
-    await this.prisma.tenantProfile.update({
-      where: { id: tenant.tenant_profile.id },
-      data: {
-        updated_at: new Date()
-      }
-    });
-
-    return {
-      notes: notes  // Return the notes as-is for now
+    const updated_at = new Date().toISOString();
+    const notes = {
+      personal_notes: payload.personal_notes ?? '',
+      todos: payload.todos ?? [],
+      updated_at,
     };
+    await this.prisma.landlordTenantNotes.upsert({
+      where: { company_id_tenant_id: { company_id: user.company_id, tenant_id: tenantId } },
+      create: { company_id: user.company_id, tenant_id: tenantId, notes, updated_at: new Date() },
+      update: { notes, updated_at: new Date() },
+    });
+    return { personal_notes: notes.personal_notes, todos: notes.todos, updated_at };
   }
 }
