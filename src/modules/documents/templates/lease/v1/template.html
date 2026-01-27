@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lease Agreement {{lease.leaseNumber}}</title>
+    <style>
+{{{css}}}
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="doc">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-name">{{company.name}}</div>
+            <div class="brand-meta">{{company.address}}</div>
+            <div class="brand-meta">{{company.email}} {{company.phone}}</div>
+          </div>
+          <div class="doc-title">
+            <h1>LEASE AGREEMENT</h1>
+            <div class="doc-number">{{lease.leaseNumber}}</div>
+            <div class="status status-{{lease.status}}">{{lease.status}}</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-title">Tenant</div>
+            <div class="kv"><div class="kv-label">Name</div><div class="kv-value">{{tenant.name}}</div></div>
+            <div class="kv"><div class="kv-label">Email</div><div class="kv-value">{{tenant.email}}</div></div>
+            <div class="kv"><div class="kv-label">Phone</div><div class="kv-value">{{tenant.phone}}</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Property</div>
+            <div class="kv"><div class="kv-label">Property</div><div class="kv-value">{{property.name}}</div></div>
+            <div class="kv"><div class="kv-label">Address</div><div class="kv-value">{{property.address}}</div></div>
+            <div class="kv"><div class="kv-label">Unit</div><div class="kv-value">{{property.unitNumber}}</div></div>
+            <div class="kv"><div class="kv-label">Unit type</div><div class="kv-value">{{property.unitType}}</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Lease Terms</h2>
+          <div class="panel">
+            <div class="kv"><div class="kv-label">Lease type</div><div class="kv-value">{{lease.leaseType}}</div></div>
+            <div class="kv"><div class="kv-label">Start date</div><div class="kv-value">{{lease.startDate}}</div></div>
+            <div class="kv"><div class="kv-label">End date</div><div class="kv-value">{{lease.endDate}}</div></div>
+            <div class="kv"><div class="kv-label">Move-in date</div><div class="kv-value">{{lease.moveInDate}}</div></div>
+            <div class="kv"><div class="kv-label">Notice period</div><div class="kv-value">{{lease.noticePeriodDays}} days</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Financial Terms</h2>
+          <div class="panel">
+            <div class="kv"><div class="kv-label">Monthly rent</div><div class="kv-value">{{lease.rentAmount}}</div></div>
+            <div class="kv"><div class="kv-label">Deposit</div><div class="kv-value">{{lease.depositAmount}}</div></div>
+            <div class="kv"><div class="kv-label">Frequency</div><div class="kv-value">{{lease.paymentFrequency}}</div></div>
+            <div class="kv"><div class="kv-label">Payment day</div><div class="kv-value">{{lease.paymentDay}}</div></div>
+            <div class="kv"><div class="kv-label">Late fee</div><div class="kv-value">{{lease.lateFeeAmount}}</div></div>
+            <div class="kv"><div class="kv-label">Grace days</div><div class="kv-value">{{lease.lateFeeGraceDays}}</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Conditions</h2>
+          <div class="panel">
+            <div class="kv"><div class="kv-label">Renewable</div><div class="kv-value">{{lease.renewable}}</div></div>
+            <div class="kv"><div class="kv-label">Auto renewal</div><div class="kv-value">{{lease.autoRenewal}}</div></div>
+            <div class="kv"><div class="kv-label">Pets allowed</div><div class="kv-value">{{lease.petsAllowed}}</div></div>
+            <div class="kv"><div class="kv-label">Smoking allowed</div><div class="kv-value">{{lease.smokingAllowed}}</div></div>
+            <div class="kv"><div class="kv-label">Subletting allowed</div><div class="kv-value">{{lease.sublettingAllowed}}</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Standard Terms</h2>
+          <div class="panel">
+            {{{sections.termsList}}}
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Special Terms</h2>
+          <div class="panel">
+            <div class="muted">{{lease.specialTerms}}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Additional Notes</h2>
+          <div class="panel">
+            <div class="muted">{{lease.notes}}</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div>{{meta.systemName}} — Generated {{meta.generatedAt}}</div>
+          <div>Document: {{lease.leaseNumber}}</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+

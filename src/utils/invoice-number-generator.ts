@@ -12,11 +12,11 @@ interface InvoiceNumberOptions {
 
 /**
  * Generate a professional invoice number
- * Format: INV-YYYY-MM-NNNN
- * Example: INV-2025-10-0001, INV-2025-10-0002
+ * Format: INV-YYMM-NNN
+ * Example: INV-2510-001, INV-2510-002
  * 
- * For property-specific: INV-PROP-YYYY-MM-NNN
- * Example: INV-SK-2025-10-001 (SK = Skyline Apartments code)
+ * For property-specific: INV-PROP-YYMM-NNN
+ * Example: INV-SKY-2510-001 (SKY = Skyline Apartments code)
  */
 export function generateInvoiceNumber(
   sequenceNumber: number,
@@ -25,24 +25,25 @@ export function generateInvoiceNumber(
   const now = new Date();
   const year = options?.year || now.getFullYear();
   const month = String(options?.month || now.getMonth() + 1).padStart(2, '0');
+  const shortYear = String(year).slice(-2);
   
-  // Format sequence number with leading zeros (4 digits)
-  const sequence = String(sequenceNumber).padStart(4, '0');
+  // Format sequence number with leading zeros (3 digits)
+  const sequence = String(sequenceNumber).padStart(3, '0');
   
   // If property code is provided, include it
   if (options?.propertyCode) {
     const propCode = options.propertyCode.toUpperCase().slice(0, 4);
-    return `INV-${propCode}-${year}-${month}-${sequence}`;
+    return `INV-${propCode}-${shortYear}${month}-${sequence}`;
   }
   
-  // Standard format: INV-YYYY-MM-NNNN
-  return `INV-${year}-${month}-${sequence}`;
+  // Standard format: INV-YYMM-NNN
+  return `INV-${shortYear}${month}-${sequence}`;
 }
 
 /**
  * Generate a receipt number for payments
- * Format: RCT-YYYY-MM-NNNN
- * Example: RCT-2025-10-0001
+ * Format: RCT-YYMM-NNN
+ * Example: RCT-2510-001
  */
 export function generateReceiptNumber(
   sequenceNumber: number,
@@ -52,61 +53,40 @@ export function generateReceiptNumber(
   const now = new Date();
   const y = year || now.getFullYear();
   const m = String(month || now.getMonth() + 1).padStart(2, '0');
-  const sequence = String(sequenceNumber).padStart(4, '0');
+  const shortYear = String(y).slice(-2);
+  const sequence = String(sequenceNumber).padStart(3, '0');
   
-  return `RCT-${y}-${m}-${sequence}`;
+  return `RCT-${shortYear}${m}-${sequence}`;
 }
 
 /**
  * Generate M-Pesa style payment reference (readable and unique)
- * Format: ABC1DEF2GH (3 letters + 1 digit + 3 letters + 1 digit + 2 letters)
- * Example: RBK1ABC2DE, PAY2XYZ5MN
- * 
- * This creates easy-to-read, memorable payment references similar to M-Pesa
+ * Format: PAY-YYMM-NNN
+ * Example: PAY-2510-042
  */
 export function generatePaymentReference(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // Removed I, O to avoid confusion with 1, 0
-  const digits = '23456789'; // Removed 0, 1 to avoid confusion
-  
-  let ref = '';
-  
-  // First 3 letters
-  for (let i = 0; i < 3; i++) {
-    ref += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
-  // First digit
-  ref += digits.charAt(Math.floor(Math.random() * digits.length));
-  
-  // Next 3 letters
-  for (let i = 0; i < 3; i++) {
-    ref += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
-  // Second digit
-  ref += digits.charAt(Math.floor(Math.random() * digits.length));
-  
-  // Last 2 letters
-  for (let i = 0; i < 2; i++) {
-    ref += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
-  return ref;
+  const now = new Date();
+  const shortYear = String(now.getFullYear()).slice(-2);
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const sequence = Math.floor(100 + Math.random() * 900);
+
+  return `PAY-${shortYear}${month}-${sequence}`;
 }
 
 /**
  * Generate a professional transaction reference with timestamp
- * Format: TXN-YYYYMMDD-SEQUENCE
- * Example: TXN-20251030-0001
+ * Format: TXN-YYMMDD-NNN
+ * Example: TXN-251030-042
  */
 export function generateTransactionReference(sequenceNumber: number): string {
   const now = new Date();
   const year = now.getFullYear();
+  const shortYear = String(year).slice(-2);
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
-  const sequence = String(sequenceNumber).padStart(4, '0');
+  const sequence = String(sequenceNumber).padStart(3, '0');
   
-  return `TXN-${year}${month}${day}-${sequence}`;
+  return `TXN-${shortYear}${month}${day}-${sequence}`;
 }
 
 /**
@@ -121,8 +101,9 @@ export async function getNextReceiptNumber(
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const monthStr = String(month).padStart(2, '0');
+  const shortYear = String(year).slice(-2);
   
-  const prefix = `RCT-${year}-${monthStr}`;
+  const prefix = `RCT-${shortYear}${monthStr}`;
   
   // Find the latest payment for this month
   const latestPayment = await prisma.payment.findFirst({
@@ -151,11 +132,11 @@ export async function getNextReceiptNumber(
 
 /**
  * Generate a lease agreement number
- * Format: LSE-YYYY-MM-NNNN
- * Example: LSE-2025-10-0001
+ * Format: LSE-YYMM-NNN
+ * Example: LSE-2510-001
  * 
- * For property-specific: LSE-PROP-YYYY-MM-NNNN
- * Example: LSE-SKY-2025-10-0001 (SKY = Skyline Apartments code)
+ * For property-specific: LSE-PROP-YYMM-NNN
+ * Example: LSE-SKY-2510-001 (SKY = Skyline Apartments code)
  */
 export function generateLeaseNumber(
   sequenceNumber: number,
@@ -166,14 +147,15 @@ export function generateLeaseNumber(
   const now = new Date();
   const y = year || now.getFullYear();
   const m = String(month || now.getMonth() + 1).padStart(2, '0');
-  const sequence = String(sequenceNumber).padStart(4, '0');
+  const shortYear = String(y).slice(-2);
+  const sequence = String(sequenceNumber).padStart(3, '0');
   
   if (propertyCode) {
     const propCode = propertyCode.toUpperCase().slice(0, 4);
-    return `LSE-${propCode}-${y}-${m}-${sequence}`;
+    return `LSE-${propCode}-${shortYear}${m}-${sequence}`;
   }
   
-  return `LSE-${y}-${m}-${sequence}`;
+  return `LSE-${shortYear}${m}-${sequence}`;
 }
 
 /**
@@ -189,10 +171,11 @@ export async function getNextLeaseNumber(
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const monthStr = String(month).padStart(2, '0');
+  const shortYear = String(year).slice(-2);
   
   const prefix = propertyCode 
-    ? `LSE-${propertyCode.toUpperCase().slice(0, 4)}-${year}-${monthStr}`
-    : `LSE-${year}-${monthStr}`;
+    ? `LSE-${propertyCode.toUpperCase().slice(0, 4)}-${shortYear}${monthStr}`
+    : `LSE-${shortYear}${monthStr}`;
   
   // Find the latest lease for this month
   const latestLease = await prisma.lease.findFirst({
@@ -229,26 +212,51 @@ export function parseInvoiceNumber(invoiceNumber: string): {
   sequence?: number;
   propertyCode?: string;
 } | null {
-  // Try to match property-specific format: INV-PROP-YYYY-MM-NNNN
-  const propMatch = invoiceNumber.match(/^INV-([A-Z]{2,4})-(\d{4})-(\d{2})-(\d{4})$/);
+  // Try to match property-specific format: INV-PROP-YYMM-NNN
+  const propMatch = invoiceNumber.match(/^INV-([A-Z]{2,4})-(\d{2})(\d{2})-(\d{3})$/);
   if (propMatch) {
     return {
       prefix: 'INV',
       propertyCode: propMatch[1],
-      year: parseInt(propMatch[2]),
+      year: 2000 + parseInt(propMatch[2]),
       month: parseInt(propMatch[3]),
       sequence: parseInt(propMatch[4]),
     };
   }
   
-  // Try to match standard format: INV-YYYY-MM-NNNN
-  const stdMatch = invoiceNumber.match(/^INV-(\d{4})-(\d{2})-(\d{4})$/);
+  // Try to match standard format: INV-YYMM-NNN
+  const stdMatch = invoiceNumber.match(/^INV-(\d{2})(\d{2})-(\d{3})$/);
   if (stdMatch) {
     return {
       prefix: 'INV',
-      year: parseInt(stdMatch[1]),
+      year: 2000 + parseInt(stdMatch[1]),
       month: parseInt(stdMatch[2]),
       sequence: parseInt(stdMatch[3]),
+    };
+  }
+
+  // Backward compatibility: INV-PROP-YYYY-MM-NNNN
+  const legacyPropMatch = invoiceNumber.match(
+    /^INV-([A-Z]{2,4})-(\d{4})-(\d{2})-(\d{4})$/
+  );
+  if (legacyPropMatch) {
+    return {
+      prefix: 'INV',
+      propertyCode: legacyPropMatch[1],
+      year: parseInt(legacyPropMatch[2]),
+      month: parseInt(legacyPropMatch[3]),
+      sequence: parseInt(legacyPropMatch[4]),
+    };
+  }
+
+  // Backward compatibility: INV-YYYY-MM-NNNN
+  const legacyStdMatch = invoiceNumber.match(/^INV-(\d{4})-(\d{2})-(\d{4})$/);
+  if (legacyStdMatch) {
+    return {
+      prefix: 'INV',
+      year: parseInt(legacyStdMatch[1]),
+      month: parseInt(legacyStdMatch[2]),
+      sequence: parseInt(legacyStdMatch[3]),
     };
   }
   

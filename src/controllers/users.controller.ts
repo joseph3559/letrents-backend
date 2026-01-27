@@ -11,6 +11,7 @@ import { writeSuccess, writeError } from '../utils/response.js';
 import multer from 'multer';
 import { getPrisma } from '../config/prisma.js';
 import { imagekitService } from '../services/imagekit.service.js';
+import { pushNotificationService } from '../services/push-notification.service.js';
 
 const service = new UsersService();
 const prisma = getPrisma();
@@ -308,5 +309,71 @@ export const updateCurrentUserPreferences = async (req: Request, res: Response) 
   } catch (error: any) {
     const message = error.message || 'Failed to update preferences';
     writeError(res, 500, message);
+  }
+};
+
+export const upgradeToAgency = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const result = await service.upgradeToAgency(user);
+    writeSuccess(res, 200, 'Account upgraded to agency successfully', result);
+  } catch (error: any) {
+    const message = error.message || 'Failed to upgrade account';
+    const status = message.includes('Only landlords') ? 403 : 500;
+    writeError(res, status, message);
+  }
+};
+
+export const registerPushToken = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { token, platform = 'web', device_id, device_info } = req.body;
+
+    if (!token) {
+      return writeError(res, 400, 'Push token is required');
+    }
+
+    if (!['web', 'ios', 'android'].includes(platform)) {
+      return writeError(res, 400, 'Platform must be one of: web, ios, android');
+    }
+
+    const success = await pushNotificationService.registerToken(
+      user.user_id,
+      token,
+      platform as 'web' | 'ios' | 'android',
+      device_id,
+      device_info
+    );
+
+    if (success) {
+      return writeSuccess(res, 200, 'Push token registered successfully');
+    }
+
+    return writeError(res, 500, 'Failed to register push token');
+  } catch (error: any) {
+    console.error('Error registering push token:', error);
+    return writeError(res, 500, error.message || 'Failed to register push token');
+  }
+};
+
+export const unregisterPushToken = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { token } = req.body;
+
+    if (!token) {
+      return writeError(res, 400, 'Push token is required');
+    }
+
+    const success = await pushNotificationService.unregisterToken(user.user_id, token);
+
+    if (success) {
+      return writeSuccess(res, 200, 'Push token unregistered successfully');
+    }
+
+    return writeError(res, 500, 'Failed to unregister push token');
+  } catch (error: any) {
+    console.error('Error unregistering push token:', error);
+    return writeError(res, 500, error.message || 'Failed to unregister push token');
   }
 };

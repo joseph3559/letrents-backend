@@ -1,6 +1,8 @@
 import { getPrisma } from '../config/prisma.js';
+import { UsersService } from './users.service.js';
 export class LeasesService {
     prisma = getPrisma();
+    usersService = new UsersService();
     // FULL IMPLEMENTATION - PRISMA MIGRATION COMPLETE
     async getLease(id, user) {
         const lease = await this.prisma.lease.findUnique({
@@ -100,6 +102,10 @@ export class LeasesService {
         if (!companyId) {
             throw new Error('unable to determine company for lease creation');
         }
+        const preferences = await this.usersService.getCurrentUserPreferences(user);
+        const preferredPaymentDay = req.payment_day || preferences?.default_rent_due_date || 5;
+        const gracePeriod = req.late_fee_grace_days ?? preferences?.grace_period ?? 5;
+        const defaultCurrency = req.currency || preferences?.default_currency || 'KES';
         try {
             const leaseNumber = await this.generateLeaseNumber(companyId, retryCount);
             // Create lease
@@ -116,8 +122,10 @@ export class LeasesService {
                     move_in_date: req.move_in_date ? new Date(req.move_in_date) : null,
                     rent_amount: req.rent_amount,
                     deposit_amount: req.deposit_amount,
+                    currency: defaultCurrency,
                     payment_frequency: req.payment_frequency || 'monthly',
-                    payment_day: req.payment_day || 1,
+                    payment_day: preferredPaymentDay,
+                    late_fee_grace_days: gracePeriod,
                     notice_period_days: req.notice_period_days || 30,
                     renewable: req.renewable ?? true,
                     auto_renewal: req.auto_renewal ?? false,
@@ -165,51 +173,67 @@ export class LeasesService {
                 }
             });
             // Auto-generate invoices for deposit and first month's rent
-            try {
-                const { InvoicesService } = await import('./invoices.service.js');
-                const invoicesService = new InvoicesService();
-                const startDate = new Date(req.start_date);
-                const depositDueDate = new Date(startDate);
-                depositDueDate.setDate(depositDueDate.getDate() + 7); // Deposit due in 7 days
-                const firstRentDueDate = new Date(startDate);
-                firstRentDueDate.setMonth(firstRentDueDate.getMonth() + 1);
-                firstRentDueDate.setDate(req.payment_day || 5);
-                // 1. Create DEPOSIT invoice
-                if (req.deposit_amount && req.deposit_amount > 0) {
-                    const depositInvoice = await invoicesService.createInvoice({
-                        tenant_id: req.tenant_id,
-                        property_id: req.property_id,
-                        unit_id: req.unit_id,
-                        title: 'Security Deposit',
-                        description: `Security deposit for ${lease.property.name} - Unit ${lease.unit.unit_number}`,
-                        invoice_type: 'deposit',
-                        rent_amount: 0,
-                        total_amount: req.deposit_amount,
-                        due_date: depositDueDate.toISOString().split('T')[0],
-                        utility_bills: [],
-                    }, user);
-                    console.log(`✅ Auto-generated DEPOSIT invoice ${depositInvoice.invoice_number} for KES ${req.deposit_amount}`);
+            if (preferences?.auto_rent_invoices !== false) {
+                try {
+                    const { InvoicesService } = await import('./invoices.service.js');
+                    const invoicesService = new InvoicesService();
+                    const startDate = new Date(req.start_date);
+                    const depositDueDate = new Date(startDate);
+                    depositDueDate.setDate(depositDueDate.getDate() + 7); // Deposit due in 7 days
+                    const firstRentDueDate = new Date(startDate);
+                    const paymentDay = preferredPaymentDay;
+                    firstRentDueDate.setDate(paymentDay);
+                    if (firstRentDueDate < startDate) {
+                        firstRentDueDate.setMonth(firstRentDueDate.getMonth() + 1);
+                        firstRentDueDate.setDate(paymentDay);
+                    }
+                    // 1. Create DEPOSIT invoice
+                    if (req.deposit_amount && req.deposit_amount > 0) {
+                        const depositInvoice = await invoicesService.createInvoice({
+                            tenant_id: req.tenant_id,
+                            property_id: req.property_id,
+                            unit_id: req.unit_id,
+                            title: 'Security Deposit',
+                            description: `Security deposit for ${lease.property.name} - Unit ${lease.unit.unit_number}`,
+                            invoice_type: 'deposit',
+                            rent_amount: 0,
+                            total_amount: req.deposit_amount,
+                            due_date: depositDueDate.toISOString().split('T')[0],
+                            utility_bills: [],
+                            currency: defaultCurrency,
+                        }, user);
+                        console.log(`✅ Auto-generated DEPOSIT invoice ${depositInvoice.invoice_number} for ${defaultCurrency} ${req.deposit_amount}`);
+                    }
+                    // 2. Create FIRST MONTH RENT invoice
+                    if (req.rent_amount && req.rent_amount > 0) {
+                        const rentInvoice = await invoicesService.createInvoice({
+                            tenant_id: req.tenant_id,
+                            property_id: req.property_id,
+                            unit_id: req.unit_id,
+                            title: 'Monthly Rent',
+                            description: `Rent for ${lease.property.name} - Unit ${lease.unit.unit_number}`,
+                            invoice_type: 'rent',
+                            rent_amount: req.rent_amount,
+                            total_amount: req.rent_amount,
+                            due_date: firstRentDueDate.toISOString().split('T')[0],
+                            utility_bills: [],
+                            currency: defaultCurrency,
+                        }, user);
+                        console.log(`✅ Auto-generated FIRST RENT invoice ${rentInvoice.invoice_number} for ${defaultCurrency} ${req.rent_amount}`);
+                    }
                 }
-                // 2. Create FIRST MONTH RENT invoice
-                if (req.rent_amount && req.rent_amount > 0) {
-                    const rentInvoice = await invoicesService.createInvoice({
-                        tenant_id: req.tenant_id,
-                        property_id: req.property_id,
-                        unit_id: req.unit_id,
-                        title: 'Monthly Rent',
-                        description: `Rent for ${lease.property.name} - Unit ${lease.unit.unit_number}`,
-                        invoice_type: 'rent',
-                        rent_amount: req.rent_amount,
-                        total_amount: req.rent_amount,
-                        due_date: firstRentDueDate.toISOString().split('T')[0],
-                        utility_bills: [],
-                    }, user);
-                    console.log(`✅ Auto-generated FIRST RENT invoice ${rentInvoice.invoice_number} for KES ${req.rent_amount}`);
+                catch (invoiceError) {
+                    console.error('⚠️ Failed to auto-generate invoices for new lease:', invoiceError.message);
+                    // Don't fail the lease creation if invoice generation fails
                 }
             }
-            catch (invoiceError) {
-                console.error('⚠️ Failed to auto-generate invoices for new lease:', invoiceError.message);
-                // Don't fail the lease creation if invoice generation fails
+            // 📄 Record lease snapshot at creation (new revision)
+            try {
+                const { documentService } = await import('../modules/documents/document-service.js');
+                await documentService.recordLeaseSnapshot(lease.id, user, 1);
+            }
+            catch {
+                // Never fail lease creation if snapshot recording fails
             }
             return lease;
         }
@@ -418,6 +442,14 @@ export class LeasesService {
                 updated_at: new Date(),
             },
         });
+        // 📄 Record lease snapshot at termination (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordLeaseSnapshot(id, user, 1);
+        }
+        catch {
+            // Never fail termination if snapshot recording fails
+        }
         return lease;
     }
     async renewLease(id, renewalData, user) {
@@ -444,13 +476,22 @@ export class LeasesService {
                 updated_at: new Date(),
             },
         });
+        // 📄 Record lease snapshot at renewal for the old lease (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordLeaseSnapshot(id, user, 1);
+        }
+        catch {
+            // Never fail renewal if snapshot recording fails
+        }
         return newLease;
     }
     async generateLeaseNumber(companyId, attempt = 0) {
         const now = new Date();
         const year = now.getFullYear();
         const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 01-12
-        const prefix = `LSE-${year}-${month}`;
+        const shortYear = String(year).slice(-2);
+        const prefix = `LSE-${shortYear}${month}`;
         // Find the latest lease for the current month to avoid duplicates
         const lastLease = await this.prisma.lease.findFirst({
             where: {
@@ -473,8 +514,8 @@ export class LeasesService {
         if (attempt > 0) {
             nextNumber += attempt;
         }
-        // Format: LSE-2025-10-0001
-        const leaseNumber = `${prefix}-${nextNumber.toString().padStart(4, '0')}`;
+        // Format: LSE-YYMM-NNN
+        const leaseNumber = `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
         // Verify uniqueness
         const existing = await this.prisma.lease.findFirst({
             where: {
@@ -711,6 +752,14 @@ export class LeasesService {
             }
         });
         // Don't update unit status since the tenant is already there and unit is already occupied
+        // 📄 Record lease snapshot at creation (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordLeaseSnapshot(lease.id, user, 1);
+        }
+        catch {
+            // Never fail lease creation if snapshot recording fails
+        }
         return lease;
     }
 }

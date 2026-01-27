@@ -227,4 +227,18 @@ export const messagingController = {
             writeError(res, 500, error.message);
         }
     },
+    deleteConversation: async (req, res) => {
+        try {
+            const user = req.user;
+            const { id } = req.params;
+            await messagingService.deleteConversation(user, id);
+            writeSuccess(res, 200, 'Conversation deleted', { success: true });
+        }
+        catch (error) {
+            if (error.message?.includes('not found') || error.message?.includes('not a participant')) {
+                return writeError(res, 404, error.message);
+            }
+            writeError(res, 500, error.message);
+        }
+    },
 };

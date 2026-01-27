@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{meta.documentTitle}} {{invoice.invoiceNumber}}</title>
+    <style>
+{{{css}}}
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="doc">
+        <!-- HEADER: Company Identity & Document Title -->
+        <div class="header">
+          <div class="header-left">
+            <div class="company-brand">
+              <div class="company-name">{{company.name}}</div>
+              <div class="company-details">
+                {{{company.metaHtml}}}
+              </div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="document-header">
+              <div class="doc-title-wrapper">
+                <h1 class="doc-title">INVOICE</h1>
+                <div class="doc-title-accent"></div>
+              </div>
+              <div class="doc-meta">
+                <div class="doc-number-label">Invoice Number</div>
+                <div class="doc-number">{{invoice.invoiceNumber}}</div>
+              </div>
+              <div class="status-badge {{invoice.statusClass}}">
+                <span class="status-dot"></span>
+                <span class="status-text">{{invoice.status}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HERO SECTION: Total Amount (Primary Focal Point) -->
+        <div class="amount-section">
+          <div class="amount-label">TOTAL DUE</div>
+          <div class="amount-value">{{invoice.total}}</div>
+        </div>
+
+        <!-- CONSOLIDATED INFORMATION: Two-Column Layout -->
+        <div class="consolidated-info">
+          <div class="info-column">
+            <div class="column-header">BILL TO</div>
+            <div class="info-panel-compact">
+              {{{sections.billToRows}}}
+            </div>
+          </div>
+          <div class="info-column">
+            <div class="column-header">Invoice Details</div>
+            <div class="info-panel-compact">
+              {{{sections.invoiceInfoRows}}}
+            </div>
+          </div>
+        </div>
+
+        <!-- LINE ITEMS TABLE -->
+        <div class="breakdown-section">
+          <div class="section-title">Line Items</div>
+          {{{sections.lineItemsTable}}}
+        </div>
+
+        <!-- TOTALS BREAKDOWN -->
+        <div class="totals-section">
+          <div class="totals-box">
+            {{{sections.totalsRows}}}
+            <div class="grand-total">
+              <strong>Grand Total: {{invoice.total}}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- NOTES (Optional) -->
+        {{{sections.notesSection}}}
+
+        <!-- FOOTER: QR Code, Status, and Technical Details -->
+        <div class="footer-section">
+          <div class="footer-left">
+            <div class="qr-compact">
+              {{{sections.qrCodeSvg}}}
+              <div class="qr-label-compact">Scan to verify</div>
+            </div>
+          </div>
+          <div class="footer-right">
+            <div class="status-indicator {{invoice.statusClass}}">
+              <span class="status-dot-indicator"></span>
+              <span class="status-text-indicator">{{invoice.status}}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOOTER: Audit & Legal (Muted) -->
+        <div class="footer">
+          <div class="footer-meta">
+            {{{sections.footerMeta}}}
+          </div>
+          <div class="footer-support">
+            Support: {{meta.supportEmail}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

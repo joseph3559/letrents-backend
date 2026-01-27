@@ -12,7 +12,10 @@ import {
   deactivateUser,
   getCurrentUserPreferences,
   updateCurrentUserPreferences,
-  uploadProfilePicture
+  uploadProfilePicture,
+  upgradeToAgency,
+  registerPushToken,
+  unregisterPushToken
 } from '../controllers/users.controller.js';
 import multer from 'multer';
 
@@ -47,6 +50,9 @@ router.get('/me', getCurrentUser); // No RBAC needed - users can always access t
 router.put('/me', updateCurrentUser); // No RBAC needed - users can always update their own profile
 router.put('/me/password', changePassword); // No RBAC needed - users can always change their own password
 router.post('/me/profile-picture', upload.single('file'), uploadProfilePicture); // No RBAC needed - users can upload their own profile picture
+router.post('/me/upgrade-to-agency', upgradeToAgency);
+router.post('/me/push-token', registerPushToken);
+router.post('/me/push-token/unregister', unregisterPushToken);
 
 // User Preferences
 router.get('/me/preferences', getCurrentUserPreferences); // No RBAC needed - users can access their own preferences

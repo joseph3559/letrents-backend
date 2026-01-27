@@ -22,6 +22,7 @@ import reports from './reports.js';
 import payments from './payments.js';
 import mpesa from './mpesa.js';
 import billing from './billing.js';
+import documents from './documents.js';
 import superAdmin from './super-admin.js';
 import enums from './enums.js';
 import email from './email.js';
@@ -32,6 +33,9 @@ import cleanup from './cleanup.js';
 import tasks from './task.routes.js';
 import webhooks from './webhooks.js';
 import emergencyContacts from './emergency-contacts.js';
+import vendors from './vendors.js';
+import marketing from './marketing.js';
+import verification from './verification.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
@@ -47,6 +51,8 @@ const requireSuperAdmin = (req, res, next) => {
 };
 // Webhook endpoints (NO AUTH - verified via signature)
 router.use('/webhooks', webhooks);
+// Public verification endpoints (NO AUTH - token-validated)
+router.use('/verify', verification);
 router.use('/auth', auth);
 // Invitations endpoints (public - for invitation verification and setup)
 router.get('/invitations/verify', async (req, res) => {
@@ -91,6 +97,7 @@ router.use('/messaging', requireAuth, messaging);
 router.use('/reports', requireAuth, reports);
 router.use('/payments', requireAuth, payments);
 router.use('/mpesa', requireAuth, mpesa); // M-Pesa management needs auth
+router.use('/documents', requireAuth, documents);
 // Public billing endpoints (no authentication required) - must come before authenticated routes
 router.get('/billing/plans', async (req, res) => {
     const { getPlans } = await import('../controllers/billing.controller.js');
@@ -128,6 +135,8 @@ router.use('/test-email', testEmail);
 router.use('/checklists', requireAuth, checklists);
 router.use('/cleanup', requireAuth, cleanup);
 router.use('/emergency-contacts', requireAuth, emergencyContacts);
+router.use('/vendors', requireAuth, vendors);
+router.use('/marketing', marketing); // Marketing routes (some public, some protected)
 // Super Admin specific endpoints that frontend calls directly
 router.get('/kpis', requireAuth, requireSuperAdmin, async (req, res) => {
     const { getKPIMetrics } = await import('../controllers/super-admin.controller.js');

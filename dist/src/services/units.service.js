@@ -1,5 +1,6 @@
 import { getPrisma } from '../config/prisma.js';
 import { LeasesService } from './leases.service.js';
+import { UsersService } from './users.service.js';
 // Utility function to map frontend unit type values to database enum values
 function mapUnitType(frontendType) {
     const unitTypeMap = {
@@ -61,6 +62,7 @@ function mapUnitCondition(frontendCondition) {
 export class UnitsService {
     prisma = getPrisma();
     leasesService = new LeasesService();
+    usersService = new UsersService();
     async createUnit(req, user) {
         // Validate user permissions
         if (!['super_admin', 'agency_admin', 'landlord'].includes(user.role)) {
@@ -87,6 +89,8 @@ export class UnitsService {
         if (existingUnit) {
             throw new Error('unit number already exists in this property');
         }
+        const preferences = await this.usersService.getCurrentUserPreferences(user);
+        const defaultCurrency = preferences?.default_currency || 'KES';
         // Apply defaults
         const unitData = {
             property_id: req.property_id,
@@ -103,7 +107,7 @@ export class UnitsService {
             has_parking: req.has_parking || false,
             parking_spaces: req.parking_spaces || 0,
             rent_amount: req.rent_amount,
-            currency: req.currency || 'KES',
+            currency: req.currency || defaultCurrency,
             deposit_amount: req.deposit_amount,
             deposit_months: req.deposit_months || 1,
             status: 'vacant',

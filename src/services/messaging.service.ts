@@ -735,6 +735,23 @@ export const messagingService = {
   },
 
   /**
+   * Delete (leave) a conversation for the current user.
+   * Removes the user's participation so the conversation no longer appears in their list.
+   */
+  async deleteConversation(user: JWTClaims, conversationId: string) {
+    const deleted = await prisma.conversationParticipant.deleteMany({
+      where: {
+        conversation_id: conversationId,
+        user_id: user.user_id,
+      },
+    });
+    if (deleted.count === 0) {
+      throw new Error('Conversation not found or you are not a participant');
+    }
+    return { success: true };
+  },
+
+  /**
    * Search messages
    */
   async searchMessages(

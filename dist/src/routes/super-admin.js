@@ -17,8 +17,12 @@ router.use((req, res, next) => {
     console.log(`🔍 Super-admin router: ${req.method} ${req.path}`);
     next();
 });
-// All super-admin routes require authentication and super_admin role
+// All super-admin routes require authentication
 router.use(requireAuth);
+// Company update endpoint - allow landlords/agency_admins to update their own company
+// This route is handled before requireSuperAdmin to allow self-updates
+router.put('/companies/:id', updateCompany);
+// All other super-admin routes require super_admin role
 router.use(requireSuperAdmin);
 // Dashboard and Analytics
 router.get('/dashboard', getDashboardData);
@@ -47,7 +51,7 @@ router.delete('/users/:id', deleteUser);
 // Company Management
 router.get('/companies', getCompanyManagement);
 router.post('/companies', createCompany);
-router.put('/companies/:id', updateCompany);
+// Note: PUT /companies/:id is defined above (before requireSuperAdmin) to allow self-updates
 router.delete('/companies/:id', deleteCompany);
 // Agency Management
 router.get('/agencies', getAgencyManagement);

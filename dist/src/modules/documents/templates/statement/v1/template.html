@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Statement {{tenant.name}}</title>
+    <style>
+{{{css}}}
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="doc">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-name">{{company.name}}</div>
+            <div class="brand-meta">{{company.address}}</div>
+            <div class="brand-meta">{{company.email}} {{company.phone}}</div>
+          </div>
+          <div class="doc-title">
+            <h1>STATEMENT</h1>
+            <div class="doc-number">{{statement.startDate}} — {{statement.endDate}}</div>
+            <div class="status">OFFICIAL</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-title">Tenant</div>
+            <div class="kv"><div class="kv-label">Name</div><div class="kv-value">{{tenant.name}}</div></div>
+            <div class="kv"><div class="kv-label">Email</div><div class="kv-value">{{tenant.email}}</div></div>
+            <div class="kv"><div class="kv-label">Phone</div><div class="kv-value">{{tenant.phone}}</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Statement Period</div>
+            <div class="kv"><div class="kv-label">Start</div><div class="kv-value">{{statement.startDate}}</div></div>
+            <div class="kv"><div class="kv-label">End</div><div class="kv-value">{{statement.endDate}}</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Invoices</h2>
+          {{{sections.invoicesTable}}}
+        </div>
+
+        <div class="section">
+          <h2>Payments</h2>
+          {{{sections.paymentsTable}}}
+        </div>
+
+        <div class="footer">
+          <div>{{meta.systemName}} — Generated {{meta.generatedAt}}</div>
+          <div>Statement period: {{statement.startDate}} — {{statement.endDate}}</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+

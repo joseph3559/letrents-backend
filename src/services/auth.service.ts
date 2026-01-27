@@ -311,10 +311,17 @@ export class AuthService {
 			// Send welcome email for landlords and agencies (after verification email)
 			if ((role === 'landlord' || role === 'agency_admin') && userWithAgency?.company_id) {
 				try {
-					const company = await this.prisma.company.findUnique({
-						where: { id: userWithAgency.company_id },
-					});
-					if (company) {
+					// Only send welcome email after subscription is active/trial.
+					// Registration can happen before payment; sending welcome immediately is confusing.
+					const [company, subscription] = await Promise.all([
+						this.prisma.company.findUnique({ where: { id: userWithAgency.company_id } }),
+						this.prisma.subscription.findFirst({
+							where: { company_id: userWithAgency.company_id, status: { in: ['trial', 'active'] } },
+							orderBy: { created_at: 'desc' },
+						}),
+					]);
+
+					if (company && subscription) {
 						await emailService.sendWelcomeEmail(
 							user.email!,
 							`${user.first_name} ${user.last_name}`,
@@ -352,10 +359,15 @@ export class AuthService {
 		// Send welcome email for landlords and agencies (autologin path)
 		if ((role === 'landlord' || role === 'agency_admin') && updatedUser?.company_id) {
 			try {
-				const company = await this.prisma.company.findUnique({
-					where: { id: updatedUser.company_id },
-				});
-				if (company) {
+				const [company, subscription] = await Promise.all([
+					this.prisma.company.findUnique({ where: { id: updatedUser.company_id } }),
+					this.prisma.subscription.findFirst({
+						where: { company_id: updatedUser.company_id, status: { in: ['trial', 'active'] } },
+						orderBy: { created_at: 'desc' },
+					}),
+				]);
+
+				if (company && subscription) {
 					await emailService.sendWelcomeEmail(
 						updatedUser.email!,
 						`${updatedUser.first_name} ${updatedUser.last_name}`,

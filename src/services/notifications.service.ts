@@ -292,6 +292,10 @@ export const notificationsService = {
       if (shouldSend) {
         // Send push notification
         try {
+          // Build push data: base fields + metadata (payment_id, invoice_id, maintenance_id, etc.) for deep linking
+          const metadata = (typeof notification.metadata === 'object' && notification.metadata)
+            ? notification.metadata as Record<string, unknown>
+            : {};
           const pushResult = await pushNotificationService.sendToUser(
             notification.recipient_id,
             {
@@ -303,10 +307,12 @@ export const notificationsService = {
               data: {
                 notificationId: notification.id,
                 id: notification.id, // Also include as 'id' for easier access
+                type: notification.notification_type,
                 sender_id: notification.sender_id || '',
                 recipient_id: notification.recipient_id || '',
                 category: notification.category,
                 actionUrl: notification.action_url,
+                ...metadata, // payment_id, invoice_id, maintenance_id, request_id, etc.
               },
             }
           );

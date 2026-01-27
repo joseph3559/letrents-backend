@@ -557,13 +557,14 @@ export const reportsService = {
     const invoices = await prisma.invoice.findMany({
       where: invoiceWhereClause,
       include: {
-        // tenant: {
-        //   select: {
-        //     id: true,
-        //     first_name: true,
-        //     last_name: true,
-        //   }
-        // },
+        recipient: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+          }
+        },
         unit: {
           select: {
             id: true,
@@ -625,19 +626,29 @@ export const reportsService = {
         collectionRate: Math.round(collectionRate * 100) / 100,
       },
       byStatus: Object.values(byStatus),
-      invoices: invoices.map(invoice => ({
-        id: invoice.id,
-        invoice_number: invoice.invoice_number,
-        amount: invoice.total_amount ? Number(invoice.total_amount) : 0,
-        status: invoice.status,
-        due_date: invoice.due_date,
-        created_at: invoice.created_at,
-        tenantName: 'Unknown', // invoice.tenant not available in current schema
-          // ? `${invoice.tenant.first_name} ${invoice.tenant.last_name}`
-          // : 'Unknown',
-        propertyName: invoice.unit?.property?.name || 'Unknown',
-        unit_number: invoice.unit?.unit_number || 'Unknown',
-      })),
+      invoices: invoices.map(invoice => {
+        const amt = invoice.total_amount ? Number(invoice.total_amount) : 0;
+        return {
+          id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          amount: amt,
+          amount_due: amt,
+          amount_paid: invoice.status === 'paid' ? amt : 0,
+          status: invoice.status,
+          due_date: invoice.due_date,
+          created_at: invoice.created_at,
+          tenant_name: (invoice as any).recipient
+            ? `${((invoice as any).recipient.first_name || '')} ${((invoice as any).recipient.last_name || '')}`.trim() || 'Unknown'
+            : 'Unknown',
+          tenantName: (invoice as any).recipient
+            ? `${((invoice as any).recipient.first_name || '')} ${((invoice as any).recipient.last_name || '')}`.trim() || 'Unknown'
+            : 'Unknown',
+          tenant_email: (invoice as any).recipient?.email || null,
+          property_name: invoice.unit?.property?.name || 'Unknown',
+          propertyName: invoice.unit?.property?.name || 'Unknown',
+          unit_number: invoice.unit?.unit_number || 'Unknown',
+        };
+      }),
       generatedAt: new Date().toISOString(),
     });
   },

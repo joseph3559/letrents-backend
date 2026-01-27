@@ -7,7 +7,8 @@ import {
   getSubscriptionStats,
   paystackWebhook,
   getPublicSubscriptionStatus,
-  verifySubscription
+  verifySubscription,
+  getAvailablePaymentGateways
 } from '../controllers/billing.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 import { optionalAuth } from '../middleware/auth.js';
@@ -21,6 +22,7 @@ router.post('/subscription', rbacResource('billing', 'create'), createSubscripti
 // Note: /subscription/verify is handled in main router as a public endpoint
 router.get('/subscription', rbacResource('billing', 'read'), getCompanySubscription);
 router.post('/subscription/cancel', rbacResource('billing', 'update'), cancelSubscription);
+router.get('/gateways', rbacResource('billing', 'read'), getAvailablePaymentGateways);
 
 // Statistics (super admin only)
 router.get('/stats', rbacResource('billing', 'stats'), getSubscriptionStats);

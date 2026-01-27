@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createUser, getUser, updateUser, deleteUser, listUsers, getCurrentUser, updateCurrentUser, changePassword, activateUser, deactivateUser, getCurrentUserPreferences, updateCurrentUserPreferences, uploadProfilePicture } from '../controllers/users.controller.js';
+import { createUser, getUser, updateUser, deleteUser, listUsers, getCurrentUser, updateCurrentUser, changePassword, activateUser, deactivateUser, getCurrentUserPreferences, updateCurrentUserPreferences, uploadProfilePicture, upgradeToAgency, registerPushToken, unregisterPushToken } from '../controllers/users.controller.js';
 import multer from 'multer';
 // Configure multer for profile picture uploads
 const upload = multer({
@@ -26,6 +26,9 @@ router.get('/me', getCurrentUser); // No RBAC needed - users can always access t
 router.put('/me', updateCurrentUser); // No RBAC needed - users can always update their own profile
 router.put('/me/password', changePassword); // No RBAC needed - users can always change their own password
 router.post('/me/profile-picture', upload.single('file'), uploadProfilePicture); // No RBAC needed - users can upload their own profile picture
+router.post('/me/upgrade-to-agency', upgradeToAgency);
+router.post('/me/push-token', registerPushToken);
+router.post('/me/push-token/unregister', unregisterPushToken);
 // User Preferences
 router.get('/me/preferences', getCurrentUserPreferences); // No RBAC needed - users can access their own preferences
 router.put('/me/preferences', updateCurrentUserPreferences); // No RBAC needed - users can update their own preferences

@@ -5,6 +5,7 @@ import {
   createPayment,
   updatePayment,
   approvePayment,
+  reconcilePendingPayments,
   deletePayment,
   sendPaymentReceipt,
   verifyRentPayment,
@@ -24,6 +25,9 @@ router.delete('/:id', rbacResource('payments', 'delete'), deletePayment);
 
 // Payment approval
 router.post('/:id/approve', rbacResource('payments', 'approve'), approvePayment);
+
+// One-time reconciliation for pending payments
+router.post('/reconcile-pending', rbacResource('payments', 'update'), reconcilePendingPayments);
 
 // Send payment receipt
 router.post('/:id/send-receipt', rbacResource('payments', 'read'), sendPaymentReceipt);

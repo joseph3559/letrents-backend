@@ -3,8 +3,11 @@ import { PaystackService, CreateSubscriptionRequest } from '../services/paystack
 import { JWTClaims } from '../types/index.js';
 import { writeSuccess, writeError } from '../utils/response.js';
 import crypto from 'crypto';
+import { emailService } from '../services/email.service.js';
+import { getPrisma } from '../config/prisma.js';
 
 const service = new PaystackService();
+const prisma = getPrisma();
 
 /**
  * Get human-readable display name for payment channel
@@ -56,6 +59,34 @@ export const getPlans = async (req: Request, res: Response) => {
     writeSuccess(res, 200, 'Subscription plans retrieved successfully', plans);
   } catch (error: any) {
     const message = error.message || 'Failed to retrieve subscription plans';
+    writeError(res, 500, message);
+  }
+};
+
+export const getAvailablePaymentGateways = async (req: Request, res: Response) => {
+  try {
+    const gateways = await prisma.paymentGatewayConfig.findMany({
+      where: { status: 'active' },
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        provider: true,
+        gateway: true,
+        status: true,
+        currency: true,
+        description: true,
+        logo: true,
+        supported_countries: true,
+        features: true,
+        is_test_mode: true,
+      },
+    });
+
+    writeSuccess(res, 200, 'Payment gateways retrieved successfully', gateways);
+  } catch (error: any) {
+    const message = error.message || 'Failed to fetch payment gateways';
     writeError(res, 500, message);
   }
 };
@@ -400,13 +431,6 @@ export const verifySubscription = async (req: Request, res: Response) => {
       } else {
         console.warn(`⚠️ Could not infer plan code from amount: ${transactionAmount} kobo`);
       }
-
-      if (amountToPlanCode[transactionAmount]) {
-        finalPlanCode = amountToPlanCode[transactionAmount];
-        console.log(`✅ Inferred plan code from amount: ${transactionAmount} kobo -> ${finalPlanCode}`);
-      } else {
-        console.warn(`⚠️ Could not infer plan code from amount: ${transactionAmount} kobo`);
-      }
     }
 
     if (!finalPlanCode) {
@@ -663,6 +687,47 @@ export const verifySubscription = async (req: Request, res: Response) => {
 
     if (!subscription) {
       return writeError(res, 500, 'Failed to create or retrieve subscription');
+    }
+
+    // Mark company active and send welcome email once subscription is active.
+    try {
+      if (subscription.company_id) {
+        await prisma.company.update({
+          where: { id: subscription.company_id },
+          data: { status: 'active', updated_at: new Date() },
+        });
+      }
+
+      const welcomeSentAt = (subscription.metadata as any)?.welcome_email_sent_at;
+      if (!welcomeSentAt) {
+        const userRecord = await prisma.user.findUnique({
+          where: { id: user.user_id },
+          select: { email: true, first_name: true, last_name: true, role: true, company: { select: { name: true } } },
+        });
+
+        if (userRecord?.email && userRecord.company?.name && (userRecord.role === 'landlord' || userRecord.role === 'agency_admin')) {
+          await emailService.sendWelcomeEmail(
+            userRecord.email,
+            `${userRecord.first_name ?? ''} ${userRecord.last_name ?? ''}`.trim() || userRecord.email,
+            userRecord.company.name,
+            userRecord.role as 'landlord' | 'agency_admin'
+          );
+
+          await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: {
+              metadata: {
+                ...(subscription.metadata as object || {}),
+                welcome_email_sent_at: new Date().toISOString(),
+              },
+              updated_at: new Date(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      // Don't block verification success on email/company updates
+      console.error('Post-verification side effects failed:', e);
     }
 
     writeSuccess(res, 200, 'Payment verified successfully', {

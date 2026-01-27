@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import { getNextReceiptNumber } from '../utils/invoice-number-generator.js';
 const prisma = new PrismaClient();
 /**
  * Get human-readable display name for payment channel
@@ -143,59 +144,70 @@ export const handlePaystackWebhook = async (req, res) => {
             const payments = [];
             const updatedInvoices = [];
             for (const invoice of invoices) {
-                // Generate receipt number
-                const receiptNumber = `PAY-${now.toISOString().split('T')[0].replace(/-/g, '')}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-                // Delete any PENDING payment records for this invoice
+                const receiptNumber = await getNextReceiptNumber(tx, invoice.company_id);
+                const paymentData = {
+                    tenant_id: invoice.issued_to,
+                    property_id: invoice.property_id,
+                    unit_id: invoice.unit_id,
+                    invoice_id: invoice.id,
+                    company_id: invoice.company_id,
+                    created_by: invoice.issued_to,
+                    amount: invoice.total_amount,
+                    currency: invoice.currency,
+                    payment_method: 'online',
+                    payment_type: 'rent',
+                    payment_date: now,
+                    payment_period: `${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`,
+                    status: 'approved',
+                    receipt_number: receiptNumber,
+                    transaction_id: reference,
+                    reference_number: reference,
+                    received_from: `Paystack Payment - ${customer?.email || 'Tenant'}`,
+                    receipt_sent: false,
+                    notification_sent: false,
+                    notes: 'Automatically processed via Paystack webhook',
+                    attachments: [{
+                            gateway: 'paystack',
+                            reference: reference,
+                            status: 'success',
+                            processed_via: 'webhook',
+                            timestamp: now.toISOString(),
+                            channel: paymentChannel,
+                            channel_display: channelDisplay,
+                            authorization: authorization ? {
+                                card_type: authorization.card_type,
+                                bank: authorization.bank,
+                                brand: authorization.brand,
+                                last4: authorization.last4
+                            } : null
+                        }]
+                };
+                const existingPending = await tx.payment.findFirst({
+                    where: {
+                        invoice_id: invoice.id,
+                        status: 'pending',
+                    },
+                    orderBy: { created_at: 'desc' },
+                });
+                const payment = existingPending
+                    ? await tx.payment.update({
+                        where: { id: existingPending.id },
+                        data: paymentData,
+                    })
+                    : await tx.payment.create({
+                        data: paymentData,
+                    });
+                // Clean up any other placeholder pending payments for this invoice
                 const deletedPending = await tx.payment.deleteMany({
                     where: {
                         invoice_id: invoice.id,
                         status: 'pending',
-                        receipt_number: { startsWith: 'PENDING-' }
+                        id: { not: payment.id }
                     }
                 });
                 if (deletedPending.count > 0) {
-                    console.log(`🗑️  Deleted ${deletedPending.count} PENDING payment record(s) for invoice ${invoice.invoice_number}`);
+                    console.log(`🗑️  Deleted ${deletedPending.count} extra pending payment record(s) for invoice ${invoice.invoice_number}`);
                 }
-                // Create payment record
-                const payment = await tx.payment.create({
-                    data: {
-                        tenant_id: invoice.issued_to,
-                        property_id: invoice.property_id,
-                        unit_id: invoice.unit_id,
-                        invoice_id: invoice.id,
-                        company_id: invoice.company_id,
-                        created_by: invoice.issued_to,
-                        amount: invoice.total_amount,
-                        currency: invoice.currency,
-                        payment_method: 'online',
-                        payment_type: 'rent',
-                        payment_date: now,
-                        payment_period: `${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`,
-                        status: 'approved',
-                        receipt_number: receiptNumber,
-                        transaction_id: reference,
-                        reference_number: reference,
-                        received_from: `Paystack Payment - ${customer?.email || 'Tenant'}`,
-                        receipt_sent: false,
-                        notification_sent: false,
-                        notes: 'Automatically processed via Paystack webhook',
-                        attachments: JSON.stringify([{
-                                gateway: 'paystack',
-                                reference: reference,
-                                status: 'success',
-                                processed_via: 'webhook',
-                                timestamp: now.toISOString(),
-                                channel: paymentChannel,
-                                channel_display: channelDisplay,
-                                authorization: authorization ? {
-                                    card_type: authorization.card_type,
-                                    bank: authorization.bank,
-                                    brand: authorization.brand,
-                                    last4: authorization.last4
-                                } : null
-                            }])
-                    }
-                });
                 payments.push(payment);
                 // Mark invoice as paid
                 const updatedInvoice = await tx.invoice.update({
@@ -212,6 +224,41 @@ export const handlePaystackWebhook = async (req, res) => {
             }
             return { payments, updatedInvoices };
         });
+        // Notify invoice issuer(s) about received payment
+        try {
+            const { notificationsService } = await import('../services/notifications.service.js');
+            for (const invoice of invoices) {
+                if (!invoice.issued_by)
+                    continue;
+                const payment = result.payments.find((p) => p.invoice_id === invoice.id);
+                if (!payment)
+                    continue;
+                await notificationsService.createNotification({
+                    user_id: invoice.issued_to,
+                    company_id: invoice.company_id,
+                    role: 'tenant',
+                }, {
+                    recipientId: invoice.issued_by,
+                    type: 'payment_received',
+                    category: 'payment',
+                    priority: 'high',
+                    channels: ['app', 'push'],
+                    title: 'Payment received',
+                    message: `Tenant payment received for invoice ${invoice.invoice_number}. Receipt: ${payment.receipt_number}`,
+                    metadata: {
+                        payment_id: payment.id,
+                        invoice_id: invoice.id,
+                        receipt_number: payment.receipt_number,
+                        amount: payment.amount,
+                        currency: payment.currency,
+                        reference: reference,
+                    },
+                });
+            }
+        }
+        catch (error) {
+            console.error('❌ Failed to send issuer payment notification:', error);
+        }
         console.log(`💰 Payment Summary:`, {
             reference,
             invoices_paid: result.payments.length,

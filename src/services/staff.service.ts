@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause, formatDataForRole } from '../utils/roleBasedFiltering.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
 const prisma = new PrismaClient();
@@ -111,6 +111,7 @@ export const staffService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,
@@ -172,6 +173,11 @@ export const staffService = {
       throw new Error(`Insufficient permissions to create ${role}`);
     }
 
+    // CRITICAL: Restrict 'manager' role to super_admin only (SaaS team only)
+    if (role === 'manager' && user.role !== 'super_admin') {
+      throw new Error('The manager role is only available for the SaaS team (super admin). Landlords and agencies cannot create manager roles.');
+    }
+
     // CRITICAL: Validate that creator has a company_id
     if (!user.company_id) {
       console.error('❌ CRITICAL: User attempting to create staff without company_id:', user);
@@ -227,6 +233,7 @@ export const staffService = {
       employment_date: staffData.employment_date ? new Date(staffData.employment_date) : null,
       emergency_contact_name: staffData.emergency_contact_name,
       emergency_contact_phone: staffData.emergency_contact_phone,
+      emergency_contact_email: staffData.emergency_contact_email,
       emergency_relationship: staffData.emergency_relationship,
       working_hours: staffData.working_hours,
       off_days: Array.isArray(staffData.off_days) ? staffData.off_days.join(',') : staffData.off_days,
@@ -318,6 +325,7 @@ export const staffService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,
@@ -383,6 +391,7 @@ export const staffService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,
@@ -459,6 +468,25 @@ export const staffService = {
 
     // Prepare update data
     const updateFields: any = {};
+    const allowedRoleUpdates = new Set([
+      'agent',
+      'caretaker',
+      'cleaner',
+      'security',
+      'maintenance',
+      'receptionist',
+      'accountant',
+      'manager',
+      'admin',
+      'team_lead',
+      'staff',
+      'finance',
+      'sales',
+      'marketing',
+      'support',
+      'hr',
+      'auditor',
+    ]);
     
     // Basic fields
     if (updateData.first_name) {
@@ -475,6 +503,13 @@ export const staffService = {
     }
     if (updateData.status) {
       updateFields.status = updateData.status;
+    }
+    if (updateData.role) {
+      const nextRole = updateData.role.toString();
+      if (!allowedRoleUpdates.has(nextRole)) {
+        throw new Error('Invalid role assignment for staff member');
+      }
+      updateFields.role = nextRole;
     }
 
     // Extended staff fields
@@ -502,6 +537,9 @@ export const staffService = {
     }
     if (updateData.emergency_contact_phone !== undefined) {
       updateFields.emergency_contact_phone = updateData.emergency_contact_phone;
+    }
+    if (updateData.emergency_contact_email !== undefined) {
+      updateFields.emergency_contact_email = updateData.emergency_contact_email;
     }
     if (updateData.emergency_relationship !== undefined) {
       updateFields.emergency_relationship = updateData.emergency_relationship;
@@ -559,6 +597,7 @@ export const staffService = {
           employment_date: true,
           emergency_contact_name: true,
           emergency_contact_phone: true,
+          emergency_contact_email: true,
           emergency_relationship: true,
           working_hours: true,
           off_days: true,
@@ -1160,13 +1199,16 @@ export const careteakersService = {
     let allowedStaffRoles: StaffRole[];
     
     if (user.role === 'agent') {
-      // Agents can only see staff below their level (NOT other agents or agency_admins)
-      allowedStaffRoles = ['caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
+      // Agents can only see staff below their level (NOT other agents, agency_admins, or managers)
+      allowedStaffRoles = ['caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant'];
     } else if (user.role === 'agency_admin') {
-      // Agency admins can see agents and all staff below
-      allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
+      // Agency admins can see agents and all staff below (NOT managers - SaaS team only)
+      allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant'];
+    } else if (user.role === 'landlord') {
+      // Landlords can see agents and all staff below (NOT managers - SaaS team only)
+      allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant'];
     } else {
-      // Landlords and super_admins can see all staff
+      // Super admins can see all staff including managers
       allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
     }
     
@@ -1259,6 +1301,7 @@ export const careteakersService = {
         employment_date: true,
         emergency_contact_name: true,
         emergency_contact_phone: true,
+        emergency_contact_email: true,
         emergency_relationship: true,
         working_hours: true,
         off_days: true,

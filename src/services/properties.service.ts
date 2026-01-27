@@ -50,6 +50,7 @@ export interface CreatePropertyRequest {
 
 export interface UpdatePropertyRequest {
   name?: string;
+  type?: string;
   description?: string;
   street?: string;
   city?: string;
@@ -225,6 +226,7 @@ export class PropertiesService {
       where: { id },
       data: {
         ...(req.name && { name: req.name }),
+        ...(req.type && { type: req.type as any }),
         ...(req.description !== undefined && { description: req.description }),
         ...(req.street && { street: req.street }),
         ...(req.city && { city: req.city }),

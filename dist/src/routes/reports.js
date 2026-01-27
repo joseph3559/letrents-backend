@@ -15,4 +15,6 @@ router.get('/rent-collection', rbacResource('reports', 'read'), reportsControlle
 router.get('/maintenance', rbacResource('reports', 'read'), reportsController.getMaintenanceReport);
 // Export functionality
 router.get('/export/:type', rbacResource('reports', 'read'), reportsController.exportReport);
+// Backward/alternate path used by some clients: /reports/:type/export
+router.get('/:type/export', rbacResource('reports', 'read'), reportsController.exportReport);
 export default router;

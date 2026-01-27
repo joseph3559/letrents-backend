@@ -1,6 +1,6 @@
 import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 export interface UserFilters {
   role?: string;
@@ -137,6 +137,11 @@ export class UsersService {
             id: true,
             name: true,
             phone_number: true,
+            street: true,
+            city: true,
+            region: true,
+            country: true,
+            postal_code: true,
           },
         },
         id_number: true,
@@ -419,8 +424,13 @@ export class UsersService {
   }
 
   private canCreateRole(userRole: string, targetRole: string): boolean {
+    // CRITICAL: Restrict 'manager' role to super_admin only (SaaS team only)
+    if (targetRole === 'manager' && userRole !== 'super_admin') {
+      return false;
+    }
+
     const roleHierarchy = {
-      super_admin: ['super_admin', 'agency_admin', 'landlord', 'agent', 'caretaker', 'tenant'],
+      super_admin: ['super_admin', 'agency_admin', 'landlord', 'agent', 'caretaker', 'tenant', 'manager', 'admin', 'team_lead', 'staff', 'finance', 'sales', 'marketing', 'support', 'hr', 'auditor'],
       agency_admin: ['landlord', 'agent', 'caretaker', 'tenant'],
       landlord: ['caretaker', 'tenant'],
     };
@@ -429,6 +439,11 @@ export class UsersService {
   }
 
   private canUpdateRole(userRole: string, currentRole: string, newRole: string): boolean {
+    // CRITICAL: Restrict 'manager' role to super_admin only (SaaS team only)
+    if (newRole === 'manager' && userRole !== 'super_admin') {
+      return false;
+    }
+
     // Super admin can change any role
     if (userRole === 'super_admin') return true;
 
@@ -530,5 +545,51 @@ export class UsersService {
     });
 
     return preferences;
+  }
+
+  async upgradeToAgency(user: JWTClaims) {
+    if (user.role !== 'landlord') {
+      throw new Error('Only landlords can upgrade to agency accounts');
+    }
+    if (!user.company_id) {
+      throw new Error('Company information is required to upgrade to agency');
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: user.company_id },
+      select: { id: true, name: true, email: true, phone_number: true },
+    });
+
+    if (!company) {
+      throw new Error('Company not found');
+    }
+
+    let agency = await this.prisma.agency.findFirst({
+      where: { company_id: company.id },
+    });
+
+    if (!agency) {
+      agency = await this.prisma.agency.create({
+        data: {
+          company_id: company.id,
+          name: `${company.name} Agency`,
+          email: company.email || user.email || `${company.name}@agency.local`,
+          phone_number: company.phone_number || null,
+          status: 'active' as any,
+          created_by: user.user_id,
+        },
+      });
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: user.user_id },
+      data: {
+        role: 'agency_admin' as any,
+        agency_id: agency.id,
+        updated_at: new Date(),
+      },
+    });
+
+    return { agency, user: updatedUser };
   }
 }

@@ -1,6 +1,8 @@
 import { TenantsService } from '../services/tenants.service.js';
 import { writeSuccess, writeError } from '../utils/response.js';
+import { getPrisma } from '../config/prisma.js';
 const service = new TenantsService();
+const prisma = getPrisma();
 export const createTenant = async (req, res) => {
     try {
         const user = req.user;
@@ -255,10 +257,21 @@ export const getTenantDocuments = async (req, res) => {
         if (!id) {
             return writeError(res, 400, 'Tenant ID is required');
         }
-        // TODO: Implement document retrieval logic
-        // For now, return empty array as placeholder
-        const documents = [];
-        writeSuccess(res, 200, 'Tenant documents retrieved successfully', documents);
+        await service.getTenant(id, user);
+        const documents = await prisma.tenantDocument.findMany({
+            where: { tenant_id: id },
+            orderBy: { created_at: 'desc' },
+        });
+        const formatted = documents.map((doc) => ({
+            id: doc.id,
+            name: doc.name,
+            type: doc.type,
+            category: doc.category,
+            size: `${(doc.size / 1024 / 1024).toFixed(2)} MB`,
+            uploadDate: doc.created_at.toISOString(),
+            url: doc.url,
+        }));
+        writeSuccess(res, 200, 'Tenant documents retrieved successfully', formatted);
     }
     catch (error) {
         const message = error.message || 'Failed to get tenant documents';
@@ -403,8 +416,8 @@ export const getTenantNotes = async (req, res) => {
         if (!id) {
             return writeError(res, 400, 'Tenant ID is required');
         }
-        const notes = await service.getTenantNotes(id, user);
-        writeSuccess(res, 200, 'Tenant notes retrieved successfully', notes);
+        const data = await service.getTenantNotes(id, user);
+        writeSuccess(res, 200, 'Tenant notes retrieved successfully', data);
     }
     catch (error) {
         const message = error.message || 'Failed to get tenant notes';
@@ -417,11 +430,24 @@ export const updateTenantNotes = async (req, res) => {
     try {
         const user = req.user;
         const { id } = req.params;
-        const { notes } = req.body;
+        const { notes, personal_notes, todos } = req.body;
         if (!id) {
             return writeError(res, 400, 'Tenant ID is required');
         }
-        const result = await service.updateTenantNotes(id, notes || '', user);
+        let payload;
+        if (personal_notes !== undefined || todos !== undefined) {
+            payload = {
+                personal_notes: (typeof personal_notes === 'string' ? personal_notes : '') ?? '',
+                todos: Array.isArray(todos) ? todos : [],
+            };
+        }
+        else if (notes !== undefined) {
+            payload = { personal_notes: typeof notes === 'string' ? notes : '', todos: [] };
+        }
+        else {
+            payload = { personal_notes: '', todos: [] };
+        }
+        const result = await service.updateTenantNotes(id, payload, user);
         writeSuccess(res, 200, 'Tenant notes updated successfully', result);
     }
     catch (error) {

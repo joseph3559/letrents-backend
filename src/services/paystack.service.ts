@@ -2,6 +2,8 @@ import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import axios from 'axios';
 import { buildWhereClause } from '../utils/roleBasedFiltering.js';
+import { getNextReceiptNumber } from '../utils/invoice-number-generator.js';
+import { getChannelDisplay } from '../utils/format-payment-display.js';
 
 export interface PaystackConfig {
   secretKey: string;
@@ -183,7 +185,38 @@ export class PaystackService {
     });
 
     if (existingSubscription) {
-      throw new Error('company already has an active subscription');
+      // If same plan, block to avoid duplicate subscriptions
+      if (existingSubscription.plan === request.plan) {
+        throw new Error('company already has this subscription plan');
+      }
+
+      // For upgrades/downgrades, cancel the current subscription before creating a new one
+      try {
+        if (existingSubscription.paystack_subscription_code) {
+          await this.makeRequest('POST', `/subscription/disable`, {
+            code: existingSubscription.paystack_subscription_code,
+            token: existingSubscription.paystack_subscription_code,
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to disable existing Paystack subscription:', error);
+        // Continue anyway; we will still create the new subscription
+      }
+
+      await this.prisma.subscription.update({
+        where: { id: existingSubscription.id },
+        data: {
+          status: 'canceled',
+          canceled_at: new Date(),
+          metadata: {
+            ...(existingSubscription.metadata as object),
+            cancellation_reason: 'plan_change',
+            canceled_by: user.user_id,
+            upgraded_to: request.plan,
+            canceled_at: new Date().toISOString(),
+          },
+        },
+      });
     }
 
     const planConfig = this.plans[request.plan];
@@ -256,7 +289,69 @@ export class PaystackService {
       };
     } catch (error: any) {
       console.error('Error creating subscription:', error);
-      throw new Error('Failed to create subscription: ' + error.message);
+
+      // DEV FALLBACK: if Paystack test keys are used and plans don't exist on test,
+      // create a local trial subscription so upgrade/downgrade can be tested.
+      const isTestKey = (this.config.secretKey || '').startsWith('sk_test');
+      const errorMessage = error?.message || '';
+      if (isTestKey && errorMessage.toLowerCase().includes('plan')) {
+        console.warn('Paystack plan not found in test mode. Creating local trial subscription.');
+
+        const trialStartDate = new Date();
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+        const subscription = await this.prisma.subscription.create({
+          data: {
+            company_id: user.company_id!,
+            plan: request.plan,
+            status: 'trial',
+            gateway: 'paystack',
+            paystack_plan_code: planConfig.plan_code,
+            paystack_subscription_code: `test_sub_${Date.now()}`,
+            paystack_customer_code: `test_cus_${Date.now()}`,
+            amount: planConfig.amount / 100,
+            currency: 'KES',
+            billing_cycle: 'monthly',
+            trial_start_date: trialStartDate,
+            trial_end_date: trialEndDate,
+            start_date: trialStartDate,
+            next_billing_date: trialEndDate,
+            metadata: {
+              customer_email: request.customerEmail,
+              customer_name: request.customerName,
+              customer_phone: request.customerPhone,
+              mock_payment: true,
+              mock_reason: errorMessage,
+            },
+            created_by: user.user_id,
+          },
+          include: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        return {
+          subscription,
+          paystack_data: {
+            authorization_url: null,
+            access_code: null,
+            reference: `test_ref_${Date.now()}`,
+          },
+          customer: {
+            id: 0,
+            customer_code: `test_cus_${Date.now()}`,
+            email: request.customerEmail,
+          },
+        };
+      }
+
+      throw new Error('Failed to create subscription: ' + errorMessage);
     }
   }
 
@@ -696,26 +791,38 @@ export class PaystackService {
         orderBy: { created_at: 'desc' },
       });
 
+      const channel = transaction.channel || (transaction.authorization as any)?.channel;
+      const channelDisplay = getChannelDisplay(channel, transaction.authorization);
+      const paystackAttachments = [{
+        gateway: 'paystack',
+        reference: transaction.reference,
+        transaction_id: String(transaction.id),
+        channel: channel || null,
+        channel_display: channelDisplay,
+      }];
+
       let payment;
       if (existingPendingPayment) {
-        // Update existing pending payment
+        const receiptNumber = await getNextReceiptNumber(this.prisma, existingPendingPayment.company_id);
         payment = await this.prisma.payment.update({
           where: { id: existingPendingPayment.id },
           data: {
             status: 'completed',
             payment_method: 'online',
             payment_date: new Date(),
-            transaction_id: transaction.id.toString(), // Convert to string
+            receipt_number: receiptNumber,
+            transaction_id: transaction.id.toString(),
             reference_number: transaction.reference,
             notes: `Online rent payment via Paystack - ${paymentPeriod}. Service fee included in total.`,
             processed_by: user.user_id,
             processed_at: new Date(),
             received_from: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
+            attachments: paystackAttachments as any,
           },
         });
         console.log(`✅ Updated existing pending payment: ${payment.receipt_number}`);
       } else {
-        // Create new payment record if no pending payment exists
+        const receiptNumber = await getNextReceiptNumber(this.prisma, user.company_id!);
         payment = await this.prisma.payment.create({
           data: {
             company_id: user.company_id,
@@ -729,14 +836,15 @@ export class PaystackService {
             status: 'completed',
             payment_date: new Date(),
             payment_period: paymentPeriod,
-            receipt_number: `RNT-${Date.now()}-${reference.substring(0, 6).toUpperCase()}`,
-            transaction_id: transaction.id.toString(), // Convert to string
+            receipt_number: receiptNumber,
+            transaction_id: transaction.id.toString(),
             reference_number: transaction.reference,
             notes: `Online rent payment via Paystack - ${paymentPeriod}. Service fee included in total.`,
             processed_by: user.user_id,
             processed_at: new Date(),
             received_from: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
             created_by: user.user_id,
+            attachments: paystackAttachments as any,
           },
         });
         console.log(`✅ Created new payment record: ${payment.receipt_number}`);
@@ -864,10 +972,14 @@ export class PaystackService {
         throw new Error('Tenant profile not found');
       }
 
-      // Create a payment record for the advance payment
+      const companyId = tenantProfile.current_property?.company_id || user.company_id!;
+      const receiptNumber = await getNextReceiptNumber(this.prisma, companyId);
+      const ch = transaction.channel || (transaction.authorization as any)?.channel;
+      const chDisplay = getChannelDisplay(ch, transaction.authorization);
+
       const payment = await this.prisma.payment.create({
         data: {
-          company_id: tenantProfile.current_property?.company_id || user.company_id!,
+          company_id: companyId,
           property_id: tenantProfile.current_property?.id,
           unit_id: tenantProfile.current_unit?.id,
           tenant_id: user.user_id,
@@ -875,14 +987,21 @@ export class PaystackService {
           payment_method: 'online',
           payment_type: 'rent',
           payment_date: new Date().toISOString(),
-          payment_period: paymentPeriod, // Use the period from metadata
-          transaction_id: transaction.id.toString(), // Convert to string
+          payment_period: paymentPeriod,
+          transaction_id: transaction.id.toString(),
           reference_number: transaction.reference,
-          receipt_number: `ADV-${Date.now()}-${transaction.reference.substring(0, 6).toUpperCase()}`,
+          receipt_number: receiptNumber,
           received_from: `${tenantProfile.user.first_name} ${tenantProfile.user.last_name}`,
           status: 'completed',
           notes: `Advance payment for ${months} months${monthsList ? ` (${monthsList})` : ''}. Total amount credited to account balance.`,
           created_by: user.user_id,
+          attachments: [{
+            gateway: 'paystack',
+            reference: transaction.reference,
+            transaction_id: String(transaction.id),
+            channel: ch || null,
+            channel_display: chDisplay,
+          }] as any,
         },
         include: {
           tenant: {

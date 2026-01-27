@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listPayments, getPayment, createPayment, updatePayment, approvePayment, deletePayment, sendPaymentReceipt, verifyRentPayment, updatePendingPayment, verifyAdvancePayment } from '../controllers/payments.controller.js';
+import { listPayments, getPayment, createPayment, updatePayment, approvePayment, reconcilePendingPayments, deletePayment, sendPaymentReceipt, verifyRentPayment, updatePendingPayment, verifyAdvancePayment } from '../controllers/payments.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 const router = Router();
 // Payments CRUD
@@ -10,6 +10,8 @@ router.put('/:id', rbacResource('payments', 'update'), updatePayment);
 router.delete('/:id', rbacResource('payments', 'delete'), deletePayment);
 // Payment approval
 router.post('/:id/approve', rbacResource('payments', 'approve'), approvePayment);
+// One-time reconciliation for pending payments
+router.post('/reconcile-pending', rbacResource('payments', 'update'), reconcilePendingPayments);
 // Send payment receipt
 router.post('/:id/send-receipt', rbacResource('payments', 'read'), sendPaymentReceipt);
 // Verify rent payment (Paystack)

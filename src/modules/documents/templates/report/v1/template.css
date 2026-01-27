@@ -1,0 +1,5 @@
+/* Report-specific styles */
+.doc-title h1 { font-size: 16px; }
+.table thead th { font-size: 10px; }
+.table tbody td { font-size: 10px; }
+

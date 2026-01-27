@@ -9,6 +9,7 @@ router.use(requireAuth);
 router.get('/conversations', rbacResource('messages', 'read'), messagingController.getConversations);
 router.post('/conversations', rbacResource('messages', 'create'), messagingController.createConversation);
 router.get('/conversations/:id', rbacResource('messages', 'read'), messagingController.getConversation);
+router.delete('/conversations/:id', rbacResource('messages', 'delete'), messagingController.deleteConversation);
 // Messages
 router.get('/conversations/:id/messages', rbacResource('messages', 'read'), messagingController.getMessages);
 router.post('/conversations/:id/messages', rbacResource('messages', 'create'), messagingController.createMessage);

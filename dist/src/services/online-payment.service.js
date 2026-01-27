@@ -1,5 +1,20 @@
 import { getPrisma } from '../config/prisma.js';
+import { getNextReceiptNumber } from '../utils/invoice-number-generator.js';
+import { getChannelDisplay } from '../utils/format-payment-display.js';
 const prisma = getPrisma();
+// UUID validation regex (supports standard UUID format)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUUID(value) {
+    if (!value || typeof value !== 'string')
+        return false;
+    return UUID_REGEX.test(value);
+}
+function validateUUIDs(values, fieldName) {
+    const invalid = values.filter(v => !isValidUUID(v));
+    if (invalid.length > 0) {
+        throw new Error(`Invalid ${fieldName}: Expected valid UUID(s), but received invalid value(s): ${invalid.slice(0, 3).join(', ')}`);
+    }
+}
 function mapInvoiceTypeToPaymentType(invoiceType) {
     if (!invoiceType)
         return 'other';
@@ -14,11 +29,8 @@ function mapInvoiceTypeToPaymentType(invoiceType) {
 function buildPaymentPeriod(date) {
     return `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
 }
-function generateReceiptNumber(now) {
-    return `PAY-${now.toISOString().split('T')[0].replace(/-/g, '')}-${Math.random()
-        .toString(36)
-        .substring(2, 8)
-        .toUpperCase()}`;
+async function generateReceiptNumber(companyId, tx) {
+    return getNextReceiptNumber(tx, companyId);
 }
 /**
  * Clean, single-responsibility payment processor used by both webhook and frontend callback.
@@ -32,6 +44,11 @@ export async function processTenantOnlinePayment(user, payload) {
     if (!invoice_ids || !Array.isArray(invoice_ids) || invoice_ids.length === 0) {
         throw new Error('At least one invoice must be selected');
     }
+    // Validate UUIDs before querying Prisma
+    if (!isValidUUID(user.user_id)) {
+        throw new Error(`Invalid user_id: Expected valid UUID, but received: ${user.user_id}`);
+    }
+    validateUUIDs(invoice_ids, 'invoice_ids');
     const invoices = await prisma.invoice.findMany({
         where: {
             id: { in: invoice_ids },
@@ -56,43 +73,57 @@ export async function processTenantOnlinePayment(user, payload) {
     const result = await prisma.$transaction(async (tx) => {
         const payments = [];
         for (const invoice of invoices) {
-            // Remove placeholder pending payments for this invoice created at invoice generation time
+            const receiptNumber = await generateReceiptNumber(invoice.company_id, tx);
+            const paymentData = {
+                company_id: invoice.company_id,
+                tenant_id: invoice.issued_to,
+                unit_id: invoice.unit_id,
+                property_id: invoice.property_id,
+                invoice_id: invoice.id,
+                amount: invoice.total_amount,
+                currency: invoice.currency,
+                payment_method: 'online',
+                payment_type: mapInvoiceTypeToPaymentType(invoice.invoice_type),
+                status: 'approved',
+                payment_date: now,
+                payment_period: paymentPeriod,
+                receipt_number: receiptNumber,
+                transaction_id: transaction_id || reference_number || null,
+                reference_number: reference_number || transaction_id || null,
+                received_from: 'Tenant Portal',
+                created_by: user.user_id,
+                attachments: [
+                    {
+                        gateway: 'paystack',
+                        transaction_id,
+                        reference_number,
+                        gateway_response: gateway_response || null,
+                        channel: gateway_response?.data?.channel || gateway_response?.channel || null,
+                        channel_display: getChannelDisplay(gateway_response?.data?.channel || gateway_response?.channel, gateway_response?.data?.authorization || gateway_response?.authorization),
+                    },
+                ],
+            };
+            const existingPending = await tx.payment.findFirst({
+                where: {
+                    invoice_id: invoice.id,
+                    status: 'pending',
+                },
+                orderBy: { created_at: 'desc' },
+            });
+            const payment = existingPending
+                ? await tx.payment.update({
+                    where: { id: existingPending.id },
+                    data: paymentData,
+                })
+                : await tx.payment.create({
+                    data: paymentData,
+                });
+            // Clean up any other placeholder pending payments for this invoice
             await tx.payment.deleteMany({
                 where: {
                     invoice_id: invoice.id,
                     status: 'pending',
-                    receipt_number: { startsWith: 'PENDING-' },
-                },
-            });
-            const receiptNumber = generateReceiptNumber(now);
-            const payment = await tx.payment.create({
-                data: {
-                    company_id: invoice.company_id,
-                    tenant_id: invoice.issued_to,
-                    unit_id: invoice.unit_id,
-                    property_id: invoice.property_id,
-                    invoice_id: invoice.id,
-                    amount: invoice.total_amount,
-                    currency: invoice.currency,
-                    payment_method: 'online',
-                    payment_type: mapInvoiceTypeToPaymentType(invoice.invoice_type),
-                    status: 'approved',
-                    payment_date: now,
-                    payment_period: paymentPeriod,
-                    receipt_number: receiptNumber,
-                    transaction_id: transaction_id || reference_number || null,
-                    reference_number: reference_number || transaction_id || null,
-                    received_from: 'Tenant Portal',
-                    created_by: user.user_id,
-                    // store gateway info in attachments json column to avoid unknown field errors
-                    attachments: [
-                        {
-                            gateway: 'paystack',
-                            transaction_id,
-                            reference_number,
-                            gateway_response: gateway_response || null,
-                        },
-                    ],
+                    id: { not: payment.id },
                 },
             });
             await tx.invoice.update({
@@ -105,9 +136,13 @@ export async function processTenantOnlinePayment(user, payload) {
                 },
             });
             payments.push({
+                payment_id: payment.id,
+                invoice_id: invoice.id,
+                issuer_id: invoice.issued_by,
                 invoice_number: invoice.invoice_number,
                 receipt_number: payment.receipt_number,
                 amount: Number(payment.amount),
+                currency: payment.currency || invoice.currency || 'KES',
             });
         }
         return {
@@ -116,5 +151,32 @@ export async function processTenantOnlinePayment(user, payload) {
             receipts: payments,
         };
     });
+    // Notify invoice issuer(s) (landlord/agency/agent) about received payment
+    try {
+        const { notificationsService } = await import('./notifications.service.js');
+        for (const receipt of result.receipts || []) {
+            if (!receipt.issuer_id)
+                continue;
+            await notificationsService.createNotification(user, {
+                recipientId: receipt.issuer_id,
+                type: 'payment_received',
+                category: 'payment',
+                priority: 'high',
+                channels: ['app', 'push'],
+                title: 'Payment received',
+                message: `Tenant payment received for invoice ${receipt.invoice_number}. Receipt: ${receipt.receipt_number}`,
+                metadata: {
+                    payment_id: receipt.payment_id,
+                    invoice_id: receipt.invoice_id,
+                    receipt_number: receipt.receipt_number,
+                    amount: receipt.amount,
+                    currency: receipt.currency,
+                },
+            });
+        }
+    }
+    catch (error) {
+        console.error('❌ Failed to send payment notifications to issuer:', error);
+    }
     return result;
 }

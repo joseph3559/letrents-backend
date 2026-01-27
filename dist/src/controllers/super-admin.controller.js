@@ -1259,12 +1259,25 @@ export const createCompany = async (req, res) => {
 export const updateCompany = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, business_type, email, phone_number, address, subscription_plan, status } = req.body;
+        const user = req.user;
+        const { name, business_type, email, phone_number, address, street, city, region, country, postal_code, subscription_plan, status } = req.body;
+        // Check if user is updating their own company (for landlords/agency_admins)
+        if (user.role !== 'super_admin') {
+            // Non-super-admin users can only update their own company
+            if (!user.company_id || user.company_id !== id) {
+                return writeError(res, 403, 'You can only update your own company');
+            }
+            // Restrict which fields non-super-admins can update
+            // They cannot update: business_type, subscription_plan, status
+            if (business_type !== undefined || subscription_plan !== undefined || status !== undefined) {
+                return writeError(res, 403, 'You do not have permission to update business_type, subscription_plan, or status');
+            }
+        }
         // Build update object with only provided fields
         const updateData = {};
         if (name !== undefined)
             updateData.name = name;
-        if (business_type !== undefined)
+        if (business_type !== undefined && user.role === 'super_admin')
             updateData.business_type = business_type;
         if (email !== undefined)
             updateData.email = email;
@@ -1272,9 +1285,19 @@ export const updateCompany = async (req, res) => {
             updateData.phone_number = phone_number;
         if (address !== undefined)
             updateData.address = address;
-        if (subscription_plan !== undefined)
+        if (street !== undefined)
+            updateData.street = street;
+        if (city !== undefined)
+            updateData.city = city;
+        if (region !== undefined)
+            updateData.region = region;
+        if (country !== undefined)
+            updateData.country = country;
+        if (postal_code !== undefined)
+            updateData.postal_code = postal_code;
+        if (subscription_plan !== undefined && user.role === 'super_admin')
             updateData.subscription_plan = subscription_plan;
-        if (status !== undefined)
+        if (status !== undefined && user.role === 'super_admin')
             updateData.status = status;
         updateData.updated_at = new Date();
         const updatedCompany = await prisma.company.update({
@@ -1287,6 +1310,11 @@ export const updateCompany = async (req, res) => {
                 email: true,
                 phone_number: true,
                 address: true,
+                street: true,
+                city: true,
+                region: true,
+                country: true,
+                postal_code: true,
                 subscription_plan: true,
                 status: true,
                 updated_at: true,

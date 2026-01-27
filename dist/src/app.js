@@ -59,6 +59,11 @@ app.use(morgan('dev'));
 // Route aliases for backward compatibility
 app.use('/api/v1', routeAliasMiddleware);
 app.use('/api/v1', deprecationWarningMiddleware);
+// Public verification routes (mounted at root for clean URLs)
+import verificationRoutes from './routes/verification.js';
+app.use('/verify', verificationRoutes);
+// Also mount at /api/v1/verify for backward compatibility
+app.use('/api/v1/verify', verificationRoutes);
 // Health & Status Endpoints
 app.get('/health', (_req, res) => {
     res.status(200).json({
