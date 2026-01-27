@@ -86,6 +86,11 @@ export class UsersService {
                         id: true,
                         name: true,
                         phone_number: true,
+                        street: true,
+                        city: true,
+                        region: true,
+                        country: true,
+                        postal_code: true,
                     },
                 },
                 id_number: true,
@@ -330,14 +335,22 @@ export class UsersService {
         });
     }
     canCreateRole(userRole, targetRole) {
+        // CRITICAL: Restrict 'manager' role to super_admin only (SaaS team only)
+        if (targetRole === 'manager' && userRole !== 'super_admin') {
+            return false;
+        }
         const roleHierarchy = {
-            super_admin: ['super_admin', 'agency_admin', 'landlord', 'agent', 'caretaker', 'tenant'],
+            super_admin: ['super_admin', 'agency_admin', 'landlord', 'agent', 'caretaker', 'tenant', 'manager', 'admin', 'team_lead', 'staff', 'finance', 'sales', 'marketing', 'support', 'hr', 'auditor'],
             agency_admin: ['landlord', 'agent', 'caretaker', 'tenant'],
             landlord: ['caretaker', 'tenant'],
         };
         return roleHierarchy[userRole]?.includes(targetRole) || false;
     }
     canUpdateRole(userRole, currentRole, newRole) {
+        // CRITICAL: Restrict 'manager' role to super_admin only (SaaS team only)
+        if (newRole === 'manager' && userRole !== 'super_admin') {
+            return false;
+        }
         // Super admin can change any role
         if (userRole === 'super_admin')
             return true;

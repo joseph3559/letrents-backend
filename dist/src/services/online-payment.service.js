@@ -2,6 +2,19 @@ import { getPrisma } from '../config/prisma.js';
 import { getNextReceiptNumber } from '../utils/invoice-number-generator.js';
 import { getChannelDisplay } from '../utils/format-payment-display.js';
 const prisma = getPrisma();
+// UUID validation regex (supports standard UUID format)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUUID(value) {
+    if (!value || typeof value !== 'string')
+        return false;
+    return UUID_REGEX.test(value);
+}
+function validateUUIDs(values, fieldName) {
+    const invalid = values.filter(v => !isValidUUID(v));
+    if (invalid.length > 0) {
+        throw new Error(`Invalid ${fieldName}: Expected valid UUID(s), but received invalid value(s): ${invalid.slice(0, 3).join(', ')}`);
+    }
+}
 function mapInvoiceTypeToPaymentType(invoiceType) {
     if (!invoiceType)
         return 'other';
@@ -31,6 +44,11 @@ export async function processTenantOnlinePayment(user, payload) {
     if (!invoice_ids || !Array.isArray(invoice_ids) || invoice_ids.length === 0) {
         throw new Error('At least one invoice must be selected');
     }
+    // Validate UUIDs before querying Prisma
+    if (!isValidUUID(user.user_id)) {
+        throw new Error(`Invalid user_id: Expected valid UUID, but received: ${user.user_id}`);
+    }
+    validateUUIDs(invoice_ids, 'invoice_ids');
     const invoices = await prisma.invoice.findMany({
         where: {
             id: { in: invoice_ids },

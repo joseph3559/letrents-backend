@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Receipt {{receipt.receiptNumber}}</title>
+    <style>
+{{{css}}}
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="doc">
+        <!-- HEADER: Company Identity & Document Title -->
+        <div class="header">
+          <div class="header-left">
+            <div class="company-brand">
+              <div class="company-name">{{company.name}}</div>
+              <div class="company-details">
+                {{{company.metaHtml}}}
+              </div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="document-header">
+              <div class="doc-title-wrapper">
+                <h1 class="doc-title">PAYMENT RECEIPT</h1>
+                <div class="doc-title-accent"></div>
+              </div>
+              <div class="doc-meta">
+                <div class="doc-number-label">Receipt Number</div>
+                <div class="doc-number">{{receipt.receiptNumber}}</div>
+              </div>
+              <div class="status-badge {{receipt.statusClass}}">
+                <span class="status-dot"></span>
+                <span class="status-text">{{receipt.status}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HERO SECTION: Total Amount (Primary Focal Point) -->
+        <div class="amount-section">
+          <div class="amount-label">TOTAL PAID</div>
+          <div class="amount-value">{{receipt.amount}}</div>
+        </div>
+
+        <!-- CONSOLIDATED INFORMATION: Two-Column Layout -->
+        <div class="consolidated-info">
+          <div class="info-column">
+            <div class="column-header">RECEIVED FROM</div>
+            <div class="info-panel-compact">
+              {{{sections.payerPropertyRows}}}
+            </div>
+          </div>
+          <div class="info-column">
+            <div class="column-header">Payment Details</div>
+            <div class="info-panel-compact">
+              {{{sections.paymentDetailsRows}}}
+            </div>
+          </div>
+        </div>
+
+        <!-- PAYMENT BREAKDOWN -->
+        <div class="breakdown-section">
+          <div class="section-title">Payment Breakdown</div>
+          {{{sections.breakdownTable}}}
+          <div class="grand-total">
+            <strong>Grand Total: {{receipt.amount}}</strong>
+          </div>
+        </div>
+
+        <!-- NOTES (Optional) -->
+        {{{sections.notesSection}}}
+
+        <!-- FOOTER: QR Code, Approval, and Technical Details -->
+        <div class="footer-section">
+          <div class="footer-left">
+            <div class="qr-compact">
+              {{{sections.qrCodeSvg}}}
+              <div class="qr-label-compact">Scan to verify</div>
+            </div>
+          </div>
+          <div class="footer-right">
+            <div class="approval-indicator">
+              <span class="approval-dot"></span>
+              <span class="approval-text">Approved</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOOTER: Audit & Legal (Muted) -->
+        <div class="footer">
+          <div class="footer-meta">
+            {{{sections.footerMeta}}}
+          </div>
+          <div class="footer-support">
+            Support: {{meta.supportEmail}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

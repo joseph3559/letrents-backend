@@ -761,6 +761,9 @@ model Invoice {
   payment_method    String?           @db.VarChar(50)
   payment_reference String?           @db.VarChar(100)
   metadata          Json              @default("{}")
+  verification_token String?         @unique @db.VarChar(255)
+  qr_url             String?          @db.VarChar(500)
+  verified_at        DateTime?        @db.Timestamptz(6)
   created_at        DateTime          @default(now()) @db.Timestamptz(6)
   updated_at        DateTime          @default(now()) @db.Timestamptz(6)
   line_items        InvoiceLineItem[]
@@ -770,6 +773,8 @@ model Invoice {
   property          Property?         @relation(fields: [property_id], references: [id])
   unit              Unit?             @relation(fields: [unit_id], references: [id])
 
+  @@index([invoice_number])
+  @@index([verification_token])
   @@map("invoices")
 }
 
@@ -921,6 +926,42 @@ model TenantDocument {
   @@map("tenant_documents")
 }
 
+model DocumentTemplate {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  document_type String   @db.VarChar(50)
+  version       Int
+  html          String   @db.Text
+  css           String   @db.Text
+  checksum      String   @db.VarChar(128)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([document_type, version])
+  @@index([document_type])
+  @@map("document_templates")
+}
+
+model DocumentSnapshot {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  document_type   String   @db.VarChar(50)
+  entity_type     String   @db.VarChar(50)
+  entity_id       String   @db.Uuid
+  document_number String?  @db.VarChar(100)
+  revision        Int      @default(1)
+  template_version Int
+  render_context  Json
+  renderer_version String? @db.VarChar(50)
+  generated_by    String?  @db.Uuid
+  generated_at    DateTime @default(now()) @db.Timestamptz(6)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([document_type, entity_type, entity_id, revision])
+  @@index([document_type, entity_type, entity_id])
+  @@index([document_number])
+  @@map("document_snapshots")
+}
+
 model LandlordTenantNotes {
   id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   company_id String   @db.Uuid
@@ -965,6 +1006,9 @@ model Payment {
   attachments        Json               @default("[]")
   receipt_sent       Boolean            @default(false)
   notification_sent  Boolean            @default(false)
+  verification_token String?            @unique @db.VarChar(255)
+  qr_url             String?            @db.VarChar(500)
+  verified_at        DateTime?          @db.Timestamptz(6)
   created_by         String             @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
   updated_at         DateTime           @default(now()) @db.Timestamptz(6)
@@ -977,6 +1021,8 @@ model Payment {
   tenant             User               @relation("PaymentTenant", fields: [tenant_id], references: [id])
   unit               Unit?              @relation("PaymentUnit", fields: [unit_id], references: [id])
 
+  @@index([receipt_number])
+  @@index([verification_token])
   @@map("payments")
 }
 

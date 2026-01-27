@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Refund Receipt {{refund.receiptNumber}}</title>
+    <style>
+{{{css}}}
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="doc">
+        <!-- HEADER: Company Identity & Document Title -->
+        <div class="header">
+          <div class="header-left">
+            <div class="company-brand">
+              <div class="company-name">{{company.name}}</div>
+              <div class="company-details">
+                {{{company.metaHtml}}}
+              </div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="document-header">
+              <div class="doc-title-wrapper">
+                <h1 class="doc-title">REFUND RECEIPT</h1>
+                <div class="doc-title-accent"></div>
+              </div>
+              <div class="doc-meta">
+                <div class="doc-number-label">Receipt Number</div>
+                <div class="doc-number">{{refund.receiptNumber}}</div>
+              </div>
+              <div class="status-badge {{refund.statusClass}}">
+                <span class="status-dot"></span>
+                <span class="status-text">{{refund.status}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REFUND CONFIRMATION -->
+        <div class="refund-notice">
+          <div class="refund-notice-content">
+            <div class="refund-notice-title">Refund Confirmation</div>
+            <div class="refund-notice-text">
+              This document confirms that the payment referenced below has been refunded.
+            </div>
+          </div>
+        </div>
+
+        <!-- HERO SECTION: Refunded Amount -->
+        <div class="amount-section">
+          <div class="amount-label">REFUNDED AMOUNT</div>
+          <div class="amount-value">{{refund.amount}}</div>
+        </div>
+
+        <!-- TENANT INFORMATION -->
+        <div class="info-section">
+          <div class="section-title">Tenant Information</div>
+          <div class="info-panel">
+            {{{sections.tenantRows}}}
+          </div>
+        </div>
+
+        <!-- REFUND INFORMATION -->
+        <div class="info-section">
+          <div class="section-title">Refund Details</div>
+          <div class="info-panel">
+            {{{sections.detailsRows}}}
+          </div>
+        </div>
+
+        <!-- PROPERTY INFORMATION -->
+        {{{sections.propertySection}}}
+
+        <!-- QR CODE VERIFICATION -->
+        <div class="qr-section">
+          <div class="qr-container">
+            {{{sections.qrCodeSvg}}}
+            <div class="qr-text">
+              <div class="qr-label">Scan to verify refund receipt</div>
+              <div class="qr-code-text">{{sections.verificationToken}}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOOTER: Audit & Legal -->
+        <div class="footer">
+          <div class="footer-legal">
+            This is a system-generated refund receipt and is valid without signature.
+          </div>
+          <div class="footer-support">
+            Support: {{meta.supportEmail}}
+          </div>
+          <div class="footer-meta">
+            <span>Generated {{meta.generatedAt}}</span>
+            <span class="separator">•</span>
+            <span>Powered by {{meta.systemName}}</span>
+            <span class="separator">•</span>
+            <span>Receipt: {{refund.receiptNumber}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

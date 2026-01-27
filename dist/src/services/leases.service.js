@@ -227,6 +227,14 @@ export class LeasesService {
                     // Don't fail the lease creation if invoice generation fails
                 }
             }
+            // 📄 Record lease snapshot at creation (new revision)
+            try {
+                const { documentService } = await import('../modules/documents/document-service.js');
+                await documentService.recordLeaseSnapshot(lease.id, user, 1);
+            }
+            catch {
+                // Never fail lease creation if snapshot recording fails
+            }
             return lease;
         }
         catch (error) {
@@ -434,6 +442,14 @@ export class LeasesService {
                 updated_at: new Date(),
             },
         });
+        // 📄 Record lease snapshot at termination (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordLeaseSnapshot(id, user, 1);
+        }
+        catch {
+            // Never fail termination if snapshot recording fails
+        }
         return lease;
     }
     async renewLease(id, renewalData, user) {
@@ -460,6 +476,14 @@ export class LeasesService {
                 updated_at: new Date(),
             },
         });
+        // 📄 Record lease snapshot at renewal for the old lease (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordLeaseSnapshot(id, user, 1);
+        }
+        catch {
+            // Never fail renewal if snapshot recording fails
+        }
         return newLease;
     }
     async generateLeaseNumber(companyId, attempt = 0) {
@@ -728,6 +752,14 @@ export class LeasesService {
             }
         });
         // Don't update unit status since the tenant is already there and unit is already occupied
+        // 📄 Record lease snapshot at creation (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordLeaseSnapshot(lease.id, user, 1);
+        }
+        catch {
+            // Never fail lease creation if snapshot recording fails
+        }
         return lease;
     }
 }

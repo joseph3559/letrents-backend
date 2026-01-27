@@ -23,6 +23,7 @@ export interface CreateTenantRequest {
   first_name: string;
   last_name: string;
   phone_number?: string;
+  id_number?: string;
   unit_id?: string;
   property_id?: string;
   lease_start_date?: string;
@@ -271,6 +272,7 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
             user_id: tenant.id,
             current_unit_id: req.unit_id,
             current_property_id: unit.property.id,
+            id_number: req.id_number || null,
             emergency_contact_name: emergencyContactName,
             emergency_contact_phone: emergencyContactPhone,
             emergency_contact_relationship: emergencyContactRelationship,
@@ -304,6 +306,7 @@ This agreement is subject to the laws of Kenya and any disputes shall be resolve
             user_id: tenant.id,
             current_unit_id: null,
             current_property_id: req.property_id || null,
+            id_number: req.id_number || null,
             emergency_contact_name: emergencyContactName,
             emergency_contact_phone: emergencyContactPhone,
             emergency_contact_relationship: emergencyContactRelationship,

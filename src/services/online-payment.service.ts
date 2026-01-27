@@ -5,6 +5,23 @@ import { JWTClaims } from '../types/index.js';
 
 const prisma = getPrisma();
 
+// UUID validation regex (supports standard UUID format)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(value: string | null | undefined): boolean {
+  if (!value || typeof value !== 'string') return false;
+  return UUID_REGEX.test(value);
+}
+
+function validateUUIDs(values: (string | null | undefined)[], fieldName: string): void {
+  const invalid = values.filter(v => !isValidUUID(v));
+  if (invalid.length > 0) {
+    throw new Error(
+      `Invalid ${fieldName}: Expected valid UUID(s), but received invalid value(s): ${invalid.slice(0, 3).join(', ')}`
+    );
+  }
+}
+
 export interface TenantPaymentRequest {
   invoice_ids: string[];
   transaction_id?: string;
@@ -45,6 +62,12 @@ export async function processTenantOnlinePayment(
   if (!invoice_ids || !Array.isArray(invoice_ids) || invoice_ids.length === 0) {
     throw new Error('At least one invoice must be selected');
   }
+
+  // Validate UUIDs before querying Prisma
+  if (!isValidUUID(user.user_id)) {
+    throw new Error(`Invalid user_id: Expected valid UUID, but received: ${user.user_id}`);
+  }
+  validateUUIDs(invoice_ids, 'invoice_ids');
 
   const invoices = await prisma.invoice.findMany({
     where: {

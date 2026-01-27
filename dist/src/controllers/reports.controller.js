@@ -1,5 +1,6 @@
 import { reportsService } from '../services/reports.service.js';
 import { writeSuccess, writeError } from '../utils/response.js';
+import { documentService } from '../modules/documents/document-service.js';
 export const reportsController = {
     getReports: async (req, res) => {
         try {
@@ -125,12 +126,68 @@ export const reportsController = {
             const user = req.user;
             const { type } = req.params;
             const { format = 'csv', ...filters } = req.query;
-            const exportData = await reportsService.exportReport(user, type, format, filters);
+            // PDF export is handled by the centralized document renderer for uniform output.
+            if (String(format) === 'pdf') {
+                // Convert property_ids query param to string array (consistent with other report endpoints)
+                let propertyIdsArray = undefined;
+                const property_ids = filters.property_ids;
+                if (property_ids) {
+                    if (typeof property_ids === 'string') {
+                        propertyIdsArray = property_ids.split(',').map((id) => id.trim()).filter((id) => id.length > 0);
+                    }
+                    else if (Array.isArray(property_ids)) {
+                        propertyIdsArray = property_ids.map((id) => String(id)).filter((id) => id.length > 0);
+                    }
+                }
+                // Reuse the same data selection logic as the report endpoints.
+                let reportData;
+                switch (type) {
+                    case 'property':
+                        reportData = await reportsService.getPropertyReport(user, filters);
+                        break;
+                    case 'financial': {
+                        const period = filters.period || 'monthly';
+                        const kind = filters.type || 'revenue';
+                        // reports.service already parses property_ids in some places; allow both string and array.
+                        reportData = await reportsService.getFinancialReport(user, kind, period, propertyIdsArray);
+                        break;
+                    }
+                    case 'occupancy': {
+                        const period = filters.period || 'monthly';
+                        reportData = await reportsService.getOccupancyReport(user, period, propertyIdsArray);
+                        break;
+                    }
+                    case 'rent-collection':
+                        reportData = await reportsService.getRentCollectionReport(user, filters);
+                        break;
+                    case 'maintenance': {
+                        const period = filters.period || 'monthly';
+                        reportData = await reportsService.getMaintenanceReport(user, period, filters, propertyIdsArray);
+                        break;
+                    }
+                    default:
+                        return writeError(res, 400, 'Invalid report type for export');
+                }
+                const summary = reportData?.summary || reportData?.overview || {};
+                const rows = reportData?.properties ||
+                    reportData?.invoices ||
+                    reportData?.requests ||
+                    reportData?.unitDetails ||
+                    reportData?.availableReports ||
+                    [];
+                const title = String(type).replaceAll('-', ' ').toUpperCase();
+                const pdf = await documentService.getReportPdf(type, `LetRents — ${title} Report`, Array.isArray(rows) ? rows : [], summary, user, 1);
+                const filename = `${type}_report_${new Date().toISOString().split('T')[0]}.pdf`;
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                res.setHeader('Content-Type', 'application/pdf');
+                return res.status(200).send(pdf);
+            }
+            const exportData = await reportsService.exportReport(user, type, String(format), filters);
             // Set appropriate headers for file download
             const filename = `${type}_report_${new Date().toISOString().split('T')[0]}.${format}`;
             res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-            res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/json');
-            res.send(exportData);
+            res.setHeader('Content-Type', String(format) === 'csv' ? 'text/csv' : 'application/json');
+            return res.send(exportData);
         }
         catch (error) {
             writeError(res, 500, error.message);

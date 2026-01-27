@@ -1,0 +1,241 @@
+/* Base document styles (print-grade) */
+
+@page {
+  /* Primary target is A4; renderer uses preferCSSPageSize */
+  size: A4;
+  margin: 18mm 16mm;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #111827; /* slate-900 */
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.page {
+  width: 100%;
+}
+
+.doc {
+  width: 100%;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e7eb; /* gray-200 */
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: #0f172a; /* slate-900 */
+}
+
+.brand-meta {
+  font-size: 11px;
+  color: #4b5563; /* gray-600 */
+}
+
+.doc-title {
+  text-align: right;
+}
+
+.doc-title h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #0b1f3a; /* deep blue */
+}
+
+.doc-title .doc-number {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.doc-title .status {
+  margin-top: 6px;
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border: 1px solid #d1d5db;
+  color: #111827;
+  background: #f9fafb;
+}
+
+.status.status-paid { border-color: #86efac; background: #ecfdf5; color: #065f46; }
+.status.status-overdue { border-color: #fecaca; background: #fef2f2; color: #7f1d1d; }
+.status.status-sent { border-color: #bfdbfe; background: #eff6ff; color: #1e3a8a; }
+.status.status-pending { border-color: #fed7aa; background: #fff7ed; color: #7c2d12; }
+.status.status-refunded { border-color: #c7d2fe; background: #eef2ff; color: #312e81; }
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 12px;
+  background: #ffffff;
+}
+
+.panel-title {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #374151;
+  font-weight: 800;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.kv:last-child {
+  border-bottom: none;
+}
+
+.kv-label {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.kv-value {
+  color: #111827;
+  font-weight: 600;
+  font-size: 11px;
+  text-align: right;
+}
+
+.section {
+  margin-top: 16px;
+}
+
+.section h2 {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #0b1f3a;
+  font-weight: 900;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table thead th {
+  background: #0b1f3a;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  text-align: left;
+  padding: 10px 10px;
+}
+
+.table tbody td {
+  padding: 9px 10px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 11px;
+  vertical-align: top;
+}
+
+.table tbody tr:nth-child(even) td {
+  background: #fcfcfd;
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.muted {
+  color: #6b7280;
+}
+
+.totals {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.totals-box {
+  width: 320px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.totals-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 11px;
+}
+
+.totals-row:last-child {
+  border-bottom: none;
+}
+
+.totals-row.total {
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 2px solid #111827;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.footer {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: #6b7280;
+}
+
+ul.terms {
+  margin: 0;
+  padding-left: 18px;
+}
+
+ul.terms li {
+  margin: 6px 0;
+  color: #111827;
+}
+

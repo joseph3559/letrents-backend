@@ -149,6 +149,10 @@ export const staffService = {
         if (!['agent', 'landlord', 'agency_admin', 'super_admin'].includes(user.role)) {
             throw new Error(`Insufficient permissions to create ${role}`);
         }
+        // CRITICAL: Restrict 'manager' role to super_admin only (SaaS team only)
+        if (role === 'manager' && user.role !== 'super_admin') {
+            throw new Error('The manager role is only available for the SaaS team (super admin). Landlords and agencies cannot create manager roles.');
+        }
         // CRITICAL: Validate that creator has a company_id
         if (!user.company_id) {
             console.error('❌ CRITICAL: User attempting to create staff without company_id:', user);
@@ -1078,15 +1082,19 @@ export const careteakersService = {
         // Define role hierarchy - roles that can be viewed based on user's role
         let allowedStaffRoles;
         if (user.role === 'agent') {
-            // Agents can only see staff below their level (NOT other agents or agency_admins)
-            allowedStaffRoles = ['caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
+            // Agents can only see staff below their level (NOT other agents, agency_admins, or managers)
+            allowedStaffRoles = ['caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant'];
         }
         else if (user.role === 'agency_admin') {
-            // Agency admins can see agents and all staff below
-            allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
+            // Agency admins can see agents and all staff below (NOT managers - SaaS team only)
+            allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant'];
+        }
+        else if (user.role === 'landlord') {
+            // Landlords can see agents and all staff below (NOT managers - SaaS team only)
+            allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant'];
         }
         else {
-            // Landlords and super_admins can see all staff
+            // Super admins can see all staff including managers
             allowedStaffRoles = ['agent', 'caretaker', 'cleaner', 'security', 'maintenance', 'receptionist', 'accountant', 'manager'];
         }
         // Extract property_ids from filters if provided

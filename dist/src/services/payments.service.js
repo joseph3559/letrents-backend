@@ -418,6 +418,23 @@ export class PaymentsService {
                 },
             },
         });
+        // 🔐 Generate verification token and QR URL for payment receipt
+        try {
+            const { verificationService } = await import('./verification.service.js');
+            await verificationService.ensurePaymentVerificationToken(payment.id);
+        }
+        catch (e) {
+            // Never fail approval if verification token generation fails
+            console.warn('Failed to generate verification token for payment:', e);
+        }
+        // 📄 Record payment receipt snapshot at approval (new revision)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordPaymentReceiptSnapshot(payment.id, user, 1);
+        }
+        catch {
+            // Never fail approval if snapshot recording fails
+        }
         // ✅ CRITICAL: If payment is linked to an invoice, mark the invoice as PAID
         if (payment.invoice_id) {
             try {
@@ -467,6 +484,14 @@ export class PaymentsService {
                         },
                     });
                     console.log(`✅ Invoice ${invoice.invoice_number} automatically marked as PAID (Amount: ${invoiceAmount}, Paid: ${totalPaid})`);
+                    // 📄 Record invoice snapshot at auto-paid event (new revision)
+                    try {
+                        const { documentService } = await import('../modules/documents/document-service.js');
+                        await documentService.recordInvoiceSnapshot(invoice.id, user, 1);
+                    }
+                    catch {
+                        // Don't fail approval if snapshot recording fails
+                    }
                 }
             }
             catch (error) {

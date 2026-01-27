@@ -1,0 +1,363 @@
+/* Refund Receipt - Enterprise-Grade Styling */
+
+/* Header Section - Professional & Smart Design */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px 0 28px 0;
+  border-bottom: 3px solid #0b1f3a;
+  margin-bottom: 28px;
+  position: relative;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 120px;
+  height: 3px;
+  background: linear-gradient(90deg, #0b1f3a 0%, transparent 100%);
+}
+
+.header-left {
+  flex: 1;
+  max-width: 55%;
+  padding-right: 24px;
+}
+
+.header-right {
+  flex: 1;
+  max-width: 45%;
+  text-align: right;
+}
+
+.company-brand {
+  position: relative;
+  padding-left: 16px;
+  border-left: 4px solid #0b1f3a;
+}
+
+.company-name {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #0b1f3a;
+  margin-bottom: 10px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.company-details {
+  margin-top: 8px;
+}
+
+.company-meta {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-top: 4px;
+  letter-spacing: 0.2px;
+}
+
+.document-header {
+  display: inline-block;
+  text-align: right;
+  min-width: 200px;
+}
+
+.doc-title-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+  display: inline-block;
+}
+
+.doc-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #0b1f3a;
+  text-transform: uppercase;
+  position: relative;
+  padding-bottom: 8px;
+  line-height: 1.1;
+}
+
+.doc-title-accent {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 60px;
+  height: 3px;
+  background: #0b1f3a;
+  border-radius: 2px;
+}
+
+.doc-meta {
+  margin-bottom: 10px;
+  padding-top: 8px;
+}
+
+.doc-number-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.doc-number {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0b1f3a;
+  letter-spacing: 0.5px;
+  font-family: 'Courier New', monospace;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  border: 2px solid;
+  margin-top: 8px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-text {
+  line-height: 1;
+}
+
+.status-badge.status-REFUNDED {
+  background-color: #eef2ff;
+  border-color: #6366f1;
+  color: #312e81;
+}
+
+.status-badge.status-REFUNDED .status-dot {
+  background-color: #6366f1;
+  box-shadow: 0 0 4px rgba(99, 102, 241, 0.4);
+}
+
+/* Refund Notice */
+.refund-notice {
+  margin: 24px 0;
+  padding: 16px;
+  background: linear-gradient(to right, #eef2ff 0%, #ffffff 100%);
+  border-left: 4px solid #6366f1;
+  border-radius: 6px;
+}
+
+.refund-notice-content {
+  padding-left: 8px;
+}
+
+.refund-notice-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #312e81;
+  margin-bottom: 6px;
+}
+
+.refund-notice-text {
+  font-size: 10px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* Total Amount Section - Visual Focus */
+.amount-section {
+  text-align: center;
+  padding: 28px 20px;
+  margin: 24px 0 32px 0;
+  background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.amount-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.amount-value {
+  font-size: 32px;
+  font-weight: 900;
+  color: #0b1f3a;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+/* Information Sections - Stacked Layout */
+.info-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.info-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-label {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+  flex: 0 0 40%;
+}
+
+.info-value {
+  font-size: 10px;
+  color: #0f172a;
+  font-weight: 600;
+  text-align: right;
+  flex: 1;
+  word-break: break-word;
+}
+
+/* QR Code Section */
+.qr-section {
+  margin: 32px 0 24px 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.qr-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  max-width: 220px;
+}
+
+.qr-container svg {
+  width: 180px;
+  height: 180px;
+  display: block;
+}
+
+.qr-text {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.qr-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.qr-code-text {
+  font-size: 8px;
+  font-family: 'Courier New', monospace;
+  color: #475569;
+  word-break: break-all;
+  line-height: 1.4;
+  padding: 4px 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+
+/* Footer */
+.footer {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 2px solid #e5e7eb;
+}
+
+.footer-legal {
+  font-size: 9px;
+  color: #64748b;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  font-style: italic;
+}
+
+.footer-support {
+  font-size: 9px;
+  color: #475569;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.footer-meta {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 9px;
+  color: #94a3b8;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.footer-meta .separator {
+  color: #cbd5e1;
+  margin: 0 4px;
+}
+
+/* Responsive adjustments for print */
+@media print {
+  .amount-section {
+    page-break-inside: avoid;
+  }
+  
+  .qr-section {
+    page-break-inside: avoid;
+  }
+}

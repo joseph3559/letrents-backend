@@ -279,6 +279,23 @@ export class InvoicesService {
             console.error('❌ Failed to create pending payment record for invoice:', paymentError);
             // Don't fail invoice creation if payment creation fails
         }
+        // 🔐 Generate verification token and QR URL for invoice
+        try {
+            const { verificationService } = await import('./verification.service.js');
+            await verificationService.ensureInvoiceVerificationToken(invoice.id);
+        }
+        catch (e) {
+            // Never fail invoice creation if verification token generation fails
+            console.warn('Failed to generate verification token for invoice:', e);
+        }
+        // 📄 Record official invoice snapshot (for exact regeneration/versioning)
+        try {
+            const { documentService } = await import('../modules/documents/document-service.js');
+            await documentService.recordInvoiceSnapshot(invoice.id, user, 1);
+        }
+        catch (e) {
+            // Never fail invoice creation if snapshot recording fails
+        }
         return completeInvoice;
     }
     async getInvoice(id, user) {
@@ -779,6 +796,14 @@ export class InvoicesService {
                     // Don't fail invoice sending if notification fails
                 }
             }
+            // 📄 Record invoice snapshot at send event (new revision)
+            try {
+                const { documentService } = await import('../modules/documents/document-service.js');
+                await documentService.recordInvoiceSnapshot(updatedInvoice.id, user, 1);
+            }
+            catch {
+                // Never fail send if snapshot recording fails
+            }
             // Transform and return the updated invoice
             const transformedInvoice = {
                 id: updatedInvoice.id,
@@ -926,6 +951,14 @@ export class InvoicesService {
                 },
             });
             console.log(`💰 Invoice ${invoice.invoice_number} marked as paid by ${user.email}`);
+            // 📄 Record invoice snapshot at paid event (new revision)
+            try {
+                const { documentService } = await import('../modules/documents/document-service.js');
+                await documentService.recordInvoiceSnapshot(updatedInvoice.id, user, 1);
+            }
+            catch {
+                // Never fail mark-paid if snapshot recording fails
+            }
             // Transform and return the updated invoice (same format as sendInvoice)
             const transformedInvoice = {
                 id: updatedInvoice.id,

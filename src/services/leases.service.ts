@@ -314,6 +314,14 @@ export class LeasesService {
         }
       }
 
+      // 📄 Record lease snapshot at creation (new revision)
+      try {
+        const { documentService } = await import('../modules/documents/document-service.js');
+        await documentService.recordLeaseSnapshot(lease.id, user, 1);
+      } catch {
+        // Never fail lease creation if snapshot recording fails
+      }
+
       return lease;
     } catch (error: any) {
       // Check if it's a unique constraint violation on lease_number
@@ -531,6 +539,14 @@ export class LeasesService {
       },
     });
 
+    // 📄 Record lease snapshot at termination (new revision)
+    try {
+      const { documentService } = await import('../modules/documents/document-service.js');
+      await documentService.recordLeaseSnapshot(id, user, 1);
+    } catch {
+      // Never fail termination if snapshot recording fails
+    }
+
     return lease;
   }
 
@@ -563,6 +579,14 @@ export class LeasesService {
         updated_at: new Date(),
       },
     });
+
+    // 📄 Record lease snapshot at renewal for the old lease (new revision)
+    try {
+      const { documentService } = await import('../modules/documents/document-service.js');
+      await documentService.recordLeaseSnapshot(id, user, 1);
+    } catch {
+      // Never fail renewal if snapshot recording fails
+    }
 
     return newLease;
   }
@@ -872,6 +896,14 @@ export class LeasesService {
 
     // Don't update unit status since the tenant is already there and unit is already occupied
     
+    // 📄 Record lease snapshot at creation (new revision)
+    try {
+      const { documentService } = await import('../modules/documents/document-service.js');
+      await documentService.recordLeaseSnapshot(lease.id, user, 1);
+    } catch {
+      // Never fail lease creation if snapshot recording fails
+    }
+
     return lease;
   }
 

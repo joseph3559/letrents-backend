@@ -26,6 +26,7 @@ const permissions = {
         companies: ['*'],
         checklists: ['*'],
         emergency: ['*'],
+        documents: ['*'],
     },
     agency_admin: {
         properties: ['create', 'read', 'update', 'delete', 'archive', 'duplicate', 'settings', 'history'],
@@ -55,6 +56,7 @@ const permissions = {
         users: ['create', 'read', 'update', 'delete'],
         checklists: ['create', 'read', 'update', 'delete'],
         emergency: ['create', 'read', 'update', 'delete'],
+        documents: ['read'],
     },
     landlord: {
         properties: ['create', 'read', 'update', 'delete', 'archive', 'duplicate', 'settings', 'history'],
@@ -84,6 +86,7 @@ const permissions = {
         users: ['create', 'read', 'update', 'delete'],
         checklists: ['create', 'read', 'update', 'delete'],
         emergency: ['create', 'read', 'update', 'delete'],
+        documents: ['read'],
     },
     agent: {
         properties: ['read'],
@@ -101,6 +104,7 @@ const permissions = {
         assignments: ['read'],
         checklists: ['create', 'read', 'update'],
         emergency: ['read'],
+        documents: ['read'],
     },
     caretaker: {
         properties: ['read'],
@@ -121,6 +125,7 @@ const permissions = {
         assignments: ['read'],
         checklists: ['create', 'read', 'update'],
         emergency: ['read'],
+        documents: ['read'],
     },
     tenant: {
         units: ['read'],
@@ -131,6 +136,7 @@ const permissions = {
         messages: ['create', 'read', 'update', 'delete'], // Allow tenants to manage their own messages
         communications: ['create', 'read'],
         checklists: ['read', 'update'],
+        documents: ['read'],
     },
     cleaner: {
         properties: ['read'],
@@ -143,6 +149,7 @@ const permissions = {
         messages: ['read'],
         tasks: ['read', 'update'],
         checklists: ['read'],
+        documents: ['read'],
     },
     security: {
         properties: ['read'],
@@ -155,6 +162,7 @@ const permissions = {
         messages: ['read'],
         tasks: ['read', 'update'],
         checklists: ['read'],
+        documents: ['read'],
     },
     maintenance: {
         properties: ['read'],
@@ -175,6 +183,7 @@ const permissions = {
         assignments: ['read'],
         checklists: ['create', 'read', 'update'],
         emergency: ['read'],
+        documents: ['read'],
     },
     receptionist: {
         properties: ['read'],
@@ -185,6 +194,7 @@ const permissions = {
         notifications: ['read'],
         messages: ['read'],
         tasks: ['read', 'update'],
+        documents: ['read'],
     },
     accountant: {
         properties: ['read'], // Read-only, no creation
@@ -196,6 +206,7 @@ const permissions = {
         payments: ['read', 'update', 'approve'],
         reports: ['read', 'generate'],
         leases: ['read'],
+        documents: ['read'],
     },
     admin: {
         properties: ['read', 'update'],
@@ -215,6 +226,7 @@ const permissions = {
         tasks: ['create', 'read', 'update'],
         users: ['read', 'update'],
         checklists: ['read', 'update'],
+        documents: ['read'],
     },
     manager: {
         properties: ['read', 'update'],
@@ -234,6 +246,7 @@ const permissions = {
         tasks: ['create', 'read', 'update'],
         users: ['read', 'update'],
         checklists: ['read', 'update'],
+        documents: ['read'],
     },
     team_lead: {
         properties: ['read'],
@@ -251,6 +264,7 @@ const permissions = {
         payments: ['read'],
         tasks: ['create', 'read', 'update'],
         checklists: ['read', 'update'],
+        documents: ['read'],
     },
     staff: {
         properties: ['read'],
@@ -263,6 +277,7 @@ const permissions = {
         messages: ['read'],
         tasks: ['read', 'update'],
         checklists: ['read'],
+        documents: ['read'],
     },
     finance: {
         properties: ['read'], // Read-only, no creation
@@ -274,6 +289,7 @@ const permissions = {
         payments: ['read', 'update', 'approve'],
         reports: ['read', 'generate'],
         leases: ['read'],
+        documents: ['read'],
     },
     sales: {
         tenants: ['create', 'read', 'update'], // Can manage tenants
@@ -284,6 +300,7 @@ const permissions = {
         leases: ['read'],
         tasks: ['create', 'read', 'update'], // Follow-up tasks
         // No system settings, no finance data
+        documents: ['read'],
     },
     marketing: {
         properties: ['read'],
@@ -294,6 +311,7 @@ const permissions = {
         notifications: ['create', 'read', 'update', 'bulk'],
         messages: ['create', 'read', 'update'],
         reports: ['read', 'generate'],
+        documents: ['read'],
     },
     support: {
         properties: ['read'],
@@ -306,6 +324,7 @@ const permissions = {
         messages: ['create', 'read', 'update'],
         tasks: ['read', 'update'],
         checklists: ['read'],
+        documents: ['read'],
     },
     hr: {
         users: ['create', 'read', 'update', 'delete'],
@@ -315,6 +334,7 @@ const permissions = {
         communications: ['read'],
         notifications: ['read'],
         messages: ['read'],
+        documents: ['read'],
     },
     auditor: {
         properties: ['read'],
@@ -328,6 +348,7 @@ const permissions = {
         leases: ['read'],
         users: ['read'],
         // Read-only access to everything for auditing
+        documents: ['read'],
     },
 };
 export const rbacResource = (resource, action) => (req, res, next) => {
