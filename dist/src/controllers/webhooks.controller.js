@@ -74,7 +74,20 @@ export const handlePaystackWebhook = async (req, res) => {
             });
         }
         const { event, data } = req.body;
-        // Only process successful charge events
+        // Route subscription events to billing webhook handler
+        if (event.startsWith('subscription.') ||
+            event.startsWith('invoice.')) {
+            console.log(`🔄 Routing subscription event to billing handler: ${event}`);
+            try {
+                const { paystackWebhook } = await import('../controllers/billing.controller.js');
+                return paystackWebhook(req, res);
+            }
+            catch (error) {
+                console.error('❌ Error routing to billing webhook:', error);
+                return res.status(500).json({ success: false, message: 'Error processing subscription event' });
+            }
+        }
+        // Only process successful charge events (rent payments)
         if (event !== 'charge.success') {
             console.log(`ℹ️  Ignoring event: ${event}`);
             return res.status(200).json({ success: true, message: 'Event ignored' });

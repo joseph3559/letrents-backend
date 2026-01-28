@@ -474,7 +474,17 @@ export const upsertCompanySubaccount = async (req: Request, res: Response) => {
         paystack_account_number: sub.account_number || account_number,
         paystack_account_name: sub.business_name || business_name,
         paystack_subaccount_status: status,
-        paystack_subaccount_metadata: paystackResult,
+        paystack_subaccount_metadata: {
+          ...(paystackResult || {}),
+          // Store form fields for retrieval
+          percentage_charge: Number(percentage_charge) || 2.5,
+          primary_contact_email: primary_contact_email || '',
+          primary_contact_name: primary_contact_name || '',
+          primary_contact_phone: primary_contact_phone || '',
+          business_name: business_name,
+          settlement_bank: settlement_bank,
+          account_number: account_number,
+        },
         paystack_subaccount_updated_at: new Date(),
         updated_at: new Date(),
       },
@@ -486,6 +496,7 @@ export const upsertCompanySubaccount = async (req: Request, res: Response) => {
         paystack_account_number: true,
         paystack_account_name: true,
         paystack_subaccount_status: true,
+        paystack_subaccount_metadata: true,
         paystack_subaccount_updated_at: true,
       },
     });
