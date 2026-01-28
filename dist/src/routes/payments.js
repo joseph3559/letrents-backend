@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { listPayments, getPayment, createPayment, updatePayment, approvePayment, reconcilePendingPayments, deletePayment, sendPaymentReceipt, verifyRentPayment, updatePendingPayment, verifyAdvancePayment, getCompanySubaccount, upsertCompanySubaccount, resolvePaystackAccount, getRentRoutingContext } from '../controllers/payments.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
+import { requireSubscription } from '../middleware/subscriptionValidation.js';
 const router = Router();
 // Paystack subaccounts (landlord/agency) + rent routing context (tenant)
 // IMPORTANT: must be defined before '/:id' routes.
-router.get('/subaccount', getCompanySubaccount);
-router.post('/subaccount', upsertCompanySubaccount);
-router.get('/subaccount/resolve', resolvePaystackAccount);
-router.post('/rent-routing', getRentRoutingContext);
+router.get('/subaccount', requireSubscription, getCompanySubaccount);
+router.post('/subaccount', requireSubscription, upsertCompanySubaccount);
+router.get('/subaccount/resolve', requireSubscription, resolvePaystackAccount);
+router.post('/rent-routing', getRentRoutingContext); // Tenant endpoint, no subscription required
 // Payments CRUD
 router.post('/', rbacResource('payments', 'create'), createPayment);
 router.get('/', rbacResource('payments', 'read'), listPayments);

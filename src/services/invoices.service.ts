@@ -455,6 +455,8 @@ export class InvoicesService {
       console.log('✅ Agency admin filter applied - agency_id:', user.agency_id);
     } else if (user.role === 'landlord') {
       // ⚠️ FIXED: Landlord must ONLY see invoices from THEIR OWN properties
+      // Ensure property_id is not null and property exists with correct owner
+      whereClause.property_id = { not: null };
       whereClause.property = {
         owner_id: user.user_id,
       };
