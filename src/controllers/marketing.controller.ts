@@ -12,28 +12,40 @@ export const getJobPostings = async (req: Request, res: Response) => {
   try {
     const { status, limit = 50, offset = 0 } = req.query;
     
-    const where: any = {};
+    // Build WHERE clause for raw query
+    let whereClause = '';
+    const params: any[] = [];
+    let paramIndex = 1;
+
     if (status) {
-      where.status = status;
+      whereClause = `WHERE status = $${paramIndex}`;
+      params.push(String(status));
+      paramIndex++;
     }
 
-    // Use Prisma's findMany instead of raw query for better type safety
+    // Use raw query with proper parameter binding
+    const jobsQuery = `
+      SELECT 
+        id, title, department, location, employment_type, 
+        description, requirements, responsibilities, benefits, salary_range,
+        status, application_deadline, posted_by, created_at, updated_at,
+        published_at, views_count, applications_count
+      FROM job_postings
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(Number(limit), Number(offset));
+
+    const countQuery = `
+      SELECT COUNT(*)::bigint as count 
+      FROM job_postings
+      ${whereClause}
+    `;
+
     const [jobs, total] = await Promise.all([
-      prisma.$queryRaw<any[]>`
-        SELECT 
-          id, title, department, location, employment_type, 
-          description, requirements, responsibilities, benefits, salary_range,
-          status, application_deadline, posted_by, created_at, updated_at,
-          published_at, views_count, applications_count
-        FROM job_postings
-        ${status ? prisma.$queryRaw`WHERE status = ${String(status)}` : prisma.$queryRaw``}
-        ORDER BY created_at DESC
-        LIMIT ${Number(limit)} OFFSET ${Number(offset)}
-      `,
-      prisma.$queryRaw<[{ count: bigint }]>`
-        SELECT COUNT(*)::bigint as count FROM job_postings
-        ${status ? prisma.$queryRaw`WHERE status = ${String(status)}` : prisma.$queryRaw``}
-      `
+      prisma.$queryRawUnsafe<any[]>(jobsQuery, ...params),
+      prisma.$queryRawUnsafe<[{ count: bigint }]>(countQuery, ...(status ? [String(status)] : []))
     ]);
 
     res.json({
