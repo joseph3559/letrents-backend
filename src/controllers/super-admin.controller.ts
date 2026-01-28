@@ -4892,13 +4892,14 @@ export const updateEntitySubscription = async (req: Request, res: Response) => {
       orderBy: { created_at: 'desc' }
     });
 
-    // Calculate subscription amount based on plan
+    // Calculate subscription amount based on plan (using actual plan names: starter, professional, enterprise)
     const getPlanAmount = (planName: string): number => {
       switch (planName) {
-        case 'basic': return 999;
-        case 'professional': return 1999;
-        case 'enterprise': return 4999;
-        default: return 999;
+        case 'starter': return 2500;
+        case 'professional': return 5000;
+        case 'enterprise': return 12000;
+        case 'basic': return 2500; // Legacy support
+        default: return 2500;
       }
     };
 
@@ -4924,7 +4925,7 @@ export const updateEntitySubscription = async (req: Request, res: Response) => {
       });
     } else {
       // Create new subscription
-      const selectedPlan = plan || 'basic';
+      const selectedPlan = plan || 'starter';
       const trialEndDate = trial_days ? new Date(Date.now() + trial_days * 24 * 60 * 60 * 1000) : null;
       const startDate = trialEndDate || new Date();
       
