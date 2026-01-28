@@ -350,6 +350,7 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
             channels: ['app', 'push'],
             title: 'Payment received',
             message: `Tenant payment received for invoice ${invoice.invoice_number}. Receipt: ${payment.receipt_number}`,
+            action_url: `/landlord/invoices/${invoice.id}`,
             metadata: {
               payment_id: payment.id,
               invoice_id: invoice.id,
