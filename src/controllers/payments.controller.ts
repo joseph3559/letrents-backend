@@ -467,7 +467,16 @@ export const upsertCompanySubaccount = async (req: Request, res: Response) => {
 
     let paystackResult: any;
     if (company.paystack_subaccount_code) {
-      paystackResult = await paystackService.updateSubaccount(company.paystack_subaccount_code, payload);
+      // First verify the subaccount exists in Paystack
+      const existingSubaccount = await paystackService.getSubaccount(company.paystack_subaccount_code);
+      if (existingSubaccount.status && existingSubaccount.data) {
+        // Subaccount exists, update it
+        paystackResult = await paystackService.updateSubaccount(company.paystack_subaccount_code, payload);
+      } else {
+        // Subaccount doesn't exist (likely created in different mode), create a new one
+        console.warn(`⚠️ Subaccount ${company.paystack_subaccount_code} not found in Paystack, creating new one`);
+        paystackResult = await paystackService.createSubaccount(payload);
+      }
     } else {
       paystackResult = await paystackService.createSubaccount(payload);
     }
@@ -565,8 +574,24 @@ export const getRentRoutingContext = async (req: Request, res: Response) => {
     if (companyIds.length !== 1) return writeError(res, 400, 'Invoices must belong to a single landlord/company');
 
     const companyId = companyIds[0];
-    const subaccountCode = await paystackService.getLandlordSubaccount(companyId);
+    // Verify subaccount exists in Paystack (will return null if it doesn't exist)
+    const subaccountCode = await paystackService.getLandlordSubaccount(companyId, true);
     if (!subaccountCode || subaccountCode.trim() === '') {
+      // Check if company has a subaccount code stored (but it's invalid)
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { paystack_subaccount_code: true },
+      });
+      
+      if (company?.paystack_subaccount_code) {
+        // Subaccount code exists in DB but not in Paystack (likely mode mismatch)
+        return writeError(
+          res,
+          400,
+          'The landlord\'s payment account is not valid. This may happen if the account was set up in test mode. Please ask the landlord to reconfigure their payment account in Settings → Payment Gateway.'
+        );
+      }
+      
       return writeError(
         res,
         409,

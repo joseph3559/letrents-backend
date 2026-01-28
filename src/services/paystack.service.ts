@@ -929,13 +929,14 @@ export class PaystackService {
   /**
    * Get landlord's Paystack subaccount code
    */
-  async getLandlordSubaccount(companyId: string): Promise<string | null> {
+  async getLandlordSubaccount(companyId: string, verifyExists: boolean = true): Promise<string | null> {
     try {
       const company = await this.prisma.company.findUnique({
         where: { id: companyId },
         select: {
           paystack_subaccount_code: true,
           paystack_subaccount_status: true,
+          paystack_subaccount_metadata: true,
         },
       });
 
@@ -948,6 +949,17 @@ export class PaystackService {
       if (!subaccountCode) {
         console.warn(`⚠️ Empty subaccount code for company ${companyId}`);
         return null;
+      }
+
+      // Verify subaccount exists in Paystack if requested
+      if (verifyExists) {
+        const verification = await this.getSubaccount(subaccountCode);
+        if (!verification.status || !verification.data) {
+          console.error(`❌ Subaccount ${subaccountCode} does not exist in Paystack (may be from different mode). Error: ${verification.message}`);
+          // Return null so caller can handle the error appropriately
+          return null;
+        }
+        console.log(`✅ Verified subaccount ${subaccountCode} exists in Paystack`);
       }
 
       if (company.paystack_subaccount_status && company.paystack_subaccount_status !== 'active') {
@@ -980,6 +992,18 @@ export class PaystackService {
     metadata?: Record<string, any>;
   }) {
     return await this.makeRequest('POST', '/subaccount', data, false);
+  }
+
+  /**
+   * Get a Paystack subaccount by code (to verify it exists).
+   */
+  async getSubaccount(subaccountCode: string) {
+    try {
+      return await this.makeRequest('GET', `/subaccount/${subaccountCode}`, undefined, false);
+    } catch (error: any) {
+      console.error(`Error fetching subaccount ${subaccountCode}:`, error.message);
+      return { status: false, message: error.message };
+    }
   }
 
   /**
