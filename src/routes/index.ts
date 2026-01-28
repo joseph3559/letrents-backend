@@ -20,6 +20,7 @@ import messages from './messages.js';
 import messaging from './messaging.js';
 import reports from './reports.js';
 import payments from './payments.js';
+import payment from './payment.js';
 import mpesa from './mpesa.js';
 import billing from './billing.js';
 import documents from './documents.js';
@@ -107,6 +108,7 @@ router.use('/messages', requireAuth, messages);
 router.use('/messaging', requireAuth, messaging);
 router.use('/reports', requireAuth, reports);
 router.use('/payments', requireAuth, payments);
+router.use('/payment', requireAuth, payment); // legacy alias for subaccount endpoints
 router.use('/mpesa', requireAuth, mpesa); // M-Pesa management needs auth
 router.use('/documents', requireAuth, documents);
 

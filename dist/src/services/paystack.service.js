@@ -55,20 +55,30 @@ export class PaystackService {
         },
     };
     constructor() {
-        // SaaS subscription credentials - LIVE MODE
-        // Ensure PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY are set in production .env
-        this.config = {
-            secretKey: process.env.PAYSTACK_SECRET_KEY || '',
-            publicKey: process.env.PAYSTACK_PUBLIC_KEY || '',
-        };
-        if (!this.config.secretKey || !this.config.publicKey) {
-            console.warn('⚠️ WARNING: Paystack credentials not configured. Please set PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY in environment variables.');
+        // Single Paystack business account (marketplace via subaccounts + split payments)
+        // Mode selection:
+        // - PAYSTACK_MODE=live|test (defaults: production=live, otherwise=test)
+        // Keys can be provided as either:
+        // - PAYSTACK_SECRET_KEY / PAYSTACK_PUBLIC_KEY (direct), OR
+        // - PAYSTACK_LIVE_* and PAYSTACK_TEST_* (mode-based)
+        const mode = (process.env.PAYSTACK_MODE ||
+            (process.env.NODE_ENV === 'production' ? 'live' : 'test'));
+        const secretKey = process.env.PAYSTACK_SECRET_KEY ||
+            (mode === 'live' ? process.env.PAYSTACK_LIVE_SECRET_KEY : process.env.PAYSTACK_TEST_SECRET_KEY) ||
+            '';
+        const publicKey = process.env.PAYSTACK_PUBLIC_KEY ||
+            (mode === 'live' ? process.env.PAYSTACK_LIVE_PUBLIC_KEY : process.env.PAYSTACK_TEST_PUBLIC_KEY) ||
+            '';
+        this.config = { secretKey, publicKey };
+        // Backward compatibility: previous code differentiated rent vs subscription credentials.
+        // We intentionally use the SAME business account for both flows.
+        this.rentConfig = this.config;
+        if (!this.config.secretKey) {
+            console.warn('⚠️ WARNING: Paystack secret key not configured (PAYSTACK_*).');
         }
-        // Rent collection credentials
-        this.rentConfig = {
-            secretKey: process.env.RENT_PAYSTACK_SECRET_KEY || '',
-            publicKey: process.env.RENT_PAYSTACK_PUBLIC_KEY || '',
-        };
+        if (!this.config.publicKey) {
+            console.warn('⚠️ WARNING: Paystack public key not configured (PAYSTACK_*).');
+        }
     }
     /**
      * Make authenticated request to Paystack API
@@ -619,6 +629,16 @@ export class PaystackService {
             if (!tenantId) {
                 throw new Error('Invalid payment: tenant ID not found in transaction metadata');
             }
+            // Tenant safety: ensure the authenticated tenant matches the Paystack metadata
+            if (user.role === 'tenant' && user.user_id !== tenantId) {
+                throw new Error('Invalid payment: tenant mismatch');
+            }
+            // If this was an invoice-based payment, reconcile invoices atomically and generate receipts.
+            const invoiceIds = Array.isArray(metadata.invoice_ids)
+                ? metadata.invoice_ids
+                : Array.isArray(metadata.invoiceIds)
+                    ? metadata.invoiceIds
+                    : [];
             // Get tenant and unit information
             const tenantProfile = await this.prisma.tenantProfile.findUnique({
                 where: { user_id: tenantId },
@@ -635,7 +655,7 @@ export class PaystackService {
                 throw new Error('Tenant not found');
             }
             // Check permissions
-            if (!user.company_id) {
+            if (!user.company_id && user.role !== 'tenant') {
                 throw new Error('User must belong to a company');
             }
             // Calculate amount in KES (Paystack returns amount in kobo)
@@ -653,6 +673,27 @@ export class PaystackService {
                 console.log(`⚠️  Payment already exists for this transaction: ${existingPaymentByRef.receipt_number}`);
                 return {
                     payment: existingPaymentByRef,
+                    transaction: {
+                        reference: transaction.reference,
+                        amount: amountKES,
+                        status: transaction.status,
+                        paid_at: transaction.paid_at,
+                        channel: transaction.channel,
+                        subaccount: transaction.subaccount,
+                    },
+                };
+            }
+            if (invoiceIds.length > 0) {
+                const { processTenantOnlinePayment } = await import('./online-payment.service.js');
+                const reconciled = await processTenantOnlinePayment(user, {
+                    invoice_ids: invoiceIds,
+                    transaction_id: String(transaction.id || reference),
+                    reference_number: String(transaction.reference || reference),
+                    payment_method: 'online',
+                    gateway_response: transaction,
+                });
+                return {
+                    ...reconciled,
                     transaction: {
                         reference: transaction.reference,
                         amount: amountKES,
@@ -703,10 +744,16 @@ export class PaystackService {
                 console.log(`✅ Updated existing pending payment: ${payment.receipt_number}`);
             }
             else {
-                const receiptNumber = await getNextReceiptNumber(this.prisma, user.company_id);
+                const companyIdForReceipt = tenantProfile?.current_unit?.property?.company_id ||
+                    tenantProfile?.current_property?.company_id ||
+                    user.company_id;
+                if (!companyIdForReceipt) {
+                    throw new Error('Unable to determine company for rent payment');
+                }
+                const receiptNumber = await getNextReceiptNumber(this.prisma, companyIdForReceipt);
                 payment = await this.prisma.payment.create({
                     data: {
-                        company_id: user.company_id,
+                        company_id: companyIdForReceipt,
                         tenant_id: tenantId,
                         unit_id: tenantProfile.current_unit_id,
                         property_id: propertyId || tenantProfile.current_property_id,
@@ -753,14 +800,44 @@ export class PaystackService {
      */
     async getLandlordSubaccount(companyId) {
         try {
-            // TODO: Implement subaccount retrieval from database
-            // For now, return null (payments will go directly to platform account)
-            return null;
+            const company = await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: {
+                    paystack_subaccount_code: true,
+                    paystack_subaccount_status: true,
+                },
+            });
+            if (!company?.paystack_subaccount_code)
+                return null;
+            if (company.paystack_subaccount_status && company.paystack_subaccount_status !== 'active') {
+                // We still return the code (it may be usable), but callers can decide to block if not active.
+                console.warn(`⚠️ Paystack subaccount for company ${companyId} is not active (status=${company.paystack_subaccount_status})`);
+            }
+            return company.paystack_subaccount_code;
         }
         catch (error) {
             console.error('Error getting landlord subaccount:', error.message);
             return null;
         }
+    }
+    /**
+     * Create a Paystack subaccount (marketplace settlement).
+     * Uses the platform Paystack business account credentials.
+     */
+    async createSubaccount(data) {
+        return await this.makeRequest('POST', '/subaccount', data, false);
+    }
+    /**
+     * Update a Paystack subaccount.
+     */
+    async updateSubaccount(subaccountCode, data) {
+        return await this.makeRequest('PUT', `/subaccount/${subaccountCode}`, data, false);
+    }
+    /**
+     * Resolve a bank account number (used before creating subaccount).
+     */
+    async resolveBankAccount(accountNumber, bankCode) {
+        return await this.makeRequest('GET', `/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`, undefined, false);
     }
     /**
      * Process advance payment for multiple months

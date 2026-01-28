@@ -155,9 +155,18 @@ export const getSubscriptionStats = async (req: Request, res: Response) => {
 
 export const paystackWebhook = async (req: Request, res: Response) => {
   try {
+    const secretKey =
+      process.env.PAYSTACK_SECRET_KEY ||
+      process.env.PAYSTACK_LIVE_SECRET_KEY ||
+      process.env.PAYSTACK_TEST_SECRET_KEY ||
+      '';
+    if (!secretKey) {
+      return writeError(res, 500, 'Paystack secret key not configured');
+    }
+
     // Verify Paystack signature
     const hash = crypto
-      .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY || 'sk_test_d3829a1a9e2b62e6314b12f5f38ec1afd22599f7')
+      .createHmac('sha512', secretKey)
       .update(JSON.stringify(req.body))
       .digest('hex');
 
@@ -243,7 +252,14 @@ export const verifySubscription = async (req: Request, res: Response) => {
     if (!user) {
       // Verify transaction with Paystack first to get metadata
       const axios = (await import('axios')).default;
-      const secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_test_d3829a1a9e2b62e6314b12f5f38ec1afd22599f7';
+      const secretKey =
+        process.env.PAYSTACK_SECRET_KEY ||
+        process.env.PAYSTACK_LIVE_SECRET_KEY ||
+        process.env.PAYSTACK_TEST_SECRET_KEY ||
+        '';
+      if (!secretKey) {
+        return writeError(res, 500, 'Paystack secret key not configured');
+      }
       
       try {
         verificationResponse = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -305,7 +321,14 @@ export const verifySubscription = async (req: Request, res: Response) => {
     if (!verificationResponse) {
       const axios = (await import('axios')).default;
       // Use subscription Paystack secret key (not rent payment key)
-      const secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_test_d3829a1a9e2b62e6314b12f5f38ec1afd22599f7';
+      const secretKey =
+        process.env.PAYSTACK_SECRET_KEY ||
+        process.env.PAYSTACK_LIVE_SECRET_KEY ||
+        process.env.PAYSTACK_TEST_SECRET_KEY ||
+        '';
+      if (!secretKey) {
+        return writeError(res, 500, 'Paystack secret key not configured');
+      }
       
       console.log('🔑 Using Paystack secret key:', secretKey.substring(0, 20) + '...');
       

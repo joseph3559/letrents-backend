@@ -31,6 +31,15 @@ model Company {
   max_tenants          Int                  @default(100)
   max_staff            Int                  @default(10)
   settings             Json                 @default("{}")
+  // Paystack marketplace routing (single Paystack business account)
+  // Each landlord/agency (Company) can be configured as a Paystack subaccount for direct settlement.
+  paystack_subaccount_code     String?      @db.VarChar(50)
+  paystack_settlement_bank     String?      @db.VarChar(20)
+  paystack_account_number      String?      @db.VarChar(30)
+  paystack_account_name        String?      @db.VarChar(255)
+  paystack_subaccount_status   String       @default("not_configured") @db.VarChar(30) // not_configured, pending, active, suspended
+  paystack_subaccount_metadata Json         @default("{}")
+  paystack_subaccount_updated_at DateTime?  @db.Timestamptz(6)
   created_by           String?              @db.Uuid
   created_at           DateTime             @default(now()) @db.Timestamptz(6)
   updated_at           DateTime             @default(now()) @db.Timestamptz(6)
@@ -62,6 +71,7 @@ model Company {
   vendors              Vendor[]
   landlord_tenant_notes LandlordTenantNotes[]
 
+  @@index([paystack_subaccount_code])
   @@map("companies")
 }
 

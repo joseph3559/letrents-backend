@@ -10,11 +10,22 @@ import {
   sendPaymentReceipt,
   verifyRentPayment,
   updatePendingPayment,
-  verifyAdvancePayment
+  verifyAdvancePayment,
+  getCompanySubaccount,
+  upsertCompanySubaccount,
+  resolvePaystackAccount,
+  getRentRoutingContext
 } from '../controllers/payments.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 
 const router = Router();
+
+// Paystack subaccounts (landlord/agency) + rent routing context (tenant)
+// IMPORTANT: must be defined before '/:id' routes.
+router.get('/subaccount', getCompanySubaccount);
+router.post('/subaccount', upsertCompanySubaccount);
+router.get('/subaccount/resolve', resolvePaystackAccount);
+router.post('/rent-routing', getRentRoutingContext);
 
 // Payments CRUD
 router.post('/', rbacResource('payments', 'create'), createPayment);

@@ -63,8 +63,18 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
     });
 
     // Verify webhook signature
+    const secretKey =
+      process.env.PAYSTACK_SECRET_KEY ||
+      process.env.PAYSTACK_LIVE_SECRET_KEY ||
+      process.env.PAYSTACK_TEST_SECRET_KEY ||
+      '';
+    if (!secretKey) {
+      console.error('❌ Paystack secret key not configured');
+      return res.status(500).json({ success: false, message: 'Webhook secret not configured' });
+    }
+
     const hash = crypto
-      .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY || '')
+      .createHmac('sha512', secretKey)
       .update(JSON.stringify(req.body))
       .digest('hex');
 
@@ -108,15 +118,54 @@ export const handlePaystackWebhook = async (req: Request, res: Response) => {
       metadata
     });
 
-    // Extract invoice IDs from metadata
-    const invoiceIds = metadata?.invoice_ids || [];
-    
+    // Extract invoice IDs from metadata (preferred).
+    // If missing, fallback to unit-number based reconciliation.
+    let invoiceIds: string[] = Array.isArray(metadata?.invoice_ids)
+      ? metadata.invoice_ids
+      : Array.isArray(metadata?.invoiceIds)
+        ? metadata.invoiceIds
+        : [];
+
     if (!invoiceIds || invoiceIds.length === 0) {
-      console.error('❌ No invoice IDs in metadata');
-      return res.status(400).json({
-        success: false,
-        message: 'No invoice IDs found in payment metadata'
-      });
+      const tenantId = metadata?.tenant_id || metadata?.tenantId || null;
+      const unitNumberRaw = metadata?.unit_number || metadata?.unitNumber || null;
+      const unitNumber = typeof unitNumberRaw === 'string' ? unitNumberRaw.trim() : null;
+
+      if (tenantId && unitNumber) {
+        try {
+          // Find unit by unit_number (scoped by tenant's company via invoice lookup)
+          const candidateInvoices = await prisma.invoice.findMany({
+            where: {
+              issued_to: tenantId,
+              status: { in: ['sent', 'overdue', 'draft'] },
+            },
+            include: { unit: true },
+            orderBy: { created_at: 'asc' },
+            take: 50,
+          });
+
+          const matches = candidateInvoices.filter((inv) => inv.unit?.unit_number?.trim() === unitNumber);
+          if (matches.length > 0) {
+            // Prefer oldest unpaid invoice for that unit (safe default)
+            invoiceIds = [matches[0].id];
+            console.warn('⚠️ invoice_ids missing; reconciled by unit_number fallback', {
+              unitNumber,
+              invoiceId: matches[0].id,
+              invoiceNumber: (matches[0] as any).invoice_number,
+            });
+          }
+        } catch (e) {
+          console.error('❌ Unit-number reconciliation fallback failed:', e);
+        }
+      }
+
+      if (!invoiceIds || invoiceIds.length === 0) {
+        console.error('❌ No invoice IDs in metadata and no unit-number match found');
+        return res.status(400).json({
+          success: false,
+          message: 'No invoice IDs found in payment metadata'
+        });
+      }
     }
 
     // Check if payment already processed
