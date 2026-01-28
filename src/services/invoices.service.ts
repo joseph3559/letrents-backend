@@ -455,11 +455,12 @@ export class InvoicesService {
       console.log('✅ Agency admin filter applied - agency_id:', user.agency_id);
     } else if (user.role === 'landlord') {
       // ⚠️ FIXED: Landlord must ONLY see invoices from THEIR OWN properties
-      // Ensure property_id is not null and property exists with correct owner
-      whereClause.property_id = { not: null };
-      whereClause.property = {
-        owner_id: user.user_id,
-      };
+      // Filter by property relation - only invoices with properties owned by this landlord
+      // Exclude invoices with null property_id
+      whereClause.AND = [
+        { property_id: { not: null } },
+        { property: { owner_id: user.user_id } }
+      ];
       console.log('✅ Landlord filter applied - owner_id:', user.user_id);
     } else if (user.role === 'agent') {
       // ⚠️ FIXED: Agent must ONLY see invoices from properties they are ASSIGNED to
