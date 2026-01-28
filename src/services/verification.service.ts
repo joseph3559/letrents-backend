@@ -245,14 +245,16 @@ export class VerificationService {
       };
     }
 
-    // Validate company is active
-    if (!invoice.company || invoice.company.status !== 'active') {
+    // Note: We allow verification even if company is inactive
+    // The invoice document itself is still valid and verifiable
+    // Company status doesn't affect the authenticity of past invoices
+    if (!invoice.company) {
       return {
         valid: false,
         documentType: 'invoice',
         documentNumber: invoiceNumber,
-        status: 'COMPANY_INACTIVE',
-        message: 'Company account is inactive',
+        status: 'COMPANY_NOT_FOUND',
+        message: 'Company not found for this invoice',
       };
     }
 

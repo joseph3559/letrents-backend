@@ -198,6 +198,7 @@ export async function processTenantOnlinePayment(
         channels: ['app', 'push'],
         title: 'Payment received',
         message: `Tenant payment received for invoice ${receipt.invoice_number}. Receipt: ${receipt.receipt_number}`,
+        action_url: `/landlord/invoices/${receipt.invoice_id}`,
         metadata: {
           payment_id: receipt.payment_id,
           invoice_id: receipt.invoice_id,
