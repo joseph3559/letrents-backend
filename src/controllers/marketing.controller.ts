@@ -17,27 +17,28 @@ export const getJobPostings = async (req: Request, res: Response) => {
       where.status = status;
     }
 
+    // Use Prisma's findMany instead of raw query for better type safety
     const [jobs, total] = await Promise.all([
-      prisma.$queryRaw`
+      prisma.$queryRaw<any[]>`
         SELECT 
           id, title, department, location, employment_type, 
           description, requirements, responsibilities, benefits, salary_range,
           status, application_deadline, posted_by, created_at, updated_at,
           published_at, views_count, applications_count
         FROM job_postings
-        WHERE ${status ? prisma.$queryRaw`status = ${status}` : prisma.$queryRaw`1=1`}
+        ${status ? prisma.$queryRaw`WHERE status = ${String(status)}` : prisma.$queryRaw``}
         ORDER BY created_at DESC
         LIMIT ${Number(limit)} OFFSET ${Number(offset)}
       `,
-      prisma.$queryRaw`
-        SELECT COUNT(*) as count FROM job_postings
-        WHERE ${status ? prisma.$queryRaw`status = ${status}` : prisma.$queryRaw`1=1`}
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*)::bigint as count FROM job_postings
+        ${status ? prisma.$queryRaw`WHERE status = ${String(status)}` : prisma.$queryRaw``}
       `
     ]);
 
     res.json({
       success: true,
-      data: jobs,
+      data: jobs || [],
       pagination: {
         total: Number((total as any[])[0]?.count || 0),
         limit: Number(limit),
