@@ -939,15 +939,25 @@ export class PaystackService {
         },
       });
 
-      if (!company?.paystack_subaccount_code) return null;
+      if (!company?.paystack_subaccount_code) {
+        console.warn(`⚠️ No subaccount code found for company ${companyId}`);
+        return null;
+      }
+
+      const subaccountCode = company.paystack_subaccount_code.trim();
+      if (!subaccountCode) {
+        console.warn(`⚠️ Empty subaccount code for company ${companyId}`);
+        return null;
+      }
+
       if (company.paystack_subaccount_status && company.paystack_subaccount_status !== 'active') {
         // We still return the code (it may be usable), but callers can decide to block if not active.
         console.warn(
-          `⚠️ Paystack subaccount for company ${companyId} is not active (status=${company.paystack_subaccount_status})`
+          `⚠️ Paystack subaccount for company ${companyId} is not active (status=${company.paystack_subaccount_status}), code: ${subaccountCode}`
         );
       }
 
-      return company.paystack_subaccount_code;
+      return subaccountCode;
     } catch (error: any) {
       console.error('Error getting landlord subaccount:', error.message);
       return null;

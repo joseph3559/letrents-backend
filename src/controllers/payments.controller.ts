@@ -566,11 +566,21 @@ export const getRentRoutingContext = async (req: Request, res: Response) => {
 
     const companyId = companyIds[0];
     const subaccountCode = await paystackService.getLandlordSubaccount(companyId);
-    if (!subaccountCode) {
+    if (!subaccountCode || subaccountCode.trim() === '') {
       return writeError(
         res,
         409,
         'This landlord has not configured a Paystack receiving account yet. Please ask them to complete Subaccount Setup in Settings.'
+      );
+    }
+
+    // Validate subaccount code format (Paystack subaccount codes are typically alphanumeric)
+    if (!/^[A-Z0-9_]+$/i.test(subaccountCode.trim())) {
+      console.error(`⚠️ Invalid subaccount code format for company ${companyId}: ${subaccountCode}`);
+      return writeError(
+        res,
+        400,
+        'Invalid subaccount configuration. Please ask the landlord to reconfigure their payment account.'
       );
     }
 
