@@ -4871,19 +4871,36 @@ export const updateEntitySubscription = async (req: Request, res: Response) => {
   try {
     const { entityType, entityId } = req.params;
     const { plan, status, trial_days } = req.body;
-    const user = (req as any).user;
+    const user = (req as any).user as JWTClaims;
 
     console.log(`💳 Updating subscription for ${entityType} ${entityId}`);
 
     // Get company_id
     let companyId = entityId;
     
-    if (entityType === 'user') {
+    // Handle different entity types
+    if (entityType === 'user' || entityType === 'landlord') {
+      // For users and landlords, entityId might be a user ID, so find their company
       const userRecord = await prisma.user.findUnique({ where: { id: entityId } });
-      if (!userRecord || !userRecord.company_id) {
-        return writeError(res, 404, 'User or company not found');
+      if (!userRecord) {
+        // If not found as user, try as company ID directly
+        const company = await prisma.company.findUnique({ where: { id: entityId } });
+        if (!company) {
+          return writeError(res, 404, 'User or company not found');
+        }
+        companyId = company.id;
+      } else if (userRecord.company_id) {
+        companyId = userRecord.company_id;
+      } else {
+        return writeError(res, 404, 'User does not belong to a company');
       }
-      companyId = userRecord.company_id;
+    } else if (entityType === 'agency') {
+      // For agencies, entityId should be a company ID
+      const company = await prisma.company.findUnique({ where: { id: entityId } });
+      if (!company) {
+        return writeError(res, 404, 'Company not found');
+      }
+      companyId = company.id;
     }
 
     // Find existing subscription
@@ -4939,7 +4956,7 @@ export const updateEntitySubscription = async (req: Request, res: Response) => {
           trial_start_date: trial_days ? new Date() : null,
           trial_end_date: trialEndDate,
           next_billing_date: trialEndDate,
-          created_by: user.id,
+          created_by: user.user_id || user.id,
           created_at: new Date(),
           updated_at: new Date()
         }
