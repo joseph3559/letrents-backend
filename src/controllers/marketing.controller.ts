@@ -14,49 +14,71 @@ export const getJobPostings = async (req: Request, res: Response) => {
     
     // Build WHERE clause for raw query
     let whereClause = '';
-    const params: any[] = [];
-    let paramIndex = 1;
+    const queryParams: any[] = [];
 
     if (status) {
-      whereClause = `WHERE status = $${paramIndex}`;
-      params.push(String(status));
-      paramIndex++;
+      whereClause = `WHERE status = $1`;
+      queryParams.push(String(status));
     }
 
-    // Use raw query with proper parameter binding
-    const jobsQuery = `
-      SELECT 
-        id, title, department, location, employment_type, 
-        description, requirements, responsibilities, benefits, salary_range,
-        status, application_deadline, posted_by, created_at, updated_at,
-        published_at, views_count, applications_count
-      FROM job_postings
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-    params.push(Number(limit), Number(offset));
+    // Use Prisma's $queryRaw with template literals for better safety
+    if (status) {
+      const [jobs, total] = await Promise.all([
+        prisma.$queryRaw<any[]>`
+          SELECT 
+            id, title, department, location, employment_type, 
+            description, requirements, responsibilities, benefits, salary_range,
+            status, application_deadline, posted_by, created_at, updated_at,
+            published_at, views_count, applications_count
+          FROM job_postings
+          WHERE status = ${String(status)}
+          ORDER BY created_at DESC
+          LIMIT ${Number(limit)} OFFSET ${Number(offset)}
+        `,
+        prisma.$queryRaw<[{ count: bigint }]>`
+          SELECT COUNT(*)::bigint as count 
+          FROM job_postings
+          WHERE status = ${String(status)}
+        `
+      ]);
 
-    const countQuery = `
-      SELECT COUNT(*)::bigint as count 
-      FROM job_postings
-      ${whereClause}
-    `;
+      res.json({
+        success: true,
+        data: jobs || [],
+        pagination: {
+          total: Number((total as any[])[0]?.count || 0),
+          limit: Number(limit),
+          offset: Number(offset)
+        }
+      });
+    } else {
+      const [jobs, total] = await Promise.all([
+        prisma.$queryRaw<any[]>`
+          SELECT 
+            id, title, department, location, employment_type, 
+            description, requirements, responsibilities, benefits, salary_range,
+            status, application_deadline, posted_by, created_at, updated_at,
+            published_at, views_count, applications_count
+          FROM job_postings
+          ORDER BY created_at DESC
+          LIMIT ${Number(limit)} OFFSET ${Number(offset)}
+        `,
+        prisma.$queryRaw<[{ count: bigint }]>`
+          SELECT COUNT(*)::bigint as count 
+          FROM job_postings
+        `
+      ]);
 
-    const [jobs, total] = await Promise.all([
-      prisma.$queryRawUnsafe<any[]>(jobsQuery, ...params),
-      prisma.$queryRawUnsafe<[{ count: bigint }]>(countQuery, ...(status ? [String(status)] : []))
-    ]);
-
-    res.json({
-      success: true,
-      data: jobs || [],
-      pagination: {
-        total: Number((total as any[])[0]?.count || 0),
-        limit: Number(limit),
-        offset: Number(offset)
-      }
-    });
+      res.json({
+        success: true,
+        data: jobs || [],
+        pagination: {
+          total: Number((total as any[])[0]?.count || 0),
+          limit: Number(limit),
+          offset: Number(offset)
+        }
+      });
+    }
   } catch (error: any) {
     console.error('Error fetching job postings:', error);
     res.status(500).json({
