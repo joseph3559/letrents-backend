@@ -510,6 +510,13 @@ export const updateJobApplication = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const { status, notes } = req.body;
 
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
     // Check if application exists
     const existing = await prisma.$queryRawUnsafe(
       `SELECT id FROM job_applications WHERE id = $1::uuid`,
@@ -530,8 +537,12 @@ export const updateJobApplication = async (req: Request, res: Response) => {
     if (status !== undefined) {
       updates.push(`status = $${paramIndex++}`);
       values.push(status);
-      updates.push(`reviewed_by = $${paramIndex++}`);
-      values.push(user.id);
+      // Use user_id from JWT claims (not id)
+      const reviewerId = user.user_id || user.id;
+      if (reviewerId) {
+        updates.push(`reviewed_by = $${paramIndex++}::uuid`);
+        values.push(reviewerId);
+      }
       updates.push(`reviewed_at = NOW()`);
     }
     if (notes !== undefined) {
@@ -549,7 +560,7 @@ export const updateJobApplication = async (req: Request, res: Response) => {
     const updateQuery = `
       UPDATE job_applications 
       SET ${updates.join(', ')}, updated_at = NOW()
-      WHERE id = $${paramIndex}
+      WHERE id = $${paramIndex}::uuid
       RETURNING *
     `;
     values.push(id);
