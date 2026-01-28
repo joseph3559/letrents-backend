@@ -428,7 +428,20 @@ export const upsertCompanySubaccount = async (req: Request, res: Response) => {
       return writeError(res, 400, 'business_name, settlement_bank, and account_number are required');
     }
 
-    // Load current company
+    // Load current company - using $queryRaw first to verify column exists
+    try {
+      const columnCheck = await prisma.$queryRaw`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'companies' 
+        AND column_name = 'paystack_subaccount_code'
+        LIMIT 1
+      `;
+      console.log('✅ Column exists check:', columnCheck);
+    } catch (e: any) {
+      console.error('❌ Column check failed:', e.message);
+    }
+
     const company = await prisma.company.findUnique({
       where: { id: user.company_id },
       select: { id: true, name: true, paystack_subaccount_code: true },
