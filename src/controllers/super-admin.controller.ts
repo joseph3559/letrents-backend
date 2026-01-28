@@ -4956,7 +4956,7 @@ export const updateEntitySubscription = async (req: Request, res: Response) => {
           trial_start_date: trial_days ? new Date() : null,
           trial_end_date: trialEndDate,
           next_billing_date: trialEndDate,
-          created_by: user.user_id || user.id,
+          created_by: user.user_id,
           created_at: new Date(),
           updated_at: new Date()
         }
@@ -5329,7 +5329,7 @@ export const createPaymentGateway = async (req: Request, res: Response) => {
         webhook_url,
         is_test_mode: is_test_mode !== undefined ? is_test_mode : true,
         status: 'inactive',
-        created_by: user.id,
+        created_by: (user as any).user_id || (user as any).id,
       },
       select: {
         id: true,
