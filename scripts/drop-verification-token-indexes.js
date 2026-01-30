@@ -2,10 +2,19 @@
 /**
  * Drop existing unique indexes on verification_token so Prisma db push can create them.
  * Run once before: npx prisma db push --accept-data-loss
+ * Load .env via: export $(grep -v '^#' .env | xargs) && node scripts/drop-verification-token-indexes.js
  */
 
-import dotenv from 'dotenv';
-dotenv.config();
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+try {
+  const envPath = resolve(process.cwd(), '.env');
+  const env = readFileSync(envPath, 'utf8');
+  for (const line of env.split('\n')) {
+    const m = line.match(/^([^#=]+)=(.*)$/);
+    if (m) process.env[m[1].trim()] = m[2].trim().replace(/^["']|["']$/g, '');
+  }
+} catch (_) {}
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
