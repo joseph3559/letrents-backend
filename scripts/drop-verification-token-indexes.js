@@ -4,7 +4,8 @@
  * Run once before: npx prisma db push --accept-data-loss
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

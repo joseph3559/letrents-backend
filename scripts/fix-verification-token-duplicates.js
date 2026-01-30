@@ -5,7 +5,8 @@
  * Keeps one row per token value, sets duplicates to NULL (app can regenerate later).
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
