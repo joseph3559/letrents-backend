@@ -4,10 +4,10 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { JWTClaims } from '../types/index.js';
+import { getPrisma } from '../config/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 /**
  * Ensure that the company has at least a Starter plan subscription

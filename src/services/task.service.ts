@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import { buildWhereClause } from '../utils/roleBasedFiltering.js';
+import { getPrisma } from '../config/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 export interface CreateTaskDto {
   title: string;

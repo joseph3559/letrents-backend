@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
+import { getPrisma } from '../config/prisma.js';
 
 const service = new AuthService();
+const prisma = getPrisma();
 
 export const register = async (req: Request, res: Response) => {
 	try {
@@ -141,8 +143,6 @@ export const verifyInvitation = async (req: Request, res: Response) => {
 		}
 
 		const userId = token.replace('invitation-', '');
-		const { PrismaClient } = await import('@prisma/client');
-		const prisma = new PrismaClient();
 
 		// Define roles that can use invitations
 		// Team member roles (SaaS team)
@@ -211,8 +211,6 @@ export const setupPassword = async (req: Request, res: Response) => {
 		}
 
 		const userId = token.replace('invitation-', '');
-		const { PrismaClient } = await import('@prisma/client');
-		const prisma = new PrismaClient();
 
 		// Get user info from database to verify and get email
 		const user = await prisma.user.findUnique({

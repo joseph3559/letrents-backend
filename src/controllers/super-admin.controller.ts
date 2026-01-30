@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { writeSuccess, writeError } from '../utils/response.js';
 import bcrypt from 'bcryptjs';
 import { JWTClaims } from '../types/index.js';
+import { getPrisma } from '../config/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 // Dashboard and Analytics
 export const getDashboardData = async (req: Request, res: Response) => {
@@ -1463,20 +1464,42 @@ export const deleteCompany = async (req: Request, res: Response) => {
 // Agency Management
 export const getAgencyManagement = async (req: Request, res: Response) => {
   try {
-    console.log('🔍 getAgencyManagement called');
-    const agencies = await prisma.agency.findMany({
-      include: {
-        company: {
-          select: {
-            id: true,
-            name: true
+    const status = req.query.status as string | undefined;
+    const limitVal = parseInt(req.query.limit as string);
+    const limit = req.query.limit != null && !isNaN(limitVal) ? Math.min(limitVal, 100) : undefined;
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+    const search = (req.query.search as string)?.trim();
+
+    console.log('🔍 getAgencyManagement called', { status, limit, offset, search });
+
+    const where: any = {};
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [agencies, total] = await Promise.all([
+      prisma.agency.findMany({
+        where,
+        include: {
+          company: {
+            select: {
+              id: true,
+              name: true
+            }
           }
-        }
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    });
+        },
+        orderBy: { created_at: 'desc' },
+        ...(limit !== undefined && { take: limit, skip: offset }),
+      }),
+      prisma.agency.count({ where }),
+    ]);
 
     // Transform to match expected format
     const agenciesData = agencies.map(agency => ({
@@ -1488,10 +1511,14 @@ export const getAgencyManagement = async (req: Request, res: Response) => {
       status: agency.status,
       created_at: agency.created_at,
       updated_at: agency.updated_at,
+      company_id: agency.company_id || null,
       company_name: agency.company?.name || null
     }));
 
-    writeSuccess(res, 200, 'Agencies retrieved successfully', agenciesData);
+    writeSuccess(res, 200, 'Agencies retrieved successfully', {
+      agencies: agenciesData,
+      total,
+    });
   } catch (err: any) {
     console.error('Error fetching agencies:', err);
     writeError(res, 500, 'Failed to fetch agencies', err.message);

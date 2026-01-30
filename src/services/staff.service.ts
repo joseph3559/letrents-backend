@@ -1,10 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause, formatDataForRole } from '../utils/roleBasedFiltering.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 /**
  * Staff roles that can be managed by this service

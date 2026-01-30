@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import { buildWhereClause, formatDataForRole, getDashboardScope } from '../utils/roleBasedFiltering.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 export const reportsService = {
   async getReports(user: JWTClaims, reportType?: string, period: string = 'monthly', propertyIds?: string[]) {

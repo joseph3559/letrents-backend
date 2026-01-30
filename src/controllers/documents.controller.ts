@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { imagekitService } from '../services/imagekit.service.js';
 import { TenantsService } from '../services/tenants.service.js';
 import { UnitsService } from '../services/units.service.js';
+import { PropertiesService } from '../services/properties.service.js';
 import { UnitActivityService } from '../services/unit-activity.service.js';
 import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
@@ -11,6 +12,7 @@ import { writeSuccess, writeError } from '../utils/response.js';
 
 const tenantsService = new TenantsService();
 const unitsService = new UnitsService();
+const propertiesService = new PropertiesService();
 const unitActivityService = new UnitActivityService();
 const prisma = getPrisma();
 
@@ -199,6 +201,99 @@ export const getUnitDocuments = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching unit documents:', error);
     const message = error.message || 'Failed to get unit documents';
+    writeError(res, 500, message);
+  }
+};
+
+export const uploadPropertyDocuments = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { id: propertyId } = req.params;
+    const { category, description, expiry_date } = req.body;
+    const tags = parseTags(req.body.tags);
+
+    if (!propertyId) {
+      return writeError(res, 400, 'Property ID is required');
+    }
+
+    const property = await propertiesService.getProperty(propertyId, user);
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return writeError(res, 400, 'No documents provided');
+    }
+
+    const uploadedDocuments = await Promise.all(
+      files.map(async (file, index) => {
+        const fileName = `property-${propertyId}-${Date.now()}-${index}`;
+        const uploadResult = await imagekitService.uploadFile(
+          file.buffer,
+          fileName,
+          `properties/${propertyId}/documents`
+        );
+
+        return {
+          id: randomUUID(),
+          name: file.originalname,
+          type: file.mimetype,
+          mime_type: file.mimetype,
+          category: category || 'other',
+          size: file.size,
+          file_size: file.size,
+          sizeFormatted: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+          uploadDate: new Date().toISOString(),
+          uploaded_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          url: uploadResult.url,
+          document_name: file.originalname,
+          document_type: category || 'other',
+          description: description || null,
+          tags,
+          expiry_date: expiry_date || null,
+        };
+      })
+    );
+
+    const currentDocuments = Array.isArray((property as any).documents)
+      ? (property as any).documents
+      : [];
+
+    const updatedDocuments = [...currentDocuments, ...uploadedDocuments];
+
+    await prisma.property.update({
+      where: { id: propertyId },
+      data: {
+        documents: updatedDocuments,
+        updated_at: new Date(),
+      },
+    });
+
+    writeSuccess(res, 200, 'Documents uploaded successfully', uploadedDocuments);
+  } catch (error: any) {
+    console.error('Error uploading property documents:', error);
+    const message = error.message || 'Failed to upload documents';
+    writeError(res, 500, message);
+  }
+};
+
+export const getPropertyDocuments = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as JWTClaims;
+    const { id: propertyId } = req.params;
+
+    if (!propertyId) {
+      return writeError(res, 400, 'Property ID is required');
+    }
+
+    const property = await propertiesService.getProperty(propertyId, user);
+    const documents = Array.isArray((property as any).documents)
+      ? (property as any).documents
+      : [];
+
+    writeSuccess(res, 200, 'Property documents retrieved successfully', documents);
+  } catch (error: any) {
+    console.error('Error fetching property documents:', error);
+    const message = error.message || 'Failed to get property documents';
     writeError(res, 500, message);
   }
 };

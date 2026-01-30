@@ -16,6 +16,11 @@ import {
   deletePropertyImage, 
   uploadMiddleware 
 } from '../controllers/images.controller.js';
+import { 
+  uploadPropertyDocuments, 
+  getPropertyDocuments,
+  documentUploadMiddleware 
+} from '../controllers/documents.controller.js';
 import { rbacResource } from '../middleware/rbac.js';
 
 const router = Router();
@@ -34,6 +39,10 @@ router.get('/:id/units', rbacResource('properties', 'read'), getPropertyUnits);
 // Property images
 router.post('/:id/images', rbacResource('properties', 'update'), uploadMiddleware, uploadPropertyImages);
 router.delete('/:id/images/:imageId', rbacResource('properties', 'update'), deletePropertyImage);
+
+// Property documents
+router.post('/:id/documents', rbacResource('properties', 'update'), documentUploadMiddleware, uploadPropertyDocuments);
+router.get('/:id/documents', rbacResource('properties', 'read'), getPropertyDocuments);
 
 // Property management actions
 router.post('/:id/duplicate', rbacResource('properties', 'duplicate'), duplicateProperty);

@@ -1,11 +1,11 @@
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from '../config/prisma.js';
 import { supabaseRealtimeService } from './supabase-realtime.service.js';
 import admin from 'firebase-admin';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 // Initialize Firebase Admin SDK with service account
 let firebaseAdminInitialized = false;

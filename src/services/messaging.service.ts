@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from '../config/prisma.js';
 import { JWTClaims } from '../types/index.js';
 import { supabaseRealtimeService } from './supabase-realtime.service.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 interface CreateMessageData {
   conversationId?: string;

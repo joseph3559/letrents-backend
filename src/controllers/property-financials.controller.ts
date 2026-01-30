@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { writeSuccess, writeError } from '../utils/response.js';
 import { JWTClaims } from '../types/index.js';
+import { getPrisma } from '../config/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 export const propertyFinancialsController = {
   // Get property payment history

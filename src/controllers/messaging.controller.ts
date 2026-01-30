@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { messagingService } from '../services/messaging.service.js';
 import { writeSuccess, writeError } from '../utils/response.js';
 import { JWTClaims } from '../types/index.js';
+import { getPrisma } from '../config/prisma.js';
+
+const prisma = getPrisma();
 
 export const messagingController = {
   getConversations: async (req: Request, res: Response) => {
@@ -49,9 +52,6 @@ export const messagingController = {
       const { id } = req.params;
       
       // Verify user is participant
-      const { PrismaClient } = await import('@prisma/client');
-      const prisma = new PrismaClient();
-      
       const participant = await prisma.conversationParticipant.findFirst({
         where: {
           conversation_id: id,

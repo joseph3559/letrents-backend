@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { PrismaClient, PaymentMethod, PaymentType, PaymentStatus } from '@prisma/client';
+import { PaymentMethod, PaymentType, PaymentStatus } from '@prisma/client';
+import { getPrisma } from '../config/prisma.js';
 import { getNextReceiptNumber } from '../utils/invoice-number-generator.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 /**
  * Get human-readable display name for payment channel

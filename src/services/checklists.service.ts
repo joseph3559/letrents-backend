@@ -2,10 +2,11 @@
 // Checklist & Inspection Service
 // ============================================================================
 
-import { PrismaClient, InspectionType, InspectionStatus, ItemCondition, ChecklistScope } from '@prisma/client';
+import { InspectionType, InspectionStatus, ItemCondition, ChecklistScope } from '@prisma/client';
 import { JWTClaims } from '../types/index.js';
+import { getPrisma } from '../config/prisma.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 // ============================================================================
 // INTERFACES

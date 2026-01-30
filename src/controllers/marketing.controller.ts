@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from '../config/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 
 // ============================================================================
 // JOB POSTINGS
